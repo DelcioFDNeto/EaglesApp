@@ -1,0 +1,142 @@
+# Eagles App — pilha completa numa VPS.
+#
+# O que NÃO está aqui, e por quê:
+#   Redis          o Postgres cobre fila (pg-boss) e cache neste volume;
+#                  um serviço a menos para operar, monitorar e fazer backup
+#   Elasticsearch  a busca full-text do Postgres basta para centenas de pessoas
+#   Kubernetes     absurdo nesta escala
+#   MinIO          volume em disco resolve até dezenas de GB de anexos
+#
+# Uso:  docker compose -f infra/docker-compose.yml --env-file .env up -d
+
+name: eagles
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # certificados — perder isto refaz o TLS do zero
+      - caddy_config:/config
+    environment:
+      DOMINIO: ${DOMINIO:?defina DOMINIO no .env}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [borda, interna]
+
+  app:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    restart: unless-stopped
+    # Duas réplicas para o deploy trocar uma de cada vez, sem janela de queda.
+    deploy:
+      replicas: 2
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://eagles:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}@postgres:5432/eagles
+      PUBLIC_ORIGIN: https://${DOMINIO}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      INVITE_TTL_DAYS: ${INVITE_TTL_DAYS:-7}
+      MAX_LOGIN_ATTEMPTS: ${MAX_LOGIN_ATTEMPTS:-5}
+      PORT: 3000
+    volumes:
+      # Anexos ficam FORA do diretório servido pela web (seção 16.4).
+      - arquivos:/dados/arquivos
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Contêiner sem root e sem escalada de privilégio.
+    user: '1000:1000'
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+    networks: [interna]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # SEM `ports:` — o banco não fica exposto à internet. O acesso externo,
+    # quando necessário, é por túnel SSH.
+    environment:
+      POSTGRES_DB: eagles
+      POSTGRES_USER: eagles
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      # Locale pt-BR para ordenação correta de nomes com acento.
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=pt-BR'
+      LANG: pt_BR.utf8
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U eagles -d eagles']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt: [no-new-privileges:true]
+    networks: [interna]
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      RETENCAO_DIARIA: 7
+      B2_BUCKET: ${B2_BUCKET:-}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - backups:/backups
+      - arquivos:/dados/arquivos:ro
+    entrypoint: ['/bin/sh', '-c']
+    # Loop simples em vez de cron: um processo a menos para depurar quando
+    # o backup não roda às 3h e ninguém percebe.
+    command:
+      - |
+        while true; do
+          agora=$$(date +%s)
+          proxima=$$(date -d 'tomorrow 03:00' +%s 2>/dev/null || echo $$((agora + 86400)))
+          sleep $$((proxima - agora))
+          /bin/sh /backup.sh
+        done
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [interna]
+
+  uptime:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    volumes:
+      - uptime:/app/data
+    networks: [interna, borda]
+
+volumes:
+  pgdata:
+  arquivos:
+  backups:
+  caddy_data:
+  caddy_config:
+  uptime:
+
+networks:
+  # Só o Caddy fica nas duas. Banco e app não alcançam a internet de entrada.
+  borda:
+  interna:
+    internal: false

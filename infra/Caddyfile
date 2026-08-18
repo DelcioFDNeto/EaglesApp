@@ -1,0 +1,65 @@
+# Caddy — TLS automático e limite de borda.
+#
+# O certificado Let's Encrypt é obtido e renovado sozinho. Requisito: o
+# DOMINIO precisa apontar para o IP da VPS ANTES de subir, senão o desafio
+# ACME falha e o Caddy fica tentando em laço.
+
+{
+	email {$ACME_EMAIL:admin@localhost}
+	# Descomente para testar sem gastar cota do Let's Encrypt:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# Limite grosso, de borda. O limite fino — por conta e por rota — está na
+	# aplicação (`ratelimit.ts`), porque só ela sabe qual conta está tentando.
+	rate_limit {
+		zone geral {
+			key {remote_host}
+			events 300
+			window 1m
+		}
+	}
+
+	# Cabeçalhos de segurança que não dependem da aplicação. A CSP vem do
+	# `hooks.server.ts`, onde pode variar por rota.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		-Server
+	}
+
+	# Arquivos versionados do build: cache longo, seguro porque o nome muda a
+	# cada deploy.
+	@imutavel path /_app/immutable/*
+	header @imutavel Cache-Control "public, max-age=31536000, immutable"
+
+	# O service worker NUNCA pode ser cacheado: um SW velho segura a versão
+	# antiga do app no aparelho das pessoas indefinidamente.
+	@sw path /service-worker.js
+	header @sw Cache-Control "no-cache, no-store, must-revalidate"
+
+	reverse_proxy app:3000 {
+		lb_policy round_robin
+		health_uri /api/health
+		health_interval 10s
+		health_timeout 5s
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+		format json
+	}
+}
+
+# Monitor de disponibilidade, em subdomínio próprio.
+monitor.{$DOMINIO} {
+	reverse_proxy uptime:3001
+}

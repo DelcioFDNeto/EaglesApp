@@ -1,0 +1,1790 @@
+<title>Arquitetura do Eagles App</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+:root{
+  --ground:#FBF7F6; --surface:#FFFFFF; --surface-2:#F5EEED; --surface-3:#EDE2E1;
+  --ink:#241416; --ink-2:#63494D; --ink-3:#8A7275;
+  --line:#E4D8D8; --line-2:#D2BFBF;
+  --brand:#A91825; --brand-deep:#741221; --brand-wine:#580F20; --brand-soft:#F6E4E5;
+  --ok:#15803D; --ok-soft:#E3F2E8; --warn:#B45309; --warn-soft:#FBEEDD; --err:#B91C1C;
+  --shadow:0 1px 2px rgba(88,15,32,.06), 0 8px 24px -12px rgba(88,15,32,.18);
+  --diagram-bg:#F5EEED;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#17090C; --surface:#1F0D11; --surface-2:#2A1217; --surface-3:#38191F;
+    --ink:#F2ECEC; --ink-2:#C6B0B3; --ink-3:#9E8689;
+    --line:#3A1C22; --line-2:#4E252C;
+    --brand:#EF5A66; --brand-deep:#C93A47; --brand-wine:#F0A9AF; --brand-soft:#33141A;
+    --ok:#5DD48B; --ok-soft:#17301F; --warn:#E9A03C; --warn-soft:#33230F; --err:#F4757F;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px -14px rgba(0,0,0,.7);
+    --diagram-bg:#EFE7E6;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#17090C; --surface:#1F0D11; --surface-2:#2A1217; --surface-3:#38191F;
+  --ink:#F2ECEC; --ink-2:#C6B0B3; --ink-3:#9E8689;
+  --line:#3A1C22; --line-2:#4E252C;
+  --brand:#EF5A66; --brand-deep:#C93A47; --brand-wine:#F0A9AF; --brand-soft:#33141A;
+  --ok:#5DD48B; --ok-soft:#17301F; --warn:#E9A03C; --warn-soft:#33230F; --err:#F4757F;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px -14px rgba(0,0,0,.7);
+  --diagram-bg:#EFE7E6;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"Literata",Georgia,"Times New Roman",serif;
+  font-size:17px; line-height:1.68; -webkit-font-smoothing:antialiased;
+}
+@media (max-width:600px){ body{font-size:16px} }
+
+/* ---------- top bar ---------- */
+.topbar{
+  position:sticky; top:0; z-index:50;
+  background:color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter:blur(10px); border-bottom:1px solid var(--line);
+}
+.topbar-in{
+  max-width:1180px; margin:0 auto; padding:.6rem 1.25rem;
+  display:flex; align-items:center; gap:1rem;
+}
+.mark{
+  display:flex; align-items:center; gap:.55rem;
+  font-family:"Archivo",system-ui,sans-serif; font-weight:800;
+  letter-spacing:-.02em; font-size:.95rem; color:var(--ink);
+}
+.mark .glyph{
+  width:26px; height:26px; flex:none; border-radius:6px;
+  background:var(--brand); display:grid; place-items:center;
+}
+.mark .glyph svg{width:17px;height:17px;display:block}
+.mark small{
+  font-family:"Archivo",sans-serif; font-weight:600; font-size:.62rem;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3);
+  border-left:1px solid var(--line-2); padding-left:.55rem; margin-left:.15rem;
+}
+@media (max-width:640px){ .mark small{display:none} }
+.spacer{flex:1}
+.tocbtn{
+  font-family:"Archivo",sans-serif; font-weight:600; font-size:.72rem;
+  letter-spacing:.1em; text-transform:uppercase;
+  background:var(--surface); color:var(--ink); border:1px solid var(--line-2);
+  border-radius:999px; padding:.42rem .9rem; cursor:pointer;
+}
+.tocbtn:hover{border-color:var(--brand); color:var(--brand)}
+.tocbtn:focus-visible{outline:2px solid var(--brand); outline-offset:2px}
+.progress{position:absolute; left:0; bottom:-1px; height:2px; background:var(--brand); width:0}
+
+/* ---------- toc drawer ---------- */
+.toc{
+  display:none; border-bottom:1px solid var(--line); background:var(--surface);
+}
+.toc.open{display:block}
+.toc-in{
+  max-width:1180px; margin:0 auto; padding:1.25rem;
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:.15rem 1.5rem;
+}
+.toc a{
+  font-family:"Archivo",sans-serif; font-size:.83rem; font-weight:500;
+  color:var(--ink-2); text-decoration:none; padding:.3rem 0;
+  display:flex; gap:.6rem; border-bottom:1px solid transparent;
+}
+.toc a:hover{color:var(--brand)}
+.toc a b{color:var(--ink-3); font-weight:600; font-variant-numeric:tabular-nums; min-width:1.4em}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1180px; margin:0 auto; padding:0 1.25rem}
+.col{max-width:730px}
+@media (min-width:1100px){
+  .wide{max-width:900px}
+}
+
+/* ---------- hero ---------- */
+.hero{padding:3.5rem 0 2.5rem; border-bottom:1px solid var(--line)}
+.eyebrow{
+  font-family:"Archivo",sans-serif; font-weight:700; font-size:.7rem;
+  letter-spacing:.18em; text-transform:uppercase; color:var(--brand); margin:0 0 1rem;
+}
+h1{
+  font-family:"Archivo",sans-serif; font-weight:800; letter-spacing:-.035em;
+  font-size:clamp(2.3rem,7vw,3.9rem); line-height:1.02; margin:0 0 1.1rem;
+  text-wrap:balance;
+}
+h1 em{font-style:normal; color:var(--brand)}
+.lede{font-size:1.12rem; color:var(--ink-2); margin:0 0 1.75rem; max-width:34em}
+.meta{
+  display:flex; flex-wrap:wrap; gap:.5rem 2rem; padding-top:1.25rem;
+  border-top:1px solid var(--line);
+  font-family:"Archivo",sans-serif; font-size:.78rem; color:var(--ink-3);
+}
+.meta b{
+  display:block; font-weight:700; font-size:.65rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:.15rem;
+}
+.meta span{color:var(--ink); font-weight:500}
+
+/* ---------- legend ---------- */
+.legend{
+  margin:2rem 0 0; padding:1.15rem 1.25rem; background:var(--surface-2);
+  border:1px solid var(--line); border-radius:12px;
+}
+.legend p{margin:0 0 .8rem; font-size:.9rem; color:var(--ink-2)}
+.legend ul{list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:.5rem .9rem}
+.legend li{font-size:.82rem; color:var(--ink-2); display:flex; align-items:center; gap:.4rem}
+
+/* ---------- tags ---------- */
+.tag{
+  font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.66rem; font-weight:600;
+  letter-spacing:.03em; padding:.16em .5em; border-radius:4px; white-space:nowrap;
+  border:1px solid; vertical-align:.08em;
+}
+.t-req{color:var(--brand); border-color:color-mix(in srgb,var(--brand) 35%,transparent); background:var(--brand-soft)}
+.t-dec{color:var(--ok); border-color:color-mix(in srgb,var(--ok) 35%,transparent); background:var(--ok-soft)}
+.t-sug{color:var(--warn); border-color:color-mix(in srgb,var(--warn) 35%,transparent); background:var(--warn-soft)}
+.t-hip{color:var(--ink-2); border-color:var(--line-2); background:var(--surface-2)}
+.t-fut{color:var(--ink-3); border-color:var(--line); background:transparent}
+
+/* ---------- sections ---------- */
+section{padding:3.25rem 0; border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:none}
+.snum{
+  font-family:"Archivo",sans-serif; font-weight:800; font-size:2.6rem; line-height:1;
+  letter-spacing:-.04em; color:transparent;
+  -webkit-text-stroke:1.5px var(--line-2); margin-bottom:.35rem;
+  font-variant-numeric:tabular-nums;
+}
+h2{
+  font-family:"Archivo",sans-serif; font-weight:800; letter-spacing:-.028em;
+  font-size:clamp(1.55rem,4.2vw,2.1rem); line-height:1.12; margin:0 0 1.5rem;
+  text-wrap:balance; scroll-margin-top:5rem;
+}
+h3{
+  font-family:"Archivo",sans-serif; font-weight:700; letter-spacing:-.015em;
+  font-size:1.12rem; margin:2.4rem 0 .85rem; text-wrap:balance;
+}
+h4{
+  font-family:"Archivo",sans-serif; font-weight:700; font-size:.72rem;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--brand);
+  margin:2rem 0 .7rem;
+}
+p{margin:0 0 1.05rem}
+ul,ol{margin:0 0 1.15rem; padding-left:1.3rem}
+li{margin-bottom:.42rem}
+li::marker{color:var(--ink-3)}
+strong{font-weight:600; color:var(--ink)}
+em{font-style:italic}
+a{color:var(--brand); text-underline-offset:2px}
+hr{border:none; border-top:1px solid var(--line); margin:2.25rem 0}
+
+code{
+  font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.83em;
+  background:var(--surface-2); border:1px solid var(--line);
+  padding:.1em .38em; border-radius:4px; color:var(--ink);
+}
+pre{
+  font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.78rem; line-height:1.6;
+  background:var(--surface-2); border:1px solid var(--line); border-radius:12px;
+  padding:1.1rem 1.25rem; overflow-x:auto; margin:0 0 1.5rem; color:var(--ink-2);
+}
+pre code{background:none; border:none; padding:0; font-size:1em}
+
+blockquote{
+  margin:0 0 1.5rem; padding:.2rem 0 .2rem 1.25rem;
+  border-left:3px solid var(--brand); color:var(--ink-2); font-style:italic;
+}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; margin:0 0 1.6rem; border:1px solid var(--line); border-radius:12px; background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:.86rem; font-variant-numeric:tabular-nums}
+th{
+  font-family:"Archivo",sans-serif; font-weight:700; font-size:.68rem;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3);
+  text-align:left; padding:.75rem .9rem; border-bottom:1px solid var(--line-2);
+  background:var(--surface-2); white-space:nowrap;
+}
+td{padding:.7rem .9rem; border-bottom:1px solid var(--line); vertical-align:top; line-height:1.5}
+tr:last-child td{border-bottom:none}
+td:first-child{color:var(--ink)}
+tbody tr:hover td{background:var(--surface-2)}
+.num{text-align:right; white-space:nowrap}
+.pill{
+  font-family:"Archivo",sans-serif; font-size:.66rem; font-weight:700; letter-spacing:.06em;
+  padding:.2em .55em; border-radius:999px; white-space:nowrap; display:inline-block;
+}
+.p-m{background:var(--brand); color:#fff}
+.p-s{background:var(--surface-3); color:var(--ink)}
+.p-c{background:transparent; color:var(--ink-3); border:1px solid var(--line-2)}
+.p-w{background:transparent; color:var(--ink-3); border:1px dashed var(--line-2)}
+
+/* ---------- callouts ---------- */
+.call{
+  margin:0 0 1.6rem; padding:1.2rem 1.35rem; border-radius:12px;
+  background:var(--surface-2); border:1px solid var(--line);
+  border-left:3px solid var(--brand);
+}
+.call.warn{border-left-color:var(--warn)}
+.call.ok{border-left-color:var(--ok)}
+.call p:last-child{margin-bottom:0}
+.call h4{margin-top:0}
+
+/* ---------- diagrams ---------- */
+.dg{
+  overflow-x:auto; margin:0 0 1.6rem; padding:1.25rem;
+  background:var(--diagram-bg); border:1px solid var(--line); border-radius:12px;
+}
+.dg pre.mermaid{background:none; border:none; padding:0; margin:0; color:#241416}
+.dg .cap{
+  font-family:"Archivo",sans-serif; font-size:.68rem; font-weight:600;
+  letter-spacing:.12em; text-transform:uppercase; color:#8A7275; margin:0 0 .8rem;
+}
+
+/* ---------- decision cards ---------- */
+.dcard{
+  margin:0 0 1.1rem; padding:1.3rem 1.4rem; background:var(--surface);
+  border:1px solid var(--line-2); border-radius:14px; box-shadow:var(--shadow);
+}
+.dcard.block{border-left:4px solid var(--brand)}
+.dcard.imp{border-left:4px solid var(--warn)}
+.dcard.quick{border-left:4px solid var(--ink-3)}
+.dhead{display:flex; align-items:baseline; gap:.7rem; flex-wrap:wrap; margin-bottom:.7rem}
+.dcode{
+  font-family:"JetBrains Mono",monospace; font-size:.72rem; font-weight:600;
+  color:var(--brand); letter-spacing:.04em;
+}
+.dtitle{font-family:"Archivo",sans-serif; font-weight:700; font-size:1.05rem; letter-spacing:-.015em}
+.dstate{
+  font-family:"Archivo",sans-serif; font-size:.62rem; font-weight:700; letter-spacing:.12em;
+  text-transform:uppercase; padding:.24em .6em; border-radius:999px;
+}
+.s-block{background:var(--brand); color:#fff}
+.s-imp{background:var(--warn-soft); color:var(--warn); border:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
+.s-quick{background:var(--surface-3); color:var(--ink-2)}
+.dcard p{font-size:.94rem; margin-bottom:.7rem}
+.dcard p:last-child{margin-bottom:0}
+.ask{
+  font-family:"Archivo",sans-serif; font-weight:600; font-size:.9rem;
+  color:var(--brand); margin-top:.6rem;
+}
+
+/* ---------- swatches ---------- */
+.swatches{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:.75rem; margin:0 0 1.6rem}
+.sw{border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--surface)}
+.sw .chip{height:62px}
+.sw .info{padding:.55rem .7rem}
+.sw .nm{font-family:"Archivo",sans-serif; font-weight:700; font-size:.74rem; letter-spacing:-.01em}
+.sw .hx{font-family:"JetBrains Mono",monospace; font-size:.68rem; color:var(--ink-3)}
+
+/* ---------- close ---------- */
+.close{
+  margin:0; padding:2.25rem 1.5rem; text-align:center;
+  background:var(--brand-wine); border-radius:16px; color:#F2ECEC;
+}
+.close p{margin:0; font-family:"Archivo",sans-serif; font-weight:700; font-size:1.05rem; letter-spacing:-.015em}
+footer{padding:2.5rem 0 3.5rem; color:var(--ink-3); font-size:.8rem; font-family:"Archivo",sans-serif}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important; scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="mark">
+      <span class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 9c3-3.4 6.6-5 10.6-5 1.6 0 3 .3 4.4.9-1 .5-1.8 1.2-2.4 2 1.5-.3 2.9-.2 4.4.4-1.2.9-2 2-2.4 3.3 1 .1 1.9.5 2.7 1.1-3.2 1-5 3.1-6.4 5.7-1.3 2.4-3.3 3.8-6 4-1.6.1-3-.3-4.3-1.2 1.6-.2 2.9-.9 3.9-2C4.7 17.6 3.2 15.6 3 13c.8.5 1.6.8 2.5.8C4 12.4 3.2 10.8 3 9Z" fill="#F2ECEC"/></svg>
+      </span>
+      Eagles App
+      <small>Descoberta &amp; Arquitetura</small>
+    </div>
+    <div class="spacer"></div>
+    <button class="tocbtn" id="tocbtn" aria-expanded="false" aria-controls="toc">Índice</button>
+    <div class="progress" id="progress"></div>
+  </div>
+  <nav class="toc" id="toc" aria-label="Índice do documento"><div class="toc-in" id="tocin"></div></nav>
+</div>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="col">
+      <p class="eyebrow">Documento de descoberta · versão 0.1 · aguardando aprovação</p>
+      <h1>Organizar pessoas <em>sem</em> burocratizar a comunidade.</h1>
+      <p class="lede">Descoberta, requisitos, modelo de dados, arquitetura e plano de entrega do Eagles App — a plataforma de gestão interna dos Eagles para o ano inteiro.</p>
+      <div class="meta">
+        <div><b>Data</b><span>18 de agosto de 2026</span></div>
+        <div><b>Escopo</b><span>24 seções + anexo</span></div>
+        <div><b>Stack recomendada</b><span>SvelteKit + PostgreSQL</span></div>
+        <div><b>MVP</b><span>6 módulos · ~10 semanas</span></div>
+      </div>
+      <div class="legend">
+        <p>Todo o documento marca a <strong>origem de cada informação</strong>. É o que separa o que você pediu daquilo que eu sugeri ou supus:</p>
+        <ul>
+          <li><span class="tag t-req">REQ</span> confirmado por você</li>
+          <li><span class="tag t-dec">DEC</span> decisão técnica minha</li>
+          <li><span class="tag t-sug">SUG</span> sugestão, aberta a rejeição</li>
+          <li><span class="tag t-hip">HIP</span> hipótese a confirmar</li>
+          <li><span class="tag t-fut">FUT</span> futuro, fora do escopo</li>
+        </ul>
+      </div>
+    </div>
+  </header>
+
+  <section id="s1">
+    <div class="col">
+      <div class="snum">01</div>
+      <h2>Resumo executivo</h2>
+      <p>O Eagles App é uma <strong>plataforma interna de gestão de comunidade</strong>, usada durante todo o ano pelos Eagles para organizar pessoas, grupos (PGs), encontros, responsabilidades, participação e recursos financeiros — sem substituir a convivência humana que define o grupo. <span class="tag t-req">REQ</span></p>
+      <p>O produto <strong>não é</strong> um app de evento. O Outside é apenas um entre vários compromissos do calendário; o app registra a participação dos Eagles nele, mas não organiza o evento. <span class="tag t-req">REQ</span></p>
+      <h3>Três características definem o produto</h3>
+      <ol>
+        <li><strong>É ferramenta de apoio à liderança, não substituta dela.</strong> Toda automação relevante — divisão de grupos, escalas, análise de frequência — termina em decisão humana explícita. O padrão obrigatório é <em>sugerir → revisar → confirmar → aplicar</em>. <span class="tag t-req">REQ</span></li>
+        <li><strong>Convive com o WhatsApp, não compete com ele.</strong> A conversa cotidiana continua lá. O app produz a informação organizada e facilita levá-la para o WhatsApp. <span class="tag t-req">REQ</span></li>
+        <li><strong>É configurável por natureza.</strong> Tipos de evento, responsabilidades, campos de cadastro, categorias financeiras, papéis, permissões e funcionalidades inteiras são <strong>dados no banco, não código</strong>. <span class="tag t-req">REQ</span></li>
+      </ol>
+      <div class="call">
+        <h4>Recomendação central</h4>
+        <p><strong>Arquitetura:</strong> monólito modular full-stack em SvelteKit (TypeScript) + PostgreSQL, entregue como PWA instalável mobile-first, na VPS existente via Docker Compose com Caddy. Custo adicional: <strong>R$ 40–90/mês</strong>. <span class="tag t-dec">DEC</span></p>
+        <p><strong>Escopo:</strong> MVP de <strong>6 módulos em ~10 semanas</strong> — Fundação, Pessoas, RBAC, Grupos, Eventos e Presença — com IA e Financeiro deliberadamente depois. <span class="tag t-sug">SUG</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s2">
+    <div class="wide">
+      <div class="snum">02</div>
+      <h2>Entendimento do problema</h2>
+      <div class="col">
+        <p>A comunidade já funciona: existe liderança, existem conselheiros, existem PGs com responsabilidades semanais, existem eventos, existe dinheiro entrando e saindo, existem visitantes virando membros. Nada disso depende do app — e é por isso que o app precisa se encaixar no que já existe, não redesenhar a comunidade.</p>
+        <h3>O que provavelmente acontece hoje <span class="tag t-hip">HIP</span></h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Dor</th><th>Sintoma típico</th><th>Onde o app entra</th></tr></thead>
+        <tbody>
+          <tr><td>Informação dispersa</td><td>Escala num grupo de WhatsApp, presença num caderno, dinheiro numa planilha, cadastro na cabeça de alguém</td><td>Fonte única de verdade consultável</td></tr>
+          <tr><td>Memória organizacional frágil</td><td>“Quem já pregou este mês?”, “Fulano ainda vem?”, “Quanto sobrou do último evento?”</td><td>Histórico persistente e pesquisável</td></tr>
+          <tr><td>Divisão de grupos trabalhosa</td><td>Reorganizar PGs exige cruzar frequência, idade, vínculos, casais, irmãos — no papel</td><td>Apoio à decisão, nunca decisão automática</td></tr>
+          <tr><td>Prestação de contas informal</td><td>Confiança pessoal substitui rastreabilidade; difícil responder “para onde foi o dinheiro?”</td><td>Livro-caixa auditável com relatórios prontos</td></tr>
+          <tr><td>Pessoas somem sem ninguém notar</td><td>Visitante veio 3 vezes e parou; ninguém percebeu a tempo</td><td>Indicadores de frequência e sinal de atenção</td></tr>
+          <tr><td>Retrabalho de comunicação</td><td>Reescrever o mesmo aviso em vários grupos</td><td>Geração e compartilhamento de mensagens</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h3>O que o app <em>não</em> deve resolver</h3>
+        <ul>
+          <li>Não organiza o Outside — isso é de outra estrutura.</li>
+          <li>Não decide a qual equipe (Bears, Tigers, Sheeps) uma pessoa pertencerá.</li>
+          <li>Não substitui o WhatsApp como canal de conversa.</li>
+          <li>Não controla nem restringe a participação de ninguém em PG.</li>
+          <li>Não é ERP nem sistema contábil — o financeiro é livro-caixa, não contabilidade formal.</li>
+        </ul>
+        <div class="call warn">
+          <h4>Risco nº 1 — Adoção</h4>
+          <p>O WhatsApp já resolve boa parte da comunicação com zero atrito. Qualquer funcionalidade que exija esforço adicional sem devolver valor imediato será abandonada em semanas — e um app abandonado deixa a organização <strong>pior</strong> do que estava, porque passam a existir duas fontes de verdade divergentes.</p>
+          <p>Regra que assumo: <strong>cada tela precisa ser justificável em uma frase para quem vai usá-la.</strong> Se um membro não consegue responder “por que eu abriria isso?”, a tela não entra no MVP. <span class="tag t-dec">DEC</span></p>
+        </div>
+        <div class="call warn">
+          <h4>Risco nº 2 — Burocratização</h4>
+          <p>Toda funcionalidade de controle (check-in, aprovação de despesas, campos obrigatórios, escalas rígidas) nasce <strong>desligada</strong>, e ligá-la é uma decisão consciente da liderança. <span class="tag t-req">REQ</span> <span class="tag t-dec">DEC</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s3">
+    <div class="col">
+      <div class="snum">03</div>
+      <h2>Objetivos do produto</h2>
+      <h3>Primários</h3>
+      <ol>
+        <li>Centralizar o cadastro de pessoas e sua jornada, com histórico preservado.</li>
+        <li>Organizar grupos/PGs com apoio à decisão nas reorganizações periódicas.</li>
+        <li>Gerir o calendário de eventos com confirmação de presença real.</li>
+        <li>Registrar responsabilidades e escalas sem repetição injusta.</li>
+        <li>Dar transparência financeira com prestação de contas simples e rastreável.</li>
+        <li>Reduzir trabalho manual repetitivo da liderança.</li>
+        <li><strong>Ajudar líderes a enxergar pessoas</strong> — quem está se afastando, quem está sobrecarregado, quem está pronto para mais.</li>
+      </ol>
+      <h3>Secundários</h3>
+      <ol start="8">
+        <li>Preservar memória organizacional entre gestões.</li>
+        <li>Fornecer indicadores confiáveis para decisão.</li>
+        <li>Permitir que a organização evolua o sistema sem depender de desenvolvedor — configuração no lugar de código.</li>
+      </ol>
+      <h3>Não-objetivos explícitos</h3>
+      <p>Substituir interação humana; burocratizar os PGs; automatizar decisões organizacionais; impressionar visualmente às custas da simplicidade.</p>
+    </div>
+  </section>
+
+  <section id="s4">
+    <div class="col">
+      <div class="snum">04</div>
+      <h2>Usuários e personas</h2>
+      <p>Cinco personas, do maior para o menor volume de uso. As descrições comportamentais são <span class="tag t-hip">HIP</span> derivadas do briefing e precisam de validação sua.</p>
+
+      <h3>P1 — Membro Eagles · <em>“o uso diário”</em></h3>
+      <p><strong>Volume:</strong> maioria dos usuários. <strong>Frequência:</strong> 1–3×/semana, sempre no celular, muitas vezes com internet ruim.<br>
+      <strong>Precisa:</strong> ver o próximo encontro, confirmar presença em 1 toque, saber se está escalado, ver seu grupo, ver quanto contribuiu.<br>
+      <strong>Não tolera:</strong> login complicado, mais de 3 toques para confirmar presença, excesso de notificação.<br>
+      <strong>Sucesso:</strong> taxa de RSVP respondido sem cobrança manual.</p>
+
+      <h3>P2 — Visitante / recorrente · <em>“a porta de entrada”</em></h3>
+      <p><strong>Volume:</strong> rotativo. <strong>Frequência:</strong> esporádica.<br>
+      <strong>Precisa:</strong> entender o que é, ver o próximo PG, se inscrever com o mínimo de dados.<br>
+      <strong>Não tolera:</strong> cadastro longo, dados sensíveis no primeiro contato, sensação de estar sendo fichado.<br>
+      <strong>Sucesso:</strong> % de visitantes que retornam e viram recorrentes.</p>
+
+      <h3>P3 — Conselheiro · <em>“o operador do sistema”</em></h3>
+      <p><strong>Volume:</strong> poucos, mas são os usuários mais intensos — o sucesso do produto depende deles. <strong>Frequência:</strong> semanal, tarefas de 10–20 min.<br>
+      <strong>Precisa:</strong> acompanhar o próprio grupo, ver quem está faltando, montar/ajustar escala, lançar despesa do PG, mandar aviso.<br>
+      <strong>Não tolera:</strong> preencher formulário para o que resolveria numa mensagem.<br>
+      <strong>Sucesso:</strong> tempo para montar a escala semanal.</p>
+
+      <h3>P4 — Líder · <em>“a visão geral”</em></h3>
+      <p><strong>Volume:</strong> 1–5 pessoas. <strong>Frequência:</strong> semanal, com picos em planejamento.<br>
+      <strong>Precisa:</strong> panorama de tudo, indicadores, saúde dos grupos, situação do caixa, pendências, apoio para reorganizar grupos.<br>
+      <strong>Não tolera:</strong> dado que não fecha; relatório em que não confia.<br>
+      <strong>Sucesso:</strong> decisões tomadas com dado em vez de impressão.</p>
+
+      <h3>P5 — Administrador do sistema</h3>
+      <p>Provavelmente a mesma pessoa do P4. Configura tipos, papéis, permissões, chaves de funcionalidade, auditoria e backup.</p>
+
+      <div class="call warn">
+        <h4>Persona negativa — “o fiscal”</h4>
+        <p>Alguém que usaria frequência e check-in para cobrar, ranquear ou constranger membros. <strong>O produto deve tornar esse uso desconfortável por design:</strong> sem ranking público de presença, sem exposição de faltas entre pares, dados de frequência visíveis apenas a quem tem responsabilidade pastoral sobre a pessoa. <span class="tag t-dec">DEC</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s5">
+    <div class="wide">
+      <div class="snum">05</div>
+      <h2>Estrutura organizacional</h2>
+      <div class="col">
+        <pre>Liderança
+  └── Conselheiros
+        └── Grupos / PGs
+              └── Membros
+                    └── Visitantes</pre>
+        <h3>A leitura arquitetural que muda tudo</h3>
+        <p>Um ponto central do briefing: <strong>grupos não são níveis hierárquicos, são divisões organizacionais</strong> — todos os membros de um grupo têm essencialmente a mesma permissão. <span class="tag t-req">REQ</span></p>
+        <p>Isso significa que a estrutura real do sistema tem <strong>dois eixos independentes</strong>:</p>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Eixo</th><th>O que representa</th><th>Valores</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Autoridade</strong> (papel)</td><td>O que a pessoa pode fazer</td><td>Líder, Conselheiro, Membro, Visitante</td></tr>
+          <tr><td><strong>Pertencimento</strong> (grupo)</td><td>Onde a pessoa está e sobre o que sua autoridade incide</td><td>PG Azul, PG Verde, …</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p>Um conselheiro tem autoridade <strong>escopada</strong> a um ou mais grupos. Um líder tem autoridade <strong>global</strong>. Um membro tem autoridade sobre si mesmo e leitura do próprio grupo.</p>
+        <div class="call">
+          <p><strong>Consequência:</strong> permissões precisam de <strong>escopo</strong> (<code>global</code> ou <code>grupo:X</code>), não apenas de papel. Esta é a decisão de modelagem mais importante de todo o sistema. <span class="tag t-dec">DEC</span></p>
+        </div>
+        <h3>Regras estruturais confirmadas <span class="tag t-req">REQ</span></h3>
+        <ul>
+          <li>Um membro pertence a <strong>no máximo um grupo por vez</strong>.</li>
+          <li>Grupos podem ser reorganizados ao longo do ano — o histórico de quem esteve onde é preservado.</li>
+          <li>Apenas líderes e conselheiros criam, editam, excluem grupos e transferem membros.</li>
+          <li>O contexto maior tem outras equipes (Bears, Tigers, Sheeps), fora do escopo do app.</li>
+        </ul>
+        <h3>Decisão sobre multi-equipe <span class="tag t-dec">DEC</span></h3>
+        <p>Vou incluir uma coluna <code>team_id</code> nas tabelas principais desde o primeiro dia, com um único registro (“Eagles”) preenchido, <strong>sem nenhuma interface de multi-equipe</strong>.</p>
+        <p>Adicionar a coluna agora custa quase nada. Adicioná-la depois, com dados em produção, é uma migração de risco alto que atinge todas as consultas e todas as regras de permissão. O briefing menciona Bears, Tigers e Sheeps explicitamente.</p>
+        <p><strong>Custo se eu estiver errado:</strong> uma coluna inútil. <strong>Custo se eu não fizer e for necessário:</strong> semanas de refatoração perigosa em código que mexe com dinheiro e permissão.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s6">
+    <div class="wide">
+      <div class="snum">06</div>
+      <h2>Regras de negócio identificadas</h2>
+      <div class="col">
+        <p>Numeradas para rastreabilidade — cada <code>RN-xx</code> será referenciada em testes e critérios de aceitação.</p>
+      </div>
+      <h4>Pessoas e jornada</h4>
+      <div class="tw"><table>
+        <thead><tr><th>ID</th><th>Regra</th><th>Origem</th></tr></thead>
+        <tbody>
+          <tr><td><code>RN-01</code></td><td>Uma pessoa existe no sistema independentemente de ter conta de acesso. Cadastro de visitante feito por terceiros é válido.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-02</code></td><td>Jornada padrão: Visitante → Participante recorrente → Membro. Novos estágios criáveis sem alterar código.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-03</code></td><td>Participar do Outside <strong>não</strong> promove ninguém a membro automaticamente.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-04</code></td><td>Toda mudança de status é registrada com data, autor e motivo opcional; o histórico é imutável.</td><td><span class="tag t-dec">DEC</span></td></tr>
+          <tr><td><code>RN-05</code></td><td>Campos obrigatórios são configuráveis; apenas “nome” é obrigatório em nível de sistema.</td><td><span class="tag t-req">REQ</span></td></tr>
+        </tbody>
+      </table></div>
+      <h4>Grupos</h4>
+      <div class="tw"><table>
+        <thead><tr><th>ID</th><th>Regra</th><th>Origem</th></tr></thead>
+        <tbody>
+          <tr><td><code>RN-06</code></td><td>Uma pessoa pertence a no máximo um grupo por vez — restrição garantida <strong>no banco</strong>, não só na aplicação.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-07</code></td><td>Transferência encerra o vínculo anterior com data de saída e cria um novo; nada é sobrescrito.</td><td><span class="tag t-dec">DEC</span></td></tr>
+          <tr><td><code>RN-08</code></td><td>Só altera composição quem tem <code>group.manage</code> global ou no escopo daquele grupo.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-09</code></td><td>Sugestões de reorganização <strong>nunca</strong> alteram grupos: produzem proposta que exige confirmação humana e pode ser aceita parcialmente.</td><td><span class="tag t-req">REQ</span></td></tr>
+        </tbody>
+      </table></div>
+      <h4>Eventos e presença</h4>
+      <div class="tw"><table>
+        <thead><tr><th>ID</th><th>Regra</th><th>Origem</th></tr></thead>
+        <tbody>
+          <tr><td><code>RN-10</code></td><td>Tipos de evento são dados configuráveis, não enum de código.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-11</code></td><td>Opções de RSVP configuráveis por tipo de evento (confirmado, talvez, não vou, chegarei atrasado, levarei convidado, personalizadas).</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-12</code></td><td>Toda resposta de RSVP é versionada: mudar a resposta preserva a anterior com timestamp.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-13</code></td><td>Presença efetiva é registro <strong>distinto</strong> do RSVP. A diferença entre os dois é indicador de primeira classe.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-14</code></td><td>Check-in (incl. QR Code) é opcional, ligável/desligável, e <strong>nunca</strong> condiciona a entrada de ninguém.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-15</code></td><td>Ausência de resposta de RSVP <strong>não é falta</strong> e não pode ser tratada como tal em nenhum relatório.</td><td><span class="tag t-dec">DEC</span></td></tr>
+        </tbody>
+      </table></div>
+      <h4>Responsabilidades</h4>
+      <div class="tw"><table>
+        <thead><tr><th>ID</th><th>Regra</th><th>Origem</th></tr></thead>
+        <tbody>
+          <tr><td><code>RN-16</code></td><td>Tipos de responsabilidade são configuráveis. Palestra, mensagem, música, alimentação, organização, recepção são <strong>valores iniciais</strong>, não o esquema.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-17</code></td><td>Escala pode ser criada manualmente, atribuída manualmente ou gerada automaticamente — as três formas coexistem.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-18</code></td><td>Escala gerada automaticamente entra como <strong>proposta</strong>; só vira oficial após confirmação humana.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-19</code></td><td>A geração evita repetição excessiva e respeita regras definidas pelos líderes.</td><td><span class="tag t-req">REQ</span></td></tr>
+        </tbody>
+      </table></div>
+      <h4>Financeiro</h4>
+      <div class="tw"><table>
+        <thead><tr><th>ID</th><th>Regra</th><th>Origem</th></tr></thead>
+        <tbody>
+          <tr><td><code>RN-20</code></td><td>Toda movimentação tem tipo, categoria, valor, data, responsável, método e descrição. Evento, grupo, comprovante e status são opcionais.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-21</code></td><td>Movimentação lançada <strong>não é editada nem excluída fisicamente</strong>: correção gera estorno + novo lançamento, ambos visíveis.</td><td><span class="tag t-dec">DEC</span></td></tr>
+          <tr><td><code>RN-22</code></td><td>Contribuição de membro pode ter valor mínimo; doação nunca tem mínimo.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-23</code></td><td>Fluxo de aprovação é opcional, com etapas configuráveis; desligado, o lançamento é direto.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-24</code></td><td>Visibilidade financeira por nível: Líder (total), Conselheiro (conforme permissão), Membro (as próprias + o que a liderança publicar), Visitante (nenhuma).</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-25</code></td><td>Grupos/PGs não têm contabilidade própria: têm registro simples de despesas atribuídas ao grupo.</td><td><span class="tag t-req">REQ</span></td></tr>
+        </tbody>
+      </table></div>
+      <h4>Sistema, IA e segurança</h4>
+      <div class="tw"><table>
+        <thead><tr><th>ID</th><th>Regra</th><th>Origem</th></tr></thead>
+        <tbody>
+          <tr><td><code>RN-26</code></td><td>A IA respeita rigorosamente as permissões de quem a invoca. Nenhuma resposta pode conter dado que o usuário não veria navegando pelo app.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-27</code></td><td>Nenhuma ação administrativa sensível é executada pela IA sem confirmação humana.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-28</code></td><td>Alterações em finanças, permissões, papéis, grupos e exclusões geram registro de auditoria imutável.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-29</code></td><td>Funcionalidades opcionais precisam funcionar corretamente <strong>desligadas</strong> — esse é o estado padrão de instalação.</td><td><span class="tag t-dec">DEC</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="s7">
+    <div class="wide">
+      <div class="snum">07</div>
+      <h2>Requisitos funcionais</h2>
+      <div class="col">
+        <p>Prioridade referente ao <strong>MVP</strong>: <span class="pill p-m">M</span> obrigatório · <span class="pill p-s">S</span> desejável · <span class="pill p-c">C</span> possível · <span class="pill p-w">W</span> agora não.</p>
+      </div>
+
+      <h4>RF-01 · Fundação e acesso</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Autenticação com sessão segura e revogável</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Convite de acesso emitido por líder/conselheiro (link ou código)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Recuperação de acesso</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Instalação como PWA na tela de início</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Segundo fator (TOTP) opcional para papéis com acesso financeiro</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Leitura offline dos últimos dados vistos</td><td class="num"><span class="pill p-s">S</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-02 · Pessoas</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Cadastro progressivo (só nome obrigatório)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Perfil com foto, contatos, nascimento, relacionamento, vínculos familiares</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Autocadastro de visitante por link/QR do evento</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Campos personalizados configuráveis pelo administrador</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Linha do tempo da pessoa (status, grupos, eventos, marcos)</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Detecção de possível duplicidade no cadastro</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Importação inicial via planilha</td><td class="num"><span class="pill p-s">S</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-03 · RBAC</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Papéis e permissões persistidos em banco, não em código</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Atribuição de papel com escopo (global ou por grupo)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Tela de gestão de papéis e permissões</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Criação de papéis personalizados pelo administrador</td><td class="num"><span class="pill p-c">C</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-04 · Grupos/PGs</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>CRUD de grupos com conselheiro responsável</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Composição do grupo e transferência com histórico</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Visão do grupo para o conselheiro (pessoas, frequência, pendências)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Reorganização em lote com pré-visualização antes de aplicar</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Sugestão de divisão equilibrada com critérios configuráveis</td><td class="num"><span class="pill p-c">C</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-05 · Eventos</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Tipos de evento configuráveis</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>CRUD de evento com data, local, responsável, grupo, descrição</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Eventos recorrentes (PG semanal)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Calendário e agenda mobile</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Público-alvo do evento (todos, grupos específicos, pessoas)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Anexos no evento</td><td class="num"><span class="pill p-c">C</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-06 · Presença</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>RSVP com opções configuráveis e histórico de mudanças</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Registro de presença efetiva (lista rápida pelo conselheiro)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Relatórios de frequência (pessoa, grupo, período, tipo de evento)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Indicador confirmação × presença efetiva</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Check-in por QR Code — opcional e desligável</td><td class="num"><span class="pill p-c">C</span></td></tr>
+          <tr><td>Registro de convidado trazido por membro</td><td class="num"><span class="pill p-s">S</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-07 · Responsabilidades</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Tipos de responsabilidade configuráveis</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Atribuição manual de responsável a evento/grupo</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Visão “minhas responsabilidades” para o membro</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Geração automática de escala com revisão obrigatória</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Troca/substituição de responsável com registro</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Regras por tipo (ex.: intervalo mínimo entre repetições)</td><td class="num"><span class="pill p-s">S</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-08 · Financeiro</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Categorias configuráveis de entrada e saída</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Lançamento de movimentação conforme RN-20</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Comprovante opcional em anexo</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Painel Arrecadado → Despesas → Saldo</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Relatórios por período, categoria, evento, grupo, responsável</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Estorno com rastreabilidade</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Contribuições de membros com valor mínimo configurável</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Mensalidade do conselho com controle de quem está em dia</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Despesas de grupo/PG (registro simples)</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Fluxo de aprovação configurável, ligável/desligável</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Exportação CSV/PDF da prestação de contas</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Integração automática com PIX (cobrança/conciliação) <span class="tag t-fut">FUT</span></td><td class="num"><span class="pill p-w">W</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-09 · Comunicação</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Compartilhar evento/escala/aviso no WhatsApp com texto pronto</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Anúncios internos com público-alvo</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Modelos de mensagem reutilizáveis com variáveis</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Notificações push (Web Push) configuráveis por usuário</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Lembretes automáticos (evento, RSVP pendente, responsabilidade)</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Envio automatizado via API oficial do WhatsApp <span class="tag t-fut">FUT</span></td><td class="num"><span class="pill p-w">W</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-10 · IA</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Redação/adaptação de avisos e mensagens</td><td class="num"><span class="pill p-s">S</span></td></tr>
+          <tr><td>Resumo de movimentação financeira e de participação</td><td class="num"><span class="pill p-c">C</span></td></tr>
+          <tr><td>Sugestão de escala (motor determinístico + explicação em texto)</td><td class="num"><span class="pill p-c">C</span></td></tr>
+          <tr><td>Sugestão de divisão de grupos com critérios configuráveis</td><td class="num"><span class="pill p-c">C</span></td></tr>
+          <tr><td>Destaque de pessoas que podem precisar de atenção</td><td class="num"><span class="pill p-c">C</span></td></tr>
+          <tr><td>Pergunta livre sobre dados autorizados</td><td class="num"><span class="pill p-c">C</span></td></tr>
+          <tr><td>Resumo de ata com extração de tarefas</td><td class="num"><span class="pill p-c">C</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h4>RF-11 · Administração</h4>
+      <div class="tw"><table>
+        <tbody>
+          <tr><td>Configurações gerais com chaves de funcionalidade</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Gestão de tipos (evento, responsabilidade, categoria, status)</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Backup e restauração verificáveis</td><td class="num"><span class="pill p-m">M</span></td></tr>
+          <tr><td>Auditoria consultável</td><td class="num"><span class="pill p-s">S</span></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="s8">
+    <div class="wide">
+      <div class="snum">08</div>
+      <h2>Requisitos não funcionais</h2>
+      <div class="tw"><table>
+        <thead><tr><th>#</th><th>Requisito</th><th>Alvo mensurável</th></tr></thead>
+        <tbody>
+          <tr><td><code>RNF-01</code></td><td><strong>Mobile-first</strong></td><td>100% das telas do MVP usáveis a 360 px; alvos de toque ≥ 44 px</td></tr>
+          <tr><td><code>RNF-02</code></td><td><strong>Performance percebida</strong></td><td>LCP &lt; 2,5 s em 4G; RSVP responde em &lt; 300 ms (atualização otimista)</td></tr>
+          <tr><td><code>RNF-03</code></td><td><strong>Peso</strong></td><td>JS inicial &lt; 100 KB comprimido na rota de dashboard</td></tr>
+          <tr><td><code>RNF-04</code></td><td><strong>Resiliência de rede</strong></td><td>Leitura offline com cache; ações críticas com fila de reenvio</td></tr>
+          <tr><td><code>RNF-05</code></td><td><strong>Disponibilidade</strong></td><td>99% mensal — sem redundância de nó no MVP</td></tr>
+          <tr><td><code>RNF-06</code></td><td><strong>Escala</strong> <span class="tag t-hip">HIP</span></td><td>500 pessoas, 20 grupos, 5.000 eventos/ano, 100 simultâneos em pico</td></tr>
+          <tr><td><code>RNF-07</code></td><td><strong>Custo operacional</strong></td><td>≤ R$ 100/mês além da VPS</td></tr>
+          <tr><td><code>RNF-08</code></td><td><strong>Segurança</strong></td><td>Argon2id, sessão server-side revogável, RBAC verificado no servidor em toda rota</td></tr>
+          <tr><td><code>RNF-09</code></td><td><strong>Privacidade / LGPD</strong></td><td>Minimização, base legal definida, consentimento para foto, tratamento especial de menores</td></tr>
+          <tr><td><code>RNF-10</code></td><td><strong>Auditabilidade</strong></td><td>100% das operações financeiras, de permissão e de exclusão registradas de forma imutável</td></tr>
+          <tr><td><code>RNF-11</code></td><td><strong>Recuperação</strong></td><td>Backup diário, RPO 24 h, RTO 4 h, restauração testada mensalmente</td></tr>
+          <tr><td><code>RNF-12</code></td><td><strong>Acessibilidade</strong></td><td>WCAG 2.1 AA: contraste ≥ 4,5:1, navegação por teclado, rótulos em formulários</td></tr>
+          <tr><td><code>RNF-13</code></td><td><strong>Internacionalização</strong></td><td>Só pt-BR; textos centralizados para tradução futura sem refatoração</td></tr>
+          <tr><td><code>RNF-14</code></td><td><strong>Manutenibilidade</strong></td><td>Uma linguagem no stack; cobertura ≥ 70% em negócio, <strong>100% em autorização e financeiro</strong></td></tr>
+          <tr><td><code>RNF-15</code></td><td><strong>Observabilidade</strong></td><td>Logs estruturados, rastreamento de erros, monitor externo de disponibilidade</td></tr>
+          <tr><td><code>RNF-16</code></td><td><strong>Extensibilidade</strong></td><td>Novos tipos de evento, responsabilidade, categoria, campo e papel <strong>sem deploy</strong></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="s9">
+    <div class="wide">
+      <div class="snum">09</div>
+      <h2>Módulos propostos</h2>
+      <div class="col"><p>Mantive a sua divisão em 12 módulos, com <strong>três ajustes</strong> explicados abaixo.</p></div>
+      <div class="tw"><table>
+        <thead><tr><th>#</th><th>Módulo</th><th>Entrega</th><th>Depende de</th><th>Ciclo</th></tr></thead>
+        <tbody>
+          <tr><td><strong>M01</strong></td><td><strong>Fundação</strong></td><td>Repositório, Docker, CI/CD, banco, migrações, autenticação, sessão, design system, layout base, PWA</td><td>—</td><td><span class="pill p-m">MVP</span></td></tr>
+          <tr><td><strong>M02</strong></td><td><strong>Pessoas</strong></td><td>Cadastro progressivo, perfil, jornada/status, histórico, vínculos familiares</td><td>M01</td><td><span class="pill p-m">MVP</span></td></tr>
+          <tr><td><strong>M03</strong></td><td><strong>RBAC</strong></td><td>Papéis, permissões, escopo, camada de política, auditoria de acesso</td><td>M01, M02</td><td><span class="pill p-m">MVP</span></td></tr>
+          <tr><td><strong>M04</strong></td><td><strong>Grupos/PGs</strong></td><td>CRUD, composição, transferência com histórico, visão do conselheiro</td><td>M02, M03</td><td><span class="pill p-m">MVP</span></td></tr>
+          <tr><td><strong>M05</strong></td><td><strong>Eventos</strong></td><td>Tipos configuráveis, CRUD, recorrência, calendário, público-alvo</td><td>M03, M04</td><td><span class="pill p-m">MVP</span></td></tr>
+          <tr><td><strong>M06</strong></td><td><strong>Presença</strong></td><td>RSVP configurável e versionado, presença efetiva, relatórios de frequência</td><td>M05</td><td><span class="pill p-m">MVP</span></td></tr>
+          <tr><td><strong>M07</strong></td><td><strong>Responsabilidades</strong></td><td>Tipos, atribuição manual, escala, motor de geração, revisão humana</td><td>M04–M06</td><td><span class="pill p-s">V1.1</span></td></tr>
+          <tr><td><strong>M08</strong></td><td><strong>Comunicação</strong></td><td>Compartilhamento WhatsApp, anúncios, modelos, Web Push, lembretes</td><td>M05, M06</td><td><span class="pill p-s">V1.1</span></td></tr>
+          <tr><td><strong>M09</strong></td><td><strong>Financeiro</strong></td><td>Categorias, lançamentos, comprovantes, prestação de contas, despesas de PG, aprovação opcional</td><td>M03, M05</td><td><span class="pill p-s">V1.2</span></td></tr>
+          <tr><td><strong>M10</strong></td><td><strong>IA</strong></td><td>Assistente com escopo de permissão, sugestões, resumos, redação</td><td>M04, M06, M07, M09</td><td><span class="pill p-c">V2</span></td></tr>
+          <tr><td><strong>M11</strong></td><td><strong>Administração</strong></td><td>Configurações, chaves de funcionalidade, auditoria consultável, backup</td><td>M03</td><td><span class="pill p-c">transversal</span></td></tr>
+          <tr><td><strong>M12</strong></td><td><strong>Evolução</strong></td><td>Novos papéis, integrações, relatórios, multi-equipe</td><td>todos</td><td><span class="pill p-c">pós-V2</span></td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h3>Os três ajustes que proponho <span class="tag t-sug">SUG</span></h3>
+        <ol>
+          <li><strong>Comunicação (M08) antes de Financeiro (M09).</strong> O compartilhamento no WhatsApp é o que faz o app “aparecer” na vida da comunidade e sustenta a adoção; o financeiro é valioso mas usado por poucas pessoas. Adoção primeiro.</li>
+          <li><strong>IA (M10) por último — e isso não é timidez, é dado.</strong> A IA do briefing depende quase toda de histórico: sugerir divisão de grupos exige meses de frequência registrada; gerar escala exige histórico de responsabilidades; identificar quem está se afastando exige série temporal. Lançar IA sem dados produz sugestões ruins, e uma sugestão ruim na primeira semana queima a confiança da liderança na funcionalidade <strong>para sempre</strong>. Estimo <strong>8 a 12 semanas de uso real</strong> antes que o M10 gere valor honesto. Exceção: a redação de mensagens não depende de histórico e pode ser antecipada para o M08.</li>
+          <li><strong>Administração (M11) é transversal, não sequencial.</strong> Cada módulo entrega junto suas próprias configurações e seus próprios eventos de auditoria. Deixar configuração para o fim gera constantes fixadas no código que ninguém volta para parametrizar.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="s10">
+    <div class="col">
+      <div class="snum">10</div>
+      <h2>Fluxos principais</h2>
+
+      <h3>F1 — Visitante chega ao PG pela primeira vez</h3>
+      <pre>Conselheiro abre "Adicionar pessoa" (ou mostra o QR do PG)
+   → visitante informa apenas nome + WhatsApp
+   → sistema cria pessoa com status "Visitante", sem conta de acesso
+   → presença do dia é registrada
+   → na 3ª presença em 60 dias, o sistema sinaliza ao conselheiro:
+     "Fulano já veio 3 vezes — quer convidá-lo para o grupo?"
+   → conselheiro decide (o sistema nunca promove sozinho)</pre>
+      <p><strong>Princípio:</strong> o primeiro contato custa 15 segundos e dois campos. Nada de foto, endereço ou data de nascimento na porta de entrada. <span class="tag t-dec">DEC</span></p>
+
+      <h3>F2 — Membro confirma presença</h3>
+      <pre>Push/lembrete → abre o app (já autenticado, sessão longa)
+   → dashboard mostra o próximo evento no topo com os botões de RSVP
+   → 1 toque → confirmado (atualização otimista, sincroniza depois)
+   → se offline, a ação entra na fila e sobe quando houver rede</pre>
+      <p><strong>Alvo:</strong> da notificação ao RSVP registrado em <strong>menos de 5 segundos e 2 toques</strong>.</p>
+
+      <h3>F3 — Conselheiro fecha a semana do PG</h3>
+      <pre>Dashboard do conselheiro → "PG de quinta"
+   → lista de presença: toca nos nomes presentes (pré-ordenada por frequência)
+   → registra despesa do lanche (valor + foto do comprovante, opcional)
+   → vê a escala da próxima semana e ajusta se precisar
+   → toca "Compartilhar no WhatsApp" → texto pronto abre no WhatsApp do grupo</pre>
+      <p><strong>Alvo:</strong> rotina semanal completa em <strong>menos de 3 minutos</strong>.</p>
+
+      <h3>F4 — Líder reorganiza os grupos (fluxo com IA)</h3>
+      <pre>Líder → Grupos → "Sugerir reorganização"
+   → escolhe critérios (equilíbrio de frequência, faixa etária, separar
+     irmãos, manter casais juntos, tamanho-alvo…)
+   → motor determinístico calcula uma proposta e a IA explica em texto o porquê
+   → tela de comparação lado a lado: composição atual × proposta
+   → líder aceita tudo, aceita parcialmente (por pessoa) ou descarta
+   → ao confirmar: transferências aplicadas, histórico gravado, auditoria registrada
+   → nada é comunicado a ninguém automaticamente — o líder decide como contar</pre>
+      <div class="call">
+        <p><strong>Regra inegociável:</strong> o botão “Aplicar” só existe depois da revisão, e a proposta expira se não for aplicada. <span class="tag t-req">REQ</span></p>
+      </div>
+
+      <h3>F5 — Prestação de contas de um evento</h3>
+      <pre>Líder → Financeiro → filtra por evento "Acampamento"
+   → Arrecadado (R$ x) → Despesas (R$ y) → Saldo (R$ z)
+   → lista de movimentações com responsável e comprovante
+   → "Gerar prestação de contas" → resumo em PDF/imagem
+   → compartilha no WhatsApp</pre>
+
+      <h3>F6 — Ciclo das notificações (o que evita o excesso)</h3>
+      <pre>Evento gera fato → regra de notificação verifica:
+   1. a funcionalidade está ligada?
+   2. o usuário quer esse tipo de notificação?
+   3. está dentro da janela de silêncio (22h–7h)?
+   4. já enviamos algo parecido nas últimas 12 h? → agrupa em vez de repetir
+→ só então envia</pre>
+      <p><strong>Regra de produto:</strong> no máximo <strong>1 notificação por dia</strong> por usuário em condições normais, com agrupamento. <span class="tag t-sug">SUG</span></p>
+    </div>
+  </section>
+
+  <section id="s11">
+    <div class="wide">
+      <div class="snum">11</div>
+      <h2>Modelo inicial de RBAC</h2>
+      <div class="col">
+        <h3>Formato das permissões</h3>
+        <p>Strings <code>recurso.ação</code>, verificadas <strong>sempre no servidor</strong>, nunca só na interface:</p>
+        <pre>person.view          person.create        person.update       person.delete
+person.view_sensitive                     person.export
+group.view           group.manage         group.assign_member
+event.view           event.manage         event.publish
+attendance.view      attendance.record    attendance.report
+responsibility.view  responsibility.manage
+finance.view_own     finance.view_group   finance.view_all
+finance.create       finance.approve      finance.reverse
+announcement.create  announcement.send
+ai.use_basic         ai.use_analytics     ai.use_finance
+settings.manage      rbac.manage          audit.view</pre>
+        <h3>O escopo é o que faz isso funcionar</h3>
+        <p>Cada atribuição de papel carrega um escopo:</p>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Campo</th><th>Valores</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td><code>scope_type</code></td><td><code>global</code> · <code>group</code> · <code>self</code></td><td>Alcance da autoridade</td></tr>
+          <tr><td><code>scope_id</code></td><td><code>null</code> ou id do grupo</td><td>Sobre qual grupo</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p>Assim, “Conselheiro do PG Azul” é <code>papel=conselheiro, scope_type=group, scope_id=PG_Azul</code>. A mesma pessoa pode ser conselheira de dois grupos: duas linhas. Um líder é <code>papel=lider, scope_type=global</code>.</p>
+        <p>A verificação central tem uma assinatura só:</p>
+        <pre>can(usuario, 'attendance.record', { groupId: 'PG_Azul' }) → boolean</pre>
+        <h3>Papéis iniciais — dados, não código <span class="tag t-req">REQ</span></h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Papel</th><th>Escopo típico</th><th>Resumo das permissões</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Líder</strong></td><td>global</td><td>Tudo, incl. <code>rbac.manage</code>, <code>settings.manage</code>, <code>finance.view_all</code>, <code>audit.view</code></td></tr>
+          <tr><td><strong>Conselheiro</strong></td><td>grupo(s)</td><td>Gestão do próprio grupo, participantes, eventos, responsabilidades, presença, comunicação, <code>finance.view_group</code> + <code>finance.create</code></td></tr>
+          <tr><td><strong>Membro</strong></td><td>self + leitura do grupo</td><td>Próprio perfil, próprios eventos e RSVPs, próprias responsabilidades, <code>finance.view_own</code></td></tr>
+          <tr><td><strong>Visitante</strong></td><td>self limitado</td><td>Eventos autorizados, inscrição, informações públicas. <strong>Zero acesso financeiro</strong></td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p>Todos os papéis são linhas em <code>role</code>, com <code>is_system = true</code> para impedir exclusão acidental dos quatro básicos — mas <strong>suas permissões são editáveis</strong> e novos papéis podem ser criados. <span class="tag t-req">REQ</span></p>
+        <h3>Decisões de segurança da camada de autorização <span class="tag t-dec">DEC</span></h3>
+        <ol>
+          <li><strong>Negação por padrão.</strong> Rota sem declaração de permissão é rota bloqueada — a ausência de declaração é erro de teste, não porta aberta.</li>
+          <li><strong>Autorização no servidor</strong>, na camada de serviço, não no componente de tela. A interface apenas <em>esconde</em> o que o servidor já <em>proíbe</em>.</li>
+          <li><strong>Um único ponto de decisão</strong> (<code>policy.ts</code>), com testes cobrindo 100% da matriz papel × permissão × escopo.</li>
+          <li><strong>RLS do PostgreSQL fica como reforço futuro</strong> <span class="tag t-fut">FUT</span>, não como mecanismo primário: duplicar as regras em SQL e em TypeScript dobra a chance de divergência silenciosa. Uma verdade só.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="s12">
+    <div class="wide">
+      <div class="snum">12</div>
+      <h2>Modelo inicial de dados</h2>
+      <div class="col">
+        <p>PostgreSQL. Convenções: <code>snake_case</code>, chaves primárias UUID v7 (ordenáveis no tempo, sem revelar volume), <code>created_at</code>/<code>updated_at</code>/<code>deleted_at</code> em todas as tabelas de domínio, exclusão lógica onde há histórico, <code>team_id</code> em toda tabela raiz.</p>
+      </div>
+
+      <h3>Núcleo — pessoas, acesso e RBAC</h3>
+      <div class="dg">
+        <p class="cap">Diagrama ER — núcleo de identidade</p>
+        <pre class="mermaid">erDiagram
+    TEAM ||--o{ PERSON : contem
+    PERSON ||--o| USER_ACCOUNT : "pode ter"
+    USER_ACCOUNT ||--o{ SESSION : possui
+    PERSON ||--o{ PERSON_STATUS_HISTORY : registra
+    MEMBERSHIP_STATUS ||--o{ PERSON_STATUS_HISTORY : classifica
+    PERSON ||--o{ PERSON_ROLE : recebe
+    ROLE ||--o{ PERSON_ROLE : concede
+    ROLE ||--o{ ROLE_PERMISSION : agrupa
+    PERMISSION ||--o{ ROLE_PERMISSION : compoe
+    PERSON ||--o{ PERSON_RELATION : "vinculo com"
+    PERSON ||--o{ CUSTOM_FIELD_VALUE : preenche
+    CUSTOM_FIELD_DEF ||--o{ CUSTOM_FIELD_VALUE : define</pre>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Tabela</th><th>Papel</th><th>Campos-chave</th></tr></thead>
+        <tbody>
+          <tr><td><code>person</code></td><td>A pessoa. Existe sem conta (RN-01)</td><td><code>full_name</code> (único obrigatório), <code>photo_file_id</code>, <code>phone</code>, <code>whatsapp</code>, <code>email</code>, <code>birth_date</code>, <code>relationship_status</code>, <code>joined_at</code>, <code>notes</code>, <code>current_status_id</code>, <code>is_minor</code></td></tr>
+          <tr><td><code>user_account</code></td><td>Credenciais, opcional</td><td><code>person_id</code>, <code>email</code>/<code>phone</code>, <code>password_hash</code> (Argon2id), <code>totp_secret</code>, <code>failed_attempts</code>, <code>locked_until</code></td></tr>
+          <tr><td><code>session</code></td><td>Sessão server-side revogável</td><td><code>token_hash</code>, <code>expires_at</code>, <code>ip</code>, <code>user_agent</code>, <code>revoked_at</code></td></tr>
+          <tr><td><code>membership_status</code></td><td>Estágios da jornada — <strong>configurável</strong> (RN-02)</td><td><code>name</code>, <code>order</code>, <code>color</code>, <code>is_terminal</code>, <code>grants_role_id</code></td></tr>
+          <tr><td><code>person_status_history</code></td><td>Append-only (RN-04)</td><td><code>from_status_id</code>, <code>to_status_id</code>, <code>changed_by</code>, <code>reason</code>, <code>occurred_at</code></td></tr>
+          <tr><td><code>person_relation</code></td><td>Irmãos, cônjuge, namorado, responsável legal</td><td><code>person_a</code>, <code>person_b</code>, <code>relation_type</code>, simétrica</td></tr>
+          <tr><td><code>role</code>, <code>permission</code>, <code>role_permission</code></td><td>RBAC como dado</td><td><code>is_system</code> protege os 4 básicos</td></tr>
+          <tr><td><code>person_role</code></td><td>Atribuição <strong>com escopo</strong></td><td><code>role_id</code>, <code>scope_type</code>, <code>scope_id</code>, <code>granted_by</code>, <code>expires_at</code></td></tr>
+          <tr><td><code>custom_field_def</code> / <code>_value</code></td><td>Cadastro configurável (RN-05)</td><td><code>entity</code>, <code>key</code>, <code>label</code>, <code>type</code>, <code>required</code>, <code>options</code>, <code>visibility_permission</code></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Grupos, eventos e presença</h3>
+      <div class="dg">
+        <p class="cap">Diagrama ER — operação semanal</p>
+        <pre class="mermaid">erDiagram
+    GROUP ||--o{ GROUP_MEMBERSHIP : tem
+    PERSON ||--o{ GROUP_MEMBERSHIP : participa
+    EVENT_TYPE ||--o{ EVENT : classifica
+    EVENT ||--o{ EVENT_AUDIENCE : direciona
+    GROUP ||--o{ EVENT : "sedia (PG)"
+    EVENT ||--o{ RSVP : recebe
+    PERSON ||--o{ RSVP : responde
+    RSVP_OPTION ||--o{ RSVP : oferece
+    RSVP ||--o{ RSVP_HISTORY : versiona
+    EVENT ||--o{ ATTENDANCE : registra
+    PERSON ||--o{ ATTENDANCE : consta
+    EVENT ||--o{ ASSIGNMENT : requer
+    RESPONSIBILITY_TYPE ||--o{ ASSIGNMENT : define
+    PERSON ||--o{ ASSIGNMENT : assume</pre>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Tabela</th><th>Papel</th><th>Observações</th></tr></thead>
+        <tbody>
+          <tr><td><code>group</code></td><td>O PG</td><td><code>name</code>, <code>color</code>, <code>advisor_person_id</code>, <code>meeting_weekday</code>, <code>location</code>, <code>active</code></td></tr>
+          <tr><td><code>group_membership</code></td><td>Vínculo <strong>temporal</strong> (RN-06, RN-07)</td><td><code>joined_at</code>, <code>left_at</code>, <code>left_reason</code>. Índice único parcial garante <strong>um grupo ativo por pessoa</strong></td></tr>
+          <tr><td><code>event_type</code></td><td>Configurável (RN-10)</td><td><code>name</code>, <code>icon</code>, <code>default_rsvp_set</code>, <code>allows_checkin</code>, <code>counts_for_attendance</code></td></tr>
+          <tr><td><code>event</code></td><td>Compromisso</td><td><code>title</code>, <code>starts_at</code>, <code>location</code>, <code>owner_person_id</code>, <code>group_id</code>, <code>status</code>, <code>recurrence_rule</code> (RRULE), <code>parent_event_id</code></td></tr>
+          <tr><td><code>event_audience</code></td><td>Quem é convidado</td><td><code>scope</code> = todos · grupo · pessoas · status</td></tr>
+          <tr><td><code>rsvp_option</code></td><td>Opções configuráveis (RN-11)</td><td><code>label</code>, <code>semantic</code> (<code>yes</code>/<code>no</code>/<code>maybe</code>/<code>late</code>/<code>guest</code>), <code>allows_guest_count</code></td></tr>
+          <tr><td><code>rsvp</code></td><td>Resposta atual</td><td>único por (evento, pessoa)</td></tr>
+          <tr><td><code>rsvp_history</code></td><td>Respostas anteriores (RN-12)</td><td>append-only</td></tr>
+          <tr><td><code>attendance</code></td><td>Presença <strong>efetiva</strong> (RN-13)</td><td><code>source</code> = manual · checkin · importado; <code>recorded_by</code></td></tr>
+          <tr><td><code>checkin_token</code></td><td>Só se a chave estiver ligada (RN-14)</td><td>token rotativo com validade curta</td></tr>
+          <tr><td><code>responsibility_type</code></td><td>Configurável (RN-16)</td><td><code>name</code>, <code>min_interval_days</code>, <code>requires_skill</code></td></tr>
+          <tr><td><code>assignment</code></td><td>Escala</td><td><code>status</code> (proposta/confirmada/trocada/cumprida), <code>source</code> (manual/gerada), <code>proposal_id</code></td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <div class="call">
+          <h4>Ponto sensível — recorrência</h4>
+          <p>PGs semanais geram muitos eventos. Adoto <strong>materialização parcial</strong>: a série guarda a RRULE e o sistema materializa apenas as próximas 12 semanas em linhas reais, mais qualquer ocorrência que já tenha RSVP, presença ou escala. Materializar tudo incharia o banco e dificultaria editar a série; não materializar nada tornaria impossível anexar presença a uma ocorrência. <span class="tag t-dec">DEC</span></p>
+        </div>
+      </div>
+
+      <h3>Financeiro</h3>
+      <div class="dg">
+        <p class="cap">Diagrama ER — livro-caixa</p>
+        <pre class="mermaid">erDiagram
+    FINANCE_ACCOUNT ||--o{ TRANSACTION : movimenta
+    FINANCE_CATEGORY ||--o{ TRANSACTION : classifica
+    PERSON ||--o{ TRANSACTION : "responsavel/contribuinte"
+    EVENT ||--o{ TRANSACTION : "vinculada a"
+    GROUP ||--o{ TRANSACTION : "despesa de PG"
+    TRANSACTION ||--o{ RECEIPT : comprova
+    TRANSACTION ||--o| TRANSACTION : estorna
+    APPROVAL_FLOW ||--o{ APPROVAL_STEP : define
+    TRANSACTION ||--o{ APPROVAL_ACTION : percorre</pre>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Tabela</th><th>Papel</th><th>Observações</th></tr></thead>
+        <tbody>
+          <tr><td><code>finance_account</code></td><td>Caixa (geral, PIX, espécie)</td><td>permite conciliação simples</td></tr>
+          <tr><td><code>finance_category</code></td><td>Configurável, hierárquica</td><td><code>kind</code> = entrada · saída; iniciais: mensalidade do conselho, contribuição, doação, venda, despesa</td></tr>
+          <tr><td><code>transaction</code></td><td>Movimentação (RN-20)</td><td><code>amount_cents</code> <strong>inteiro</strong> (nunca float), <code>occurred_at</code>, <code>method</code>, <code>person_id</code>, <code>event_id</code>, <code>group_id</code>, <code>reverses_transaction_id</code></td></tr>
+          <tr><td><code>receipt</code></td><td>Comprovante opcional</td><td>aponta para <code>file_object</code>; nunca obrigatório</td></tr>
+          <tr><td><code>contribution_rule</code></td><td>Valor mínimo por papel/status (RN-22)</td><td><code>applies_to_role_id</code>, <code>min_amount_cents</code>, <code>period</code></td></tr>
+          <tr><td><code>approval_flow</code> / <code>_step</code> / <code>_action</code></td><td>Fluxo <strong>opcional</strong> (RN-23)</td><td>desligado ⇒ tabelas simplesmente não são usadas</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <div class="call ok">
+          <h4>Regras rígidas do módulo financeiro <span class="tag t-dec">DEC</span></h4>
+          <ul style="margin-bottom:0">
+            <li>Valores em <strong>centavos inteiros</strong>. Nenhum float em nenhum ponto do caminho.</li>
+            <li><code>transaction</code> é <strong>imutável</strong> após confirmada: correção = estorno + novo lançamento.</li>
+            <li>Toda operação escreve em <code>audit_log</code> com o valor anterior e o novo.</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Sistema, IA e auditoria</h3>
+      <div class="tw"><table>
+        <thead><tr><th>Tabela</th><th>Papel</th></tr></thead>
+        <tbody>
+          <tr><td><code>setting</code></td><td>Chave/valor com escopo (global/grupo/usuário) — abriga as chaves de funcionalidade (check-in, aprovação, notificações, IA)</td></tr>
+          <tr><td><code>feature_flag</code></td><td>Subconjunto tipado de <code>setting</code>, com padrão <strong>desligado</strong> (RN-29)</td></tr>
+          <tr><td><code>file_object</code></td><td>Arquivos: chave no storage, mime real, tamanho, hash, dono, permissão de leitura</td></tr>
+          <tr><td><code>notification</code> / <code>notification_preference</code> / <code>push_subscription</code></td><td>Fila, preferências por tipo e canal, endpoints Web Push</td></tr>
+          <tr><td><code>announcement</code> / <code>message_template</code></td><td>Comunicação e modelos com variáveis</td></tr>
+          <tr><td><code>ai_suggestion</code></td><td><strong>Central para o M10</strong>: <code>kind</code>, <code>input_snapshot</code>, <code>output</code>, <code>status</code> (pendente/aceita/parcial/rejeitada/expirada), <code>decided_by</code>, <code>applied_changes</code></td></tr>
+          <tr><td><code>ai_interaction_log</code></td><td>Auditoria de IA: quem perguntou, com que permissões, que dados entraram, custo em tokens</td></tr>
+          <tr><td><code>audit_log</code></td><td>Append-only: <code>actor</code>, <code>action</code>, <code>entity</code>, <code>before</code>, <code>after</code>, <code>ip</code>, <code>at</code> — sem UPDATE nem DELETE concedidos à aplicação</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h3>O que deliberadamente <em>não</em> modelei</h3>
+        <p>Chat interno, mural de fotos, feed social, gamificação, pontos, badges, ranking de presença. São funcionalidades que parecem valiosas, competem com o WhatsApp, aumentam a superfície de segurança e contrariam o princípio de preservar o caráter humano da comunidade. <span class="tag t-dec">DEC</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s13">
+    <div class="wide">
+      <div class="snum">13</div>
+      <h2>Arquitetura proposta</h2>
+      <div class="col"><h3>Estilo: monólito modular</h3></div>
+      <div class="dg">
+        <p class="cap">Camadas — da tela ao disco</p>
+        <pre style="background:none;border:none;padding:0;margin:0;color:#241416">┌──────────────────────────────────────────────────────┐
+│  PWA (SvelteKit) — instalável, offline de leitura     │
+└───────────────────────┬──────────────────────────────┘
+                        │ HTTPS
+┌───────────────────────▼──────────────────────────────┐
+│  Caddy — TLS automático, proxy, headers, rate limit   │
+└───────────────────────┬──────────────────────────────┘
+┌───────────────────────▼──────────────────────────────┐
+│  Aplicação SvelteKit (Node)                           │
+│  ┌────────────────────────────────────────────────┐   │
+│  │ Rotas / Form Actions / Endpoints JSON          │   │
+│  ├────────────────────────────────────────────────┤   │
+│  │ POLICY  ← toda requisição passa aqui           │   │
+│  ├────────────────────────────────────────────────┤   │
+│  │ Serviços de domínio (um por módulo)            │   │
+│  │ pessoas · grupos · eventos · presença ·        │   │
+│  │ responsabilidades · financeiro · comunicação   │   │
+│  ├────────────────────────────────────────────────┤   │
+│  │ Repositórios (Drizzle) · Storage · IA · Push   │   │
+│  └────────────────────────────────────────────────┘   │
+└──────┬──────────────────────┬────────────────────────┘
+       │                      │
+┌──────▼───────┐      ┌───────▼────────┐
+│ PostgreSQL   │      │ Volume de      │
+│ (+ pg-boss)  │      │ arquivos       │
+└──────────────┘      └────────────────┘</pre>
+      </div>
+      <div class="col">
+        <p><strong>Por que monólito e não microsserviços:</strong> uma comunidade de centenas de pessoas, um desenvolvedor, uma VPS. Microsserviços aqui só adicionariam latência, complexidade de deploy e modos de falha distribuída sem nenhum ganho. A modularidade que importa é a <strong>do código</strong> — fronteiras entre módulos, dependências explícitas — não a do processo. <span class="tag t-dec">DEC</span></p>
+        <h3>Regras de fronteira entre módulos <span class="tag t-dec">DEC</span></h3>
+        <ul>
+          <li>Um módulo <strong>nunca</strong> importa o repositório de outro; conversa pelo serviço público do outro módulo.</li>
+          <li>Toda rota declara sua permissão. Sem declaração ⇒ negado.</li>
+          <li>Efeitos entre módulos (ex.: “presença registrada” → “recalcular frequência”) passam por eventos de domínio na fila, não por chamada direta. Isso mantém o registro de presença rápido mesmo quando o cálculo cresce.</li>
+          <li>Nenhuma regra de negócio dentro de componente de tela.</li>
+        </ul>
+        <h3>Por que PWA e não app de loja <span class="tag t-dec">DEC</span></h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th></th><th>PWA</th><th>App nativo / Flutter nas lojas</th></tr></thead>
+        <tbody>
+          <tr><td>Custo anual</td><td><strong>R$ 0</strong></td><td>US$ 99 (Apple) + US$ 25 (Google)</td></tr>
+          <tr><td>Publicar correção</td><td><strong>minutos</strong></td><td>1–7 dias de revisão</td></tr>
+          <tr><td>Instalação</td><td>link → “adicionar à tela de início”</td><td>busca na loja</td></tr>
+          <tr><td>Adoção em comunidade</td><td><strong>link no WhatsApp funciona</strong></td><td>mais atrito</td></tr>
+          <tr><td>Push Android</td><td>sim</td><td>sim</td></tr>
+          <tr><td>Push iOS</td><td><strong>só se instalado na tela de início</strong> (iOS 16.4+)</td><td>sim, sempre</td></tr>
+          <tr><td>Câmera para QR</td><td>sim</td><td>sim</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p>O único ponto realmente fraco do PWA é a notificação no iPhone, tratado como risco <code>R-03</code>. Para uma comunidade que se organiza por link de WhatsApp, o PWA vence com folga.</p>
+        <h3>Estratégia offline</h3>
+        <p>Nível pragmático, não sincronização completa — que exigiria resolução de conflitos e triplicaria a complexidade:</p>
+        <ul>
+          <li><strong>Leitura:</strong> service worker com cache <em>stale-while-revalidate</em> para dashboard, agenda e lista do meu grupo.</li>
+          <li><strong>Escrita:</strong> apenas RSVP e presença entram numa fila local com reenvio em segundo plano; o resto exige rede e avisa claramente.</li>
+          <li><strong>Nunca offline:</strong> qualquer operação financeira ou de permissão. <span class="tag t-dec">DEC</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="s14">
+    <div class="wide">
+      <div class="snum">14</div>
+      <h2>Comparação de stacks</h2>
+      <div class="col">
+        <p>Você pediu explicitamente para evitar React e frameworks escolhidos por popularidade. Avaliei quatro caminhos sérios. Notas de 1 a 5.</p>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Critério</th><th>A. SvelteKit + Postgres</th><th>B. Laravel + Livewire</th><th>C. Phoenix LiveView</th><th>D. Flutter + API</th></tr></thead>
+        <tbody>
+          <tr><td>Custo de operação</td><td class="num">5</td><td class="num">5</td><td class="num">5</td><td class="num">3</td></tr>
+          <tr><td>Experiência mobile</td><td class="num">5</td><td class="num">3,5</td><td class="num">4</td><td class="num">5</td></tr>
+          <tr><td>Performance na VPS</td><td class="num">4,5</td><td class="num">4</td><td class="num">5</td><td class="num">4,5</td></tr>
+          <tr><td>Maturidade</td><td class="num">4,5</td><td class="num">5</td><td class="num">4,5</td><td class="num">5</td></tr>
+          <tr><td>Ecossistema/bibliotecas</td><td class="num">4</td><td class="num">5</td><td class="num">3,5</td><td class="num">4,5</td></tr>
+          <tr><td>Facilidade de hospedar na VPS</td><td class="num">4,5</td><td class="num">5</td><td class="num">4</td><td class="num">3</td></tr>
+          <tr><td>Segurança de fábrica</td><td class="num">4</td><td class="num">5</td><td class="num">4,5</td><td class="num">3,5</td></tr>
+          <tr><td>Curva / manutenção futura</td><td class="num">4,5</td><td class="num">5</td><td class="num">2,5</td><td class="num">3,5</td></tr>
+          <tr><td>Uma só linguagem no stack</td><td class="num">5</td><td class="num">4</td><td class="num">4</td><td class="num">2</td></tr>
+          <tr><td><strong>Rede ruim / offline</strong></td><td class="num"><strong>5</strong></td><td class="num">2</td><td class="num">2</td><td class="num">5</td></tr>
+          <tr><td>Integração com IA</td><td class="num">4,5</td><td class="num">4,5</td><td class="num">4</td><td class="num">4,5</td></tr>
+          <tr><td>“Fora do padrão gerado por IA”</td><td class="num">4,5</td><td class="num">4</td><td class="num">5</td><td class="num">4</td></tr>
+          <tr><td><strong>Média ponderada</strong></td><td class="num"><strong>4,6</strong></td><td class="num">4,3</td><td class="num">3,9</td><td class="num">3,8</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h3>Descartados sem análise longa</h3>
+        <ul>
+          <li><strong>Next.js / React</strong> — excluído pela sua preferência explícita, e a exclusão é tecnicamente defensável: para este produto traria peso de runtime sem benefício.</li>
+          <li><strong>WordPress / no-code / Bubble</strong> — teto baixo em RBAC com escopo e em regras financeiras auditáveis.</li>
+          <li><strong>Django/Rails + HTMX</strong> — perfeitamente válidos; perdem para A no mesmo ponto que B (interatividade dependente de ida ao servidor) sem a vantagem de ecossistema do Laravel.</li>
+        </ul>
+
+        <div class="call ok">
+          <h4>Recomendação — A · SvelteKit 2 (Svelte 5) + TypeScript + PostgreSQL 16 + Drizzle <span class="tag t-dec">DEC</span></h4>
+          <ol>
+            <li><strong>Rede ruim é o cenário real.</strong> PG em salão, sinal fraco, todo mundo confirmando presença ao mesmo tempo. Svelte roda a interação no dispositivo e sincroniza depois; Livewire e LiveView precisam de ida e volta ao servidor a cada clique, e LiveView com WebSocket caído deixa a tela inerte. Esse critério sozinho já separa A do resto.</li>
+            <li><strong>Progressive enhancement de verdade.</strong> As <em>form actions</em> funcionam como formulário HTML puro se o JavaScript falhar — o app degrada em vez de quebrar.</li>
+            <li><strong>Uma linguagem só.</strong> TypeScript da validação de formulário até a consulta ao banco, com tipos compartilhados entre cliente e servidor.</li>
+            <li><strong>Peso.</strong> Svelte compila em vez de embarcar runtime. O alvo de &lt; 100 KB de JS é confortável — com React seria uma luta.</li>
+          </ol>
+        </div>
+
+        <div class="call warn">
+          <h4>A ressalva honesta</h4>
+          <p>Se quem vai manter o sistema é mais forte em PHP do que em TypeScript, a opção <strong>B (Laravel + Livewire + Filament)</strong> passa a ser a escolha certa, mesmo com nota menor. <strong>Um stack ligeiramente inferior que você domina bate um stack superior que você combate.</strong> Notei projetos PHP e Flutter na sua pasta de trabalho — por isso esta é a primeira decisão que preciso que você aprove.</p>
+        </div>
+
+        <h3>Bibliotecas escolhidas (opção A) <span class="tag t-dec">DEC</span></h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Necessidade</th><th>Escolha</th><th>Por quê</th></tr></thead>
+        <tbody>
+          <tr><td>ORM / consultas</td><td><strong>Drizzle</strong></td><td>SQL-first, tipado, migrações versionadas, sem mágica escondida</td></tr>
+          <tr><td>Autenticação</td><td><strong>própria + Oslo/Arctic</strong></td><td>Auth de terceiros é dependência pesada para um caso simples; sessão em tabela dá revogação real</td></tr>
+          <tr><td>Hash de senha</td><td><strong>Argon2id</strong></td><td>padrão atual da OWASP</td></tr>
+          <tr><td>Validação</td><td><strong>Zod</strong></td><td>um esquema serve para formulário, API e tipo TS</td></tr>
+          <tr><td>Fila / agendamento</td><td><strong>pg-boss</strong></td><td>fila dentro do próprio Postgres — dispensa Redis, um serviço a menos para operar e fazer backup</td></tr>
+          <tr><td>Testes</td><td><strong>Vitest + Playwright</strong></td><td>unidade/integração e ponta a ponta em mobile emulado</td></tr>
+          <tr><td>Estilo</td><td><strong>Tailwind + tokens da marca</strong></td><td>ver anexo de identidade visual</td></tr>
+          <tr><td>E-mail</td><td>Resend ou SMTP próprio</td><td>free tier suficiente para convites e recuperação</td></tr>
+          <tr><td>PDF</td><td>Typst ou HTML→PDF</td><td>prestação de contas</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="s15">
+    <div class="wide">
+      <div class="snum">15</div>
+      <h2>Estratégia de hospedagem na VPS</h2>
+      <div class="col">
+        <h3>Serviços na máquina</h3>
+        <pre>caddy:      # TLS automático (Let's Encrypt), proxy reverso, headers, rate limit
+app:        # SvelteKit em Node 22, 2 réplicas para deploy sem queda
+postgres:   # PostgreSQL 16 + pg-boss (fila) no mesmo banco
+backup:     # pg_dump agendado, criptografado, com cópia externa
+uptime:     # Uptime Kuma — monitor leve</pre>
+        <p><strong>Não incluí:</strong> Redis (o Postgres cobre fila e cache neste volume), Elasticsearch (busca full-text do Postgres basta), Kubernetes (absurdo nesta escala), MinIO (volume em disco basta até dezenas de GB).</p>
+        <h3>Requisitos de máquina <span class="tag t-hip">HIP</span></h3>
+        <p>Preciso confirmar os specs da sua VPS.</p>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Recurso</th><th>Mínimo</th><th>Confortável</th></tr></thead>
+        <tbody>
+          <tr><td>vCPU</td><td>2</td><td>4</td></tr>
+          <tr><td>RAM</td><td>4 GB</td><td>8 GB</td></tr>
+          <tr><td>Disco</td><td>40 GB SSD</td><td>80 GB SSD</td></tr>
+          <tr><td>Sistema</td><td>Debian 12 / Ubuntu 22.04+</td><td>idem</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p>Consumo estimado em regime: app ~300 MB, Postgres ~500 MB, Caddy ~30 MB, restante para cache de disco.</p>
+        <div class="call warn">
+          <h4>Domínio — pendência real</h4>
+          <p>Sem domínio não há HTTPS confiável e <strong>sem HTTPS não há PWA</strong> — service worker e Web Push exigem contexto seguro. Um <code>.com.br</code> custa ~R$ 40/ano no Registro.br. Alternativas gratuitas (<code>sslip.io</code>, DuckDNS) servem para testar, não para produção: e-mails caem em spam e a URL não passa confiança para a comunidade. <strong>Recomendo comprar o domínio já no início do M01.</strong> <span class="tag t-sug">SUG</span></p>
+        </div>
+        <h3>CI/CD e ambientes</h3>
+        <pre>push na branch main
+   → GitHub Actions: lint, typecheck, testes de unidade, testes E2E
+   → build da imagem Docker → GitHub Container Registry
+   → deploy por SSH: pull da imagem, migração do banco, troca das réplicas
+   → verificação de saúde; se falhar, volta para a imagem anterior</pre>
+        <p>Dois ambientes na mesma VPS: <code>app.dominio</code> (produção) e <code>dev.dominio</code> (homologação, bancos separados). Um terceiro ambiente não se justifica nesta escala. <span class="tag t-dec">DEC</span></p>
+        <h3>Backup e recuperação</h3>
+        <ul>
+          <li><code>pg_dump</code> diário às 3h, comprimido e <strong>criptografado</strong>.</li>
+          <li>Retenção 7 diários / 4 semanais / 12 mensais.</li>
+          <li><strong>Cópia fora da VPS — obrigatória.</strong> Backblaze B2 custa ~US$ 6/TB/mês e o volume aqui será de poucos GB. Backup que mora só na máquina que pode morrer não é backup.</li>
+          <li>Anexos (fotos, comprovantes) no mesmo ciclo.</li>
+          <li><strong>Restauração testada uma vez por mês</strong> em ambiente separado, com registro. Backup nunca testado deve ser considerado inexistente.</li>
+        </ul>
+        <h3>Custo mensal projetado</h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Item</th><th class="num">Custo</th></tr></thead>
+        <tbody>
+          <tr><td>VPS</td><td class="num">já existente</td></tr>
+          <tr><td>Domínio .com.br</td><td class="num">~R$ 3,50/mês</td></tr>
+          <tr><td>Backup externo (B2)</td><td class="num">~R$ 2/mês</td></tr>
+          <tr><td>E-mail transacional</td><td class="num">R$ 0</td></tr>
+          <tr><td>Web Push</td><td class="num">R$ 0</td></tr>
+          <tr><td>IA (M10, sob demanda)</td><td class="num">R$ 30–80/mês</td></tr>
+          <tr><td><strong>Total além da VPS</strong></td><td class="num"><strong>~R$ 40 sem IA · ~R$ 90 com IA</strong></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="s16">
+    <div class="wide">
+      <div class="snum">16</div>
+      <h2>Estratégia de segurança</h2>
+      <div class="col">
+        <p>Tratada como requisito do primeiro módulo, não como etapa final. <span class="tag t-req">REQ</span></p>
+        <h3>Autenticação e sessão</h3>
+        <ul>
+          <li>Argon2id para senhas (<code>m=19456, t=2, p=1</code>, parâmetros da OWASP).</li>
+          <li><strong>Sessão em tabela</strong> com cookie <code>httpOnly</code>, <code>Secure</code>, <code>SameSite=Lax</code>; token rotacionado no login e revogável no servidor. Rejeitei JWT stateless: sem revogação real, um token vazado vale até expirar — inaceitável em sistema com dados financeiros. <span class="tag t-dec">DEC</span></li>
+          <li>Sessão longa (30 dias) para conforto no celular, com <strong>reautenticação obrigatória</strong> para operações sensíveis.</li>
+          <li>TOTP opcional, recomendado para quem tem <code>finance.*</code> e <code>rbac.manage</code>.</li>
+          <li>Bloqueio progressivo por tentativas + limite por IP e por conta.</li>
+        </ul>
+        <h3>Entrada e APIs</h3>
+        <ul>
+          <li>Zod em <strong>toda</strong> fronteira de entrada; nada chega ao serviço sem validação.</li>
+          <li>Consultas parametrizadas via Drizzle — sem concatenação de SQL.</li>
+          <li>Proteção CSRF nativa do SvelteKit, verificação de origem em ações mutantes.</li>
+          <li>Rate limit em camadas: Caddy (global), aplicação (por conta, por rota sensível).</li>
+          <li>CSP restritiva, <code>X-Content-Type-Options</code>, <code>Referrer-Policy</code>, HSTS.</li>
+        </ul>
+        <div class="call warn">
+          <h4>Uploads — a superfície de risco subestimada</h4>
+          <p>Fotos de pessoas e comprovantes financeiros são o vetor mais perigoso deste sistema:</p>
+          <ul>
+            <li>Validação do <strong>conteúdo real</strong> do arquivo (magic bytes), não da extensão nem do <code>Content-Type</code> declarado.</li>
+            <li>Toda imagem é <strong>reprocessada</strong> no servidor — isso remove qualquer payload embutido e, crucialmente, <strong>apaga os metadados EXIF</strong>, que incluem coordenadas de GPS. Publicar a foto de um membro com a localização da casa dele seria um vazamento sério e silencioso. <span class="tag t-dec">DEC</span></li>
+            <li>Nome aleatório, armazenamento <strong>fora do diretório servido pela web</strong>, entrega por rota que verifica permissão.</li>
+            <li>Limite de tamanho e de taxa por usuário.</li>
+          </ul>
+        </div>
+        <h3>Dados pessoais e LGPD</h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Categoria</th><th>Tratamento</th></tr></thead>
+        <tbody>
+          <tr><td>Dados de contato</td><td>Base legal: legítimo interesse da associação. Minimização — só o que é usado</td></tr>
+          <tr><td>Foto</td><td><strong>Consentimento explícito</strong>, revogável, registrado com data</td></tr>
+          <tr><td><strong>Dados de menores</strong></td><td>LGPD art. 14: exige consentimento <strong>específico e destacado de pelo menos um dos pais ou responsável</strong>. Se houver menores de 18 nos Eagles, isso é obrigação legal, não opção. Exige campo de responsável, registro do consentimento e visibilidade mais restrita</td></tr>
+          <tr><td>Relacionamento, vínculos</td><td>Visível apenas a quem tem <code>person.view_sensitive</code></td></tr>
+          <tr><td>Dados financeiros</td><td>Só para papéis autorizados; membro vê apenas os próprios</td></tr>
+          <tr><td>Exclusão</td><td>Direito ao apagamento com anonimização, preservando a integridade dos registros financeiros (obrigação legal de guarda prevalece)</td></tr>
+          <tr><td>Retenção</td><td>Política por categoria; inativos por N anos são anonimizados</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p><strong>Esta é a pendência jurídica mais importante do projeto</strong> e está na lista de aprovação.</p>
+        <h3>Segredos e infraestrutura</h3>
+        <p>Segredos só em variáveis de ambiente fora do repositório (com <code>.env.example</code> versionado); rotação documentada; SSH só por chave, senha desabilitada, <code>fail2ban</code>; firewall abrindo apenas 80/443/22; Postgres <strong>sem porta exposta</strong> à internet; contêineres sem root; atualizações de segurança automáticas.</p>
+        <h3>Auditoria e logs</h3>
+        <p><code>audit_log</code> append-only (a aplicação recebe apenas INSERT e SELECT); logs estruturados <strong>sem PII nem segredos</strong>; retenção de 90 dias para log operacional e permanente para auditoria de finanças e permissões.</p>
+        <h3>Riscos específicos de IA</h3>
+        <ul>
+          <li>Nunca enviar base de dados ao modelo: apenas o recorte mínimo que o usuário já poderia ver.</li>
+          <li><strong>Pseudonimização antes do envio</strong> — nomes viram <code>P1, P2, P3</code> e são reidratados na resposta, do lado do servidor. O provedor recebe padrões, não a lista de membros dos Eagles. <span class="tag t-dec">DEC</span></li>
+          <li>Defesa contra injeção de prompt: conteúdo escrito por usuários (observações, atas) entra no modelo como <strong>dado delimitado</strong>, jamais como instrução.</li>
+          <li>A IA não tem acesso direto ao banco: consome as mesmas funções de serviço, com as mesmas verificações de permissão.</li>
+          <li>Todo uso registrado em <code>ai_interaction_log</code> com custo e escopo.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="s17">
+    <div class="wide">
+      <div class="snum">17</div>
+      <h2>Estratégia de IA</h2>
+      <div class="col">
+        <h3>A decisão mais importante: determinístico primeiro, IA depois</h3>
+        <p>Boa parte do que o briefing chama de “IA” <strong>não é problema de IA</strong> — é problema de otimização com restrições:</p>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Tarefa</th><th>Natureza real</th><th>Quem resolve</th></tr></thead>
+        <tbody>
+          <tr><td>Equilibrar grupos por frequência, idade, vínculos</td><td>Otimização com restrições</td><td><strong>Algoritmo determinístico</strong></td></tr>
+          <tr><td>Gerar escala sem repetir a mesma pessoa</td><td>Escalonamento com restrições</td><td><strong>Algoritmo determinístico</strong></td></tr>
+          <tr><td>Calcular frequência, tendência, queda de participação</td><td>Estatística</td><td><strong>SQL</strong></td></tr>
+          <tr><td>Detectar inconsistência financeira</td><td>Regras + estatística</td><td><strong>SQL + regras</strong></td></tr>
+          <tr><td><strong>Explicar</strong> por que a proposta ficou assim</td><td>Linguagem natural</td><td><strong>LLM</strong></td></tr>
+          <tr><td>Redigir o aviso do PG no tom certo</td><td>Linguagem natural</td><td><strong>LLM</strong></td></tr>
+          <tr><td>Resumir uma ata e extrair tarefas</td><td>Compreensão de texto</td><td><strong>LLM</strong></td></tr>
+          <tr><td>Responder “quem faltou nas últimas 3 semanas?”</td><td>Tradução pergunta → consulta</td><td><strong>LLM + ferramentas</strong></td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <div class="call ok">
+          <h4>Por que isso importa <span class="tag t-dec">DEC</span></h4>
+          <ol>
+            <li><strong>Reprodutibilidade.</strong> Um algoritmo dá a mesma resposta duas vezes; um LLM não necessariamente. Para divisão de grupos, onde as pessoas vão perguntar “por que eu fui pro PG Verde?”, a resposta precisa ser auditável.</li>
+            <li><strong>Custo.</strong> Otimização roda de graça na VPS. Cada chamada ao modelo custa.</li>
+            <li><strong>Confiança.</strong> Um LLM que “acha” que Fulano veio 4 vezes quando vieram 2 destrói a credibilidade do sistema inteiro. Números vêm sempre do SQL, nunca da geração de texto.</li>
+            <li><strong>Funciona sem internet e sem crédito.</strong> Se a API cair ou o teto de gasto estourar, a escala <strong>ainda é gerada</strong> — só não vem com a explicação em texto. Nenhuma funcionalidade essencial pode depender da IA.</li>
+          </ol>
+        </div>
+        <h3>Modelo e provedor</h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Alternativa</th><th>Avaliação</th><th>Veredito</th></tr></thead>
+        <tbody>
+          <tr><td><strong>API Claude (Anthropic)</strong></td><td>Melhor qualidade em português e em raciocínio sobre dados estruturados; pagamento por uso, sem mensalidade; cache de prompt e Batch API reduzem custo</td><td><strong>recomendado</strong></td></tr>
+          <tr><td>Modelo local (Ollama/Llama) na VPS</td><td>“Grátis”, mas a VPS não tem GPU: respostas de dezenas de segundos, qualidade bem inferior em português, e o consumo de RAM competiria com o banco</td><td>descartado</td></tr>
+          <tr><td>API de terceiro mais barata</td><td>Economia irrelevante nesta escala; troca por qualidade pior justamente nas tarefas sensíveis</td><td>descartado</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p><strong>Modelo padrão: <code>claude-opus-5</code></strong> — US$ 5 por milhão de tokens de entrada e US$ 25 de saída. A alternativa de menor custo (<code>claude-haiku-4-5</code>, US$ 1/US$ 5) fica disponível como opção configurável para tarefas simples e de alto volume, como redigir avisos. Essa é uma escolha sua. <span class="tag t-sug">SUG</span></p>
+        <p><strong>Custo estimado</strong> para ~200 pessoas com uso mensal de ~40 avisos redigidos, ~20 resumos, ~100 perguntas e as reorganizações do período: <strong>≈ US$ 8/mês (~R$ 45)</strong>. Três mecanismos reduzem ainda mais:</p>
+        <ul>
+          <li><strong>Cache de prompt</strong> — regras da organização e esquema de dados são idênticos em toda chamada; em cache, custam uma fração.</li>
+          <li><strong>Batch API</strong> — relatórios noturnos e análises não urgentes saem por 50% do preço.</li>
+          <li><strong>Teto mensal configurável</strong>, com aviso em 80% e degradação suave ao atingir o limite.</li>
+        </ul>
+        <h3>Privacidade — o desenho que protege os membros <span class="tag t-dec">DEC</span></h3>
+        <pre>Pergunta do usuário
+   → camada de política verifica permissões (a mesma do app)
+   → busca dados APENAS no escopo permitido, via serviços de domínio
+   → PSEUDONIMIZAÇÃO: "Maria Silva" → "P7"
+     telefone / e-mail / endereço nunca saem
+   → envio ao modelo: padrões e números, sem identidade
+   → resposta recebida
+   → REIDRATAÇÃO local: "P7" → "Maria Silva"
+   → registro em ai_interaction_log (quem, quando, escopo, custo)
+   → entrega ao usuário</pre>
+        <p>Regras absolutas: a IA <strong>não tem acesso ao banco</strong>; nenhum dado de menor sai sem consentimento registrado do responsável; texto escrito por usuários entra como dado delimitado, jamais como instrução; nenhum dado é usado para treinar modelo; todo uso é auditável e visível ao líder.</p>
+        <h3>O contrato de toda sugestão</h3>
+      </div>
+      <div class="dg">
+        <p class="cap">Ciclo de vida de uma sugestão</p>
+        <pre class="mermaid">flowchart LR
+    A[Dados autorizados] --> B[Motor deterministico]
+    B --> C[Proposta estruturada]
+    C --> D[LLM: explicacao em texto]
+    D --> E[Tela de revisao humana]
+    E -->|aceita| F[Aplica + auditoria]
+    E -->|aceita em parte| F
+    E -->|rejeita| G[Descarta + registra motivo]
+    E -->|ignora| H[Expira em 7 dias]</pre>
+      </div>
+      <div class="col">
+        <p>Toda sugestão vira uma linha em <code>ai_suggestion</code> com estado explícito. Nenhuma se aplica sozinha, nenhuma expira em silêncio sem registro, e o motivo da rejeição alimenta a melhoria dos critérios. <span class="tag t-req">REQ</span></p>
+        <h3>Escopo de IA por papel</h3>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Papel</th><th>Permissão</th><th>O que pode pedir</th></tr></thead>
+        <tbody>
+          <tr><td>Líder</td><td><code>ai.use_basic</code> + <code>ai.use_analytics</code> + <code>ai.use_finance</code></td><td>Tudo dentro dos dados que já pode ver</td></tr>
+          <tr><td>Conselheiro</td><td><code>ai.use_basic</code> + <code>ai.use_analytics</code> (escopo do grupo)</td><td>Análises do próprio grupo, redação de avisos, escala</td></tr>
+          <tr><td>Membro</td><td><code>ai.use_basic</code></td><td>Ajuda com texto pessoal; <strong>zero acesso analítico</strong></td></tr>
+          <tr><td>Visitante</td><td>nenhuma</td><td>—</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="s18">
+    <div class="wide">
+      <div class="snum">18</div>
+      <h2>Integração com WhatsApp</h2>
+      <div class="col"><p>Avaliei as três formas tecnicamente possíveis. Só uma é adequada agora.</p></div>
+      <div class="tw"><table>
+        <thead><tr><th>Abordagem</th><th>Como funciona</th><th>Custo</th><th>Risco</th><th>Veredito</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1. Deep link + Web Share</strong></td><td><code>wa.me/?text=…</code> e a API de compartilhamento do navegador abrem o WhatsApp com o texto pronto; o usuário escolhe o grupo e toca em enviar</td><td>R$ 0</td><td>nenhum</td><td><strong>MVP</strong></td></tr>
+          <tr><td><strong>2. API oficial (WhatsApp Cloud API)</strong></td><td>Envio automatizado real</td><td>Cobrança por modelo de mensagem</td><td>Exige verificação de empresa, número dedicado e aprovação prévia de cada template</td><td>futuro <span class="tag t-fut">FUT</span></td></tr>
+          <tr><td><strong>3. Bibliotecas não oficiais</strong><br>(whatsapp-web.js, Baileys)</td><td>Automatizam o WhatsApp Web</td><td>R$ 0</td><td><strong>Violam os termos de uso da Meta. O número usado pode ser banido</strong> — inclusive o número pessoal de um líder</td><td><strong>não recomendo</strong></td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h3>O que entrego no MVP <span class="tag t-sug">SUG</span></h3>
+        <p>Um botão <strong>“Compartilhar no WhatsApp”</strong> presente em evento, escala, aviso, lembrete e prestação de contas. Ele monta o texto formatado (com a formatação nativa do WhatsApp) e chama o compartilhamento nativo do celular — o usuário escolhe o grupo e envia. Um toque a mais que o envio automático, <strong>zero custo, zero risco de banimento e zero burocracia</strong>.</p>
+        <pre>*PG Azul — Quinta, 21/08 às 20h*
+📍 Casa do Pedro
+
+*Escala:*
+• Palestra: João
+• Louvor: Marina
+• Lanche: Família Souza
+
+Confirme sua presença: eagles.app/e/a7f3</pre>
+        <p>O link curto leva ao RSVP com um toque. <strong>É esse link que faz o app circular na comunidade</strong> — sem loja, sem instalação obrigatória, sem atrito.</p>
+        <div class="call">
+          <h4>Por que não a API oficial agora <span class="tag t-dec">DEC</span></h4>
+          <p>O ganho é economizar <strong>um toque</strong>. O custo é verificação de empresa junto à Meta, número de telefone dedicado, aprovação prévia de cada modelo de mensagem, cobrança por mensagem e uma dependência externa que pode quebrar. Fora de proporção para o benefício. Reavaliar apenas se o volume de lembretes crescer muito.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s19">
+    <div class="wide">
+      <div class="snum">19</div>
+      <h2>MVP recomendado</h2>
+      <div class="col"><h3>Escopo — 6 módulos, ~10 semanas <span class="tag t-sug">SUG</span></h3></div>
+      <div class="tw"><table>
+        <thead><tr><th>Semanas</th><th>Módulo</th><th>Entregável verificável</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1–2</strong></td><td>M01 Fundação</td><td>VPS configurada, HTTPS, CI/CD, banco migrado, login funcionando, PWA instalável, design system aplicado</td></tr>
+          <tr><td><strong>3–4</strong></td><td>M02 Pessoas + M03 RBAC</td><td>Cadastrar pessoa em 15 s; 4 papéis com escopo funcionando; matriz de permissões 100% testada</td></tr>
+          <tr><td><strong>5–6</strong></td><td>M04 Grupos</td><td>PGs criados, membros distribuídos, transferência com histórico, visão do conselheiro</td></tr>
+          <tr><td><strong>7–8</strong></td><td>M05 Eventos</td><td>PG semanal recorrente, calendário mobile, público-alvo, link público do evento</td></tr>
+          <tr><td><strong>9–10</strong></td><td>M06 Presença + compartilhamento</td><td>RSVP em 1 toque, lista de presença, relatório de frequência, botão de WhatsApp</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h3>O critério de corte que usei</h3>
+        <blockquote>Entra no MVP o que responde <strong>sim</strong> a: “sem isso, a liderança não consegue usar o app para o PG da próxima quinta-feira?”</blockquote>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Fica de fora do MVP</th><th>Motivo</th></tr></thead>
+        <tbody>
+          <tr><td>Financeiro</td><td>Alto valor, mas usado por 3–5 pessoas. Adiar não impede ninguém de usar o app</td></tr>
+          <tr><td>IA</td><td>Precisa de histórico. Lançar sem dados produz sugestão ruim e queima a confiança</td></tr>
+          <tr><td>Check-in QR</td><td>Nasce desligado; ninguém sente falta na primeira semana</td></tr>
+          <tr><td>Aprovação de despesas</td><td>Depende do financeiro</td></tr>
+          <tr><td>Push</td><td>Lembrete pelo WhatsApp resolve enquanto isso</td></tr>
+          <tr><td>Campos personalizados</td><td>Os campos padrão cobrem os primeiros meses</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h3>Antes de qualquer código — a semana zero <span class="tag t-sug">SUG</span></h3>
+        <ol>
+          <li>Aprovar as decisões da seção final.</li>
+          <li>Comprar o domínio e confirmar os specs da VPS.</li>
+          <li><strong>Cadastrar as pessoas reais em planilha</strong> — o app nasce com dados de verdade, não com “João da Silva teste”. Sistema vazio na primeira demonstração não convence ninguém.</li>
+          <li>Definir com a liderança <strong>três indicadores</strong> que hoje ninguém consegue responder — eles viram o critério objetivo de sucesso.</li>
+        </ol>
+        <div class="call warn">
+          <h4>Estratégia de lançamento <span class="tag t-sug">SUG</span></h4>
+          <p>Não lançar para todos de uma vez. <strong>Um PG piloto por 3 semanas</strong> — de preferência o de um conselheiro paciente e comunicativo. Ajustar com base no uso real e só então abrir para os demais. O custo de um lançamento geral ruim é a comunidade decidir coletivamente que “aquele app não funciona”, e essa impressão é quase impossível de reverter.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s20">
+    <div class="wide">
+      <div class="snum">20</div>
+      <h2>Roadmap pós-MVP</h2>
+      <div class="tw"><table>
+        <thead><tr><th>Fase</th><th>Quando</th><th>Conteúdo</th><th>Por que nessa ordem</th></tr></thead>
+        <tbody>
+          <tr><td><strong>V1.1</strong></td><td>+4 semanas</td><td><strong>M07 Responsabilidades</strong> (escala manual + geração determinística) e <strong>M08 Comunicação</strong> (anúncios, modelos, Web Push, lembretes)</td><td>A escala é a segunda maior dor dos conselheiros; notificação só faz sentido quando já existe conteúdo a notificar</td></tr>
+          <tr><td><strong>V1.2</strong></td><td>+4 semanas</td><td><strong>M09 Financeiro</strong> completo, prestação de contas, exportação, despesas de PG, aprovação opcional</td><td>Precisa de eventos e grupos consolidados para as vinculações fazerem sentido</td></tr>
+          <tr><td><strong>V1.3</strong></td><td>+3 semanas</td><td>Relatórios avançados, dashboards por papel refinados, campos personalizados, importação</td><td>Refinamento guiado por dados de uso, não por suposição</td></tr>
+          <tr><td><strong>V2.0</strong></td><td>+6 semanas, após ~6 meses de operação</td><td><strong>M10 IA</strong> completo: sugestão de grupos, escala inteligente, análise de participação, assistente de perguntas, resumo de atas</td><td>Só aqui existe histórico suficiente para a IA ser honesta</td></tr>
+          <tr><td><strong>V2.x</strong></td><td>conforme demanda</td><td>Check-in QR, multi-equipe, integrações, novos papéis, novos relatórios</td><td>Puxado por necessidade real</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p><strong>Nota sobre a IA:</strong> a única funcionalidade de IA antecipada é a <strong>redação de mensagens</strong>, que entra já na V1.1 por não depender de histórico — e serve como primeira experiência positiva da liderança com o recurso.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="s21">
+    <div class="wide">
+      <div class="snum">21</div>
+      <h2>Riscos e pontos de atenção</h2>
+      <div class="tw"><table>
+        <thead><tr><th>#</th><th>Risco</th><th>Prob.</th><th>Impacto</th><th>Mitigação</th></tr></thead>
+        <tbody>
+          <tr><td><code>R-01</code></td><td><strong>Baixa adoção</strong> — comunidade continua só no WhatsApp</td><td>Alta</td><td>Crítico</td><td>PG piloto; valor visível em 1 tela; link de RSVP circulando no WhatsApp; nunca exigir o app para participar</td></tr>
+          <tr><td><code>R-02</code></td><td><strong>Rejeição cultural</strong> — sensação de vigilância/burocracia</td><td>Média</td><td>Crítico</td><td>Controles nascem desligados; sem ranking de presença; linguagem acolhedora; envolver conselheiros no desenho</td></tr>
+          <tr><td><code>R-03</code></td><td><strong>Push no iPhone</strong> exige PWA instalado na tela de início</td><td>Alta</td><td>Médio</td><td>Onboarding com instruções de instalação; lembrete por WhatsApp como caminho principal; e-mail como reserva</td></tr>
+          <tr><td><code>R-04</code></td><td><strong>Fator caminhão</strong> — um desenvolvedor só</td><td>Alta</td><td>Crítico</td><td>Documentação desde o dia 1; stack comum; código simples; backup automatizado e testado; sem magia</td></tr>
+          <tr><td><code>R-05</code></td><td><strong>Vazamento de dados pessoais</strong> (fotos, contatos, menores)</td><td>Baixa</td><td>Crítico</td><td>EXIF removido; autorização no servidor; auditoria; 2FA para papéis sensíveis</td></tr>
+          <tr><td><code>R-06</code></td><td><strong>Erro ou desconfiança no financeiro</strong></td><td>Média</td><td>Alto</td><td>Centavos inteiros; imutabilidade com estorno; auditoria total; 100% de cobertura de testes; conferência manual nos 3 primeiros meses</td></tr>
+          <tr><td><code>R-07</code></td><td><strong>VPS morre</strong> (disco, provedor, invasão)</td><td>Baixa</td><td>Crítico</td><td>Backup diário criptografado <strong>fora da VPS</strong>; restauração testada mensalmente; infra reproduzível por Docker Compose</td></tr>
+          <tr><td><code>R-08</code></td><td><strong>IA gera sugestão ruim ou constrangedora</strong></td><td>Média</td><td>Alto</td><td>Determinístico primeiro; revisão humana obrigatória; pseudonimização; nunca sugerir julgamento sobre pessoas, apenas fatos</td></tr>
+          <tr><td><code>R-09</code></td><td><strong>Escopo cresce sem controle</strong></td><td>Alta</td><td>Alto</td><td>Módulos fechados com critérios de aceitação; novidade vai para o backlog, não para o módulo em andamento</td></tr>
+          <tr><td><code>R-10</code></td><td><strong>Dados de menores sem consentimento parental</strong></td><td>Média</td><td><strong>Alto — jurídico</strong></td><td>Confirmar se há menores; se houver, campo de responsável + consentimento registrado antes do primeiro cadastro real</td></tr>
+          <tr><td><code>R-11</code></td><td><strong>Custo de IA fora de controle</strong></td><td>Baixa</td><td>Médio</td><td>Teto mensal configurável; cache de prompt; Batch API; degradação suave</td></tr>
+          <tr><td><code>R-12</code></td><td><strong>Migração de dados existentes</strong></td><td>Média</td><td>Médio</td><td>Importador de planilha no M02; detecção de duplicidade; período de conferência</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <div class="call warn">
+          <h4>Os dois riscos que realmente decidem o projeto</h4>
+          <p><code>R-01</code> e <code>R-02</code> são <strong>de produto, não de tecnologia</strong>. Um sistema tecnicamente impecável que ninguém abre falhou completamente. Por isso o MVP é enxuto, o piloto é pequeno e todo controle nasce desligado.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s22">
+    <div class="wide">
+      <div class="snum">22</div>
+      <h2>Ambiguidades que precisam de decisão</h2>
+      <div class="col"><h3>Decidi por conta própria — justificativa registrada <span class="tag t-dec">DEC</span></h3></div>
+      <div class="tw"><table>
+        <thead><tr><th>#</th><th>Ambiguidade</th><th>Decisão</th><th>Razão</th></tr></thead>
+        <tbody>
+          <tr><td><code>A-01</code></td><td>Multi-equipe (Bears/Tigers/Sheeps)?</td><td><code>team_id</code> no modelo, sem interface</td><td>Barato agora, caro depois</td></tr>
+          <tr><td><code>A-02</code></td><td>JWT ou sessão em banco?</td><td>Sessão em banco</td><td>Revogação real importa com dados financeiros</td></tr>
+          <tr><td><code>A-03</code></td><td>Editar ou estornar lançamento?</td><td>Estornar</td><td>Rastreabilidade financeira inegociável</td></tr>
+          <tr><td><code>A-04</code></td><td>Como tratar PG recorrente?</td><td>RRULE + materialização de 12 semanas</td><td>Equilíbrio entre tamanho do banco e flexibilidade</td></tr>
+          <tr><td><code>A-05</code></td><td>RLS do Postgres?</td><td>Não agora</td><td>Duplicar regra em dois lugares gera divergência silenciosa</td></tr>
+          <tr><td><code>A-06</code></td><td>Redis?</td><td>Não — pg-boss no Postgres</td><td>Um serviço a menos para operar e fazer backup</td></tr>
+          <tr><td><code>A-07</code></td><td>Sincronização offline completa?</td><td>Não — só leitura em cache e fila para RSVP/presença</td><td>Resolução de conflitos triplicaria a complexidade</td></tr>
+          <tr><td><code>A-08</code></td><td>Ausência de RSVP conta como falta?</td><td><strong>Não, nunca</strong></td><td>Confundir silêncio com ausência gera relatório injusto</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col"><h3>Dependem de você</h3></div>
+      <div class="tw"><table>
+        <thead><tr><th>#</th><th>Ambiguidade</th><th>Por que importa</th></tr></thead>
+        <tbody>
+          <tr><td><code>B-01</code></td><td><strong>Stack</strong>: SvelteKit/TS ou Laravel/PHP?</td><td>Define tudo. Depende de quem vai manter o sistema</td></tr>
+          <tr><td><code>B-02</code></td><td><strong>Existem menores de 18 anos?</strong></td><td>Obrigação legal da LGPD art. 14 — muda o cadastro e a visibilidade</td></tr>
+          <tr><td><code>B-03</code></td><td><strong>Como as pessoas entram no app?</strong></td><td>Define o fluxo de autenticação e a taxa de adoção</td></tr>
+          <tr><td><code>B-04</code></td><td><strong>Escopo do MVP</strong> — financeiro entra ou não?</td><td>Muda o cronograma em ~4 semanas</td></tr>
+          <tr><td><code>B-05</code></td><td>Quantas pessoas, quantos PGs hoje?</td><td>Calibra o dimensionamento e o desenho das telas</td></tr>
+          <tr><td><code>B-06</code></td><td>Specs da VPS?</td><td>Confirma a viabilidade da arquitetura proposta</td></tr>
+          <tr><td><code>B-07</code></td><td>Quem administra o sistema no dia a dia?</td><td>Define quantas configurações precisam de interface própria</td></tr>
+          <tr><td><code>B-08</code></td><td>Periodicidade real de reorganização dos PGs?</td><td>Calibra o motor de sugestão</td></tr>
+          <tr><td><code>B-09</code></td><td>Existe caixa/conta bancária formal dos Eagles?</td><td>Muda a modelagem de <code>finance_account</code></td></tr>
+          <tr><td><code>B-10</code></td><td>“Eagles App” é o nome definitivo?</td><td>Afeta domínio, marca e textos</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section id="s23">
+    <div class="col">
+      <div class="snum">23</div>
+      <h2>Recomendações adicionais</h2>
+      <h3>Produto</h3>
+      <ol>
+        <li><strong>Comece pelos conselheiros, não pelos membros.</strong> Eles são o gargalo operacional. Se o app fizer a vida deles melhor, eles trazem os membros. O caminho contrário nunca funciona.</li>
+        <li><strong>Uma tela por papel na primeira versão.</strong> Membro precisa de um dashboard e uma tela de evento. Só isso.</li>
+        <li><strong>Nunca exija o app para participar.</strong> A pessoa que não instalou precisa continuar entrando no PG, sendo marcada presente por outro e recebendo o aviso no WhatsApp.</li>
+        <li><strong>Comemore os números certos.</strong> Se a liderança começar a celebrar “95% de presença”, o produto virou instrumento de pressão. Os indicadores existem para <strong>identificar quem precisa de atenção</strong>, não para cobrar.</li>
+      </ol>
+      <h3>Engenharia</h3>
+      <ol start="5">
+        <li><strong>Escreva os testes de autorização antes das telas.</strong> A matriz papel × permissão × escopo é onde um erro vira vazamento.</li>
+        <li><strong>Semeie o banco com dados realistas</strong> desde o dia 1. Bug de interface aparece com dado real, não com “teste 123”.</li>
+        <li><strong>Registre cada decisão arquitetural em um ADR curto</strong> (<code>docs/adr/NNN-titulo.md</code>). Em 8 meses ninguém lembra por que o Redis foi descartado.</li>
+        <li><strong>Faça o deploy funcionar na semana 1</strong>, mesmo com uma página em branco. Deploy adiado é deploy que dói.</li>
+        <li><strong>Um script de configuração da VPS versionado.</strong> Se a máquina morrer, subir outra é executar um script — não lembrar de 40 passos.</li>
+      </ol>
+      <h3>Organização</h3>
+      <ol start="10">
+        <li><strong>Nomeie um dono do sistema</strong> dentro dos Eagles — alguém que cadastra, corrige e responde dúvidas. Sistema sem dono interno vira sistema morto.</li>
+        <li><strong>Combine agora a política de dados</strong>: quem vê o quê, o que acontece quando alguém sai, quem pode exportar. É mais fácil combinar antes do primeiro conflito.</li>
+        <li><strong>Defina o rito de prestação de contas</strong> antes de construir o módulo financeiro. A ferramenta serve ao rito, não o contrário.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="s24">
+    <div class="wide">
+      <div class="snum">24</div>
+      <h2>Critérios de sucesso do produto</h2>
+      <h4>Adoção — os que realmente importam</h4>
+      <div class="tw"><table>
+        <thead><tr><th>Indicador</th><th class="num">3 meses</th><th class="num">12 meses</th></tr></thead>
+        <tbody>
+          <tr><td>Membros com conta ativa</td><td class="num">≥ 60%</td><td class="num">≥ 85%</td></tr>
+          <tr><td>Membros que abrem o app ao menos 1×/semana</td><td class="num">≥ 40%</td><td class="num">≥ 60%</td></tr>
+          <tr><td><strong>Conselheiros usando semanalmente</strong></td><td class="num"><strong>100%</strong></td><td class="num"><strong>100%</strong></td></tr>
+          <tr><td>Eventos com presença registrada no app</td><td class="num">≥ 70%</td><td class="num">≥ 95%</td></tr>
+          <tr><td>RSVP respondido sem cobrança manual</td><td class="num">≥ 50%</td><td class="num">≥ 70%</td></tr>
+        </tbody>
+      </table></div>
+      <h4>Operação</h4>
+      <div class="tw"><table>
+        <thead><tr><th>Indicador</th><th class="num">Meta</th></tr></thead>
+        <tbody>
+          <tr><td>Tempo do conselheiro para fechar a semana</td><td class="num">&lt; 3 min</td></tr>
+          <tr><td>Tempo para cadastrar um visitante</td><td class="num">&lt; 30 s</td></tr>
+          <tr><td>Tempo para montar a escala do mês</td><td class="num">de horas para &lt; 10 min</td></tr>
+          <tr><td>Prestação de contas de um evento</td><td class="num">&lt; 5 min</td></tr>
+          <tr><td>Uptime</td><td class="num">≥ 99%</td></tr>
+          <tr><td>Restaurações de backup testadas com sucesso</td><td class="num">12/12 no ano</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <h4>Qualidade — portas para considerar um módulo concluído</h4>
+        <ul>
+          <li>Todos os critérios de aceitação do módulo verificados.</li>
+          <li>Cobertura: ≥ 70% em regras de negócio, <strong>100% em autorização e financeiro</strong>.</li>
+          <li>Zero vulnerabilidade crítica ou alta em aberto.</li>
+          <li>Todas as telas usáveis a 360 px.</li>
+          <li>Contraste WCAG AA verificado.</li>
+          <li>Documentação do módulo escrita.</li>
+          <li>Nenhuma regra de negócio dentro de componente de tela.</li>
+        </ul>
+        <div class="call ok">
+          <h4>O critério humano — o que nenhuma métrica captura</h4>
+          <p>Depois de 6 meses, três perguntas à liderança:</p>
+          <ol>
+            <li><em>“Vocês estão gastando menos tempo organizando e mais tempo com pessoas?”</em></li>
+            <li><em>“Alguém já se sentiu vigiado, cobrado ou constrangido por causa do app?”</em></li>
+            <li><em>“Vocês perceberam alguém que estava se afastando e conseguiram agir a tempo?”</em></li>
+          </ol>
+          <p><strong>Sim, não, sim</strong> = o produto cumpriu seu propósito. Qualquer outra combinação exige correção de rumo, por melhores que estejam os números. <span class="tag t-sug">SUG</span></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="anexo">
+    <div class="wide">
+      <div class="snum">A</div>
+      <h2>Anexo · Identidade visual e design system</h2>
+      <div class="col">
+        <p>Derivado da logo fornecida — mascote de águia em estilo esportivo moderno, angular e enérgico, exatamente a direção “Jovem + Moderno” pedida. <span class="tag t-req">REQ</span></p>
+        <h3>Paleta extraída dos pixels da logo</h3>
+      </div>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#A91825"></div><div class="info"><div class="nm">eagles-red</div><div class="hx">#A91825 · 73% da arte</div></div></div>
+        <div class="sw"><div class="chip" style="background:#741221"></div><div class="info"><div class="nm">eagles-deep</div><div class="hx">#741221 · penas escuras</div></div></div>
+        <div class="sw"><div class="chip" style="background:#580F20"></div><div class="info"><div class="nm">eagles-wine</div><div class="hx">#580F20 · sombras</div></div></div>
+        <div class="sw"><div class="chip" style="background:#F2ECEC"></div><div class="info"><div class="nm">eagles-bone</div><div class="hx">#F2ECEC · cabeça</div></div></div>
+        <div class="sw"><div class="chip" style="background:#E4D8D8"></div><div class="info"><div class="nm">bone-200</div><div class="hx">#E4D8D8 · penas claras</div></div></div>
+        <div class="sw"><div class="chip" style="background:#AE9195"></div><div class="info"><div class="nm">eagles-ash</div><div class="hx">#AE9195 · pescoço</div></div></div>
+      </div>
+      <div class="col">
+        <p>Os neutros têm <strong>viés quente</strong> — puxados para o rosa/marrom, não para o azul-cinza. Isso não é detalhe: é o que impede o app de parecer um painel corporativo genérico e o mantém coerente com a logo.</p>
+        <div class="call warn">
+          <h4>O problema de cor que o design system precisa resolver</h4>
+          <p><strong>O vermelho da marca é também a cor universal de erro e de ação destrutiva.</strong> Se <code>#A91825</code> for ao mesmo tempo o botão “Confirmar presença” e o botão “Excluir”, a interface fica ambígua num sistema que mexe com dinheiro e permissões.</p>
+        </div>
+      </div>
+      <div class="tw"><table>
+        <thead><tr><th>Significado</th><th>Cor</th><th>Regra</th></tr></thead>
+        <tbody>
+          <tr><td>Marca / ação primária</td><td><code>#A91825</code> preenchido</td><td>Botão sólido</td></tr>
+          <tr><td><strong>Destrutivo</strong></td><td><code>#580F20</code>, contorno + ícone</td><td><strong>Nunca</strong> preenchido de vermelho; sempre com ícone e confirmação textual</td></tr>
+          <tr><td>Sucesso</td><td><code>#15803D</code></td><td>Com ícone</td></tr>
+          <tr><td>Aviso</td><td><code>#B45309</code></td><td>Com ícone</td></tr>
+          <tr><td>Erro / validação</td><td><code>#B91C1C</code></td><td><strong>Sempre</strong> com ícone e texto — nunca depende só da cor</td></tr>
+        </tbody>
+      </table></div>
+      <div class="col">
+        <p>Nenhum estado é comunicado <strong>apenas</strong> por cor — requisito de acessibilidade (<code>RNF-12</code>) e proteção contra ambiguidade.</p>
+        <h3>Diretrizes de interface</h3>
+        <ul>
+          <li><strong>Tipografia:</strong> uma família variável sem serifa de alta legibilidade em telas pequenas; pesos altos (600–800) para títulos, ecoando o traço firme do mascote.</li>
+          <li><strong>Formas:</strong> cantos arredondados médios (8–12 px). O mascote é angular; a interface é acolhedora — o contraste é intencional e evita agressividade.</li>
+          <li><strong>Densidade:</strong> confortável, não compacta. Alvos de toque ≥ 44 px.</li>
+          <li><strong>Navegação:</strong> barra inferior com no máximo 5 itens, variando por papel.</li>
+          <li><strong>Tema:</strong> claro (fundo <em>bone</em>) e escuro (fundo <em>wine</em>) desde o início — jovem usa o celular no escuro.</li>
+          <li><strong>Movimento:</strong> discreto e funcional (150–200 ms). Sem animação decorativa.</li>
+          <li><strong>A águia:</strong> aparece na marca, no ícone do app, na tela de entrada e nos estados vazios. <strong>Não</strong> vira ornamento de fundo em telas de trabalho.</li>
+          <li><strong>Estados vazios com voz humana:</strong> <em>“Nenhum evento por aqui ainda. Que tal criar o próximo encontro?”</em> — nunca “Nenhum registro encontrado”.</li>
+        </ul>
+        <h3>Pendências de identidade</h3>
+        <ul>
+          <li>Versão da logo <strong>sem fundo</strong> (PNG transparente ou SVG) para o cabeçalho e o ícone do app.</li>
+          <li>Versão horizontal (águia + texto lado a lado) para telas largas.</li>
+          <li>Confirmação de que a fonte do texto “EAGLES” pode ser usada na interface, ou escolha de uma equivalente.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="decisoes">
+    <div class="wide">
+      <div class="snum">25</div>
+      <h2>Decisões que precisam da sua aprovação</h2>
+      <div class="col"><p>Apenas as que <strong>bloqueiam</strong> o início da implementação.</p></div>
+
+      <div class="dcard block">
+        <div class="dhead"><span class="dcode">D-01</span><span class="dtitle">Stack tecnológica</span><span class="dstate s-block">bloqueante</span></div>
+        <p>Recomendo <strong>SvelteKit + TypeScript + PostgreSQL</strong>. Alternativa séria: <strong>Laravel + Livewire (PHP)</strong>, melhor se quem vai manter o sistema for mais forte em PHP.</p>
+        <p class="ask">Qual linguagem você domina mais, e quem vai manter isso daqui a um ano?</p>
+      </div>
+
+      <div class="dcard block">
+        <div class="dhead"><span class="dcode">D-02</span><span class="dtitle">Escopo do MVP</span><span class="dstate s-block">bloqueante</span></div>
+        <p>Recomendo <strong>6 módulos em ~10 semanas</strong> (Fundação, Pessoas, RBAC, Grupos, Eventos, Presença), com Financeiro na V1.2 e IA na V2.0.</p>
+        <p class="ask">Aceita adiar o financeiro, ou a prestação de contas é urgente a ponto de entrar já no MVP (+3 a 4 semanas)?</p>
+      </div>
+
+      <div class="dcard block">
+        <div class="dhead"><span class="dcode">D-03</span><span class="dtitle">Existem menores de 18 anos nos Eagles?</span><span class="dstate s-block">bloqueante · jurídico</span></div>
+        <p>A LGPD (art. 14) exige <strong>consentimento específico e destacado de pelo menos um dos pais ou responsável</strong> para tratar dados de menores. Se houver, isso muda o cadastro, a política de fotos e as regras de visibilidade — e precisa estar certo <strong>antes</strong> do primeiro cadastro real, não depois.</p>
+      </div>
+
+      <div class="dcard block">
+        <div class="dhead"><span class="dcode">D-04</span><span class="dtitle">Como as pessoas entram no app?</span><span class="dstate s-block">bloqueante</span></div>
+        <p>Três caminhos: <strong>(a)</strong> convite do líder por link do WhatsApp + senha; <strong>(b)</strong> telefone + código por SMS (tem custo por mensagem); <strong>(c)</strong> e-mail + senha, com autocadastro aberto.</p>
+        <p class="ask">Recomendo (a) — casa com o WhatsApp, evita cadastro de estranho e não tem custo.</p>
+      </div>
+
+      <div class="dcard imp">
+        <div class="dhead"><span class="dcode">D-05</span><span class="dtitle">Nível de detalhe da IA</span><span class="dstate s-imp">importante</span></div>
+        <p>Confirma a estratégia “determinístico primeiro, IA depois”, com IA apenas na V2.0 e a redação de mensagens antecipada para a V1.1?</p>
+        <p class="ask">E o modelo padrão <code>claude-opus-5</code> (~R$ 45/mês) ou prefere começar com o mais econômico <code>claude-haiku-4-5</code> (~R$ 10/mês, qualidade menor nas análises)?</p>
+      </div>
+
+      <div class="dcard imp">
+        <div class="dhead"><span class="dcode">D-06</span><span class="dtitle">Domínio</span><span class="dstate s-imp">importante</span></div>
+        <p>Preciso de um domínio para HTTPS, PWA e Web Push (~R$ 40/ano).</p>
+        <p class="ask">Você compra e me passa, ou seguimos em subdomínio temporário só para desenvolvimento?</p>
+      </div>
+
+      <div class="dcard quick">
+        <div class="dhead"><span class="dcode">D-07</span><span class="dtitle">Confirmações de contexto</span><span class="dstate s-quick">rápidas</span></div>
+        <ol style="margin-bottom:0">
+          <li>Quantas pessoas e quantos PGs existem hoje?</li>
+          <li>Specs da VPS (vCPU / RAM / disco / sistema)?</li>
+          <li>Quem será o administrador do sistema no dia a dia?</li>
+          <li>Com que frequência os PGs são reorganizados?</li>
+          <li>“Eagles App” é o nome definitivo?</li>
+        </ol>
+      </div>
+
+      <div class="col" style="margin-top:2rem">
+        <div class="close"><p>Nenhuma linha de código será escrita antes da sua aprovação destas decisões.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.1 · 18 de agosto de 2026<br>
+    Fonte no repositório: <code>docs/00-descoberta-e-arquitetura.md</code>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var secs = Array.prototype.slice.call(document.querySelectorAll("section"));
+  var tocin = document.getElementById("tocin");
+  var toc = document.getElementById("toc");
+  var btn = document.getElementById("tocbtn");
+  secs.forEach(function(s){
+    var h = s.querySelector("h2");
+    var n = s.querySelector(".snum");
+    if(!h) return;
+    var a = document.createElement("a");
+    a.href = "#" + s.id;
+    a.innerHTML = "<b>" + (n ? n.textContent : "") + "</b><span>" + h.textContent + "</span>";
+    a.addEventListener("click", function(){ toc.classList.remove("open"); btn.setAttribute("aria-expanded","false"); });
+    tocin.appendChild(a);
+  });
+  btn.addEventListener("click", function(){
+    var open = toc.classList.toggle("open");
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  var bar = document.getElementById("progress");
+  function onScroll(){
+    var h = document.documentElement;
+    var max = h.scrollHeight - h.clientHeight;
+    bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + "%";
+  }
+  document.addEventListener("scroll", onScroll, {passive:true});
+  onScroll();
+})();
+</script>

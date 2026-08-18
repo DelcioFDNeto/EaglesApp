@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Uma execução por branch: um push novo cancela o anterior em vez de
+# enfileirar trabalho que já não interessa.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Testes e verificações
+    runs-on: ubuntu-latest
+    # Alvo: menos de 5 minutos (critério de aceitação do M01).
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Formatação
+        run: npm run format:check
+
+      - name: Tipos
+        run: npm run check
+
+      # Os testes de integração usam PGlite (Postgres em WASM) — não precisam
+      # de serviço de banco no CI, o que também mantém a execução rápida.
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Peso do bundle
+        run: |
+          TAMANHO=$(find .svelte-kit/output/client/_app/immutable/entry -name '*.js' -exec gzip -c {} \; | wc -c)
+          echo "JS de entrada, comprimido: $((TAMANHO / 1024)) KB"
+          if [ "$TAMANHO" -gt 102400 ]; then
+            echo "::error::JS de entrada passou de 100 KB comprimido (RNF-03)."
+            exit 1
+          fi
