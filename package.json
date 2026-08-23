@@ -14,9 +14,10 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:e2e": "playwright test",
+		"db:e2e": "vite-node -c vite.script.config.ts tests/e2e/preparar-banco.ts",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "node --experimental-strip-types src/lib/server/db/migrate.ts",
-		"db:seed": "node --experimental-strip-types seed/seed.ts"
+		"db:seed": "vite-node -c vite.script.config.ts seed/seed.ts"
 	},
 	"dependencies": {
 		"@noble/hashes": "^1.8.0",
@@ -38,6 +39,7 @@
 		"svelte-check": "^4.1.1",
 		"typescript": "^5.7.2",
 		"vite": "^6.0.7",
+		"vite-node": "^3.2.4",
 		"vitest": "^3.2.7"
 	}
 }

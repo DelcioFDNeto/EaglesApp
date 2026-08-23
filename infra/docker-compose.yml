@@ -94,14 +94,20 @@ services:
     networks: [interna]
 
   backup:
-    image: postgres:16-alpine
+    # Imagem própria: precisa do 'age' para cifrar e do 'rclone' para enviar.
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
     restart: unless-stopped
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
       RETENCAO_DIARIA: 7
       B2_BUCKET: ${B2_BUCKET:-}
+      # Chave PÚBLICA age. Só ela fica na VPS: quem invadir a máquina consegue
+      # criar backups novos, mas não consegue ler nenhum dos antigos.
+      # A chave privada fica fora daqui — ver infra/README.md.
+      EAGLES_BACKUP_RECIPIENT: ${EAGLES_BACKUP_RECIPIENT:?defina EAGLES_BACKUP_RECIPIENT}
     volumes:
-      - ./backup.sh:/backup.sh:ro
       - backups:/backups
       - arquivos:/dados/arquivos:ro
     entrypoint: ['/bin/sh', '-c']

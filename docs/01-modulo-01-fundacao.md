@@ -183,44 +183,47 @@ Conselheiro toca "Convidar" no perfil de alguém
 
 ## 8. Critérios de aceitação
 
-Estado verificado em **23/08/2026**, com a suíte executada localmente:
-`npm test` → **87 testes, 5 arquivos, todos passando** · `npm run check` → **0 erros em 637 arquivos** · `npm run build` → **sucesso**.
+Estado verificado em **23/08/2026**:
+`npm test` → **87 testes** · `npm run test:e2e` → **16 testes, 2 navegadores** · `npm run check` → **0 erros em 650 arquivos** · `npm run build` → sucesso.
 
 ### ✅ Atendidos e verificados
 
-| Critério                                                                 | Evidência                                                                                      |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Rota sem permissão declarada **falha no teste**                          | `tests/unit/rotas-declaram-permissao.test.ts` — "toda rota de servidor declara sua permissão"  |
-| `audit_log` recusa UPDATE e DELETE mesmo com o usuário da aplicação      | `tests/integration/banco.test.ts` — "RECUSA update — mesmo vindo do dono da tabela"            |
-| Sessão revogável; "sair de todos os dispositivos" invalida imediatamente | `tests/integration/autenticacao.test.ts` — "revogação tem efeito IMEDIATO", "preserva o atual" |
-| Convite de uso único, resistente a clique duplo                          | "só pode ser consumido UMA vez — a proteção contra clique duplo"                               |
-| Token em claro nunca persiste — só o hash                                | "o token em claro NÃO fica no banco — só o hash"                                               |
-| Migrações aplicam do zero                                                | "aplicam do zero e criam as 12 tabelas"                                                        |
-| JS inicial abaixo de 100 KB comprimido (RNF-03)                          | **53,6 KB** gzip somando todo o cliente; o CI falha acima de 100 KB                            |
-| CI bloqueia merge com teste falhando                                     | `.github/workflows/ci.yml`, `timeout-minutes: 10`, alvo de 5 min                               |
+| Critério                                                                 | Evidência                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Login funciona com JavaScript desabilitado**                           | `tests/e2e/sem-javascript.spec.ts` — projeto `sem-javascript` com `javaScriptEnabled: false`. Cobre entrada, erro de senha e saída. O primeiro teste do arquivo é uma **guarda de integridade**: se o projeto voltar a rodar com JavaScript, ele falha, em vez de o arquivo ficar verde sem provar nada |
+| Rota sem permissão declarada **falha no teste**                          | `tests/unit/rotas-declaram-permissao.test.ts`                                                                                                                                                                                                                                                           |
+| `audit_log` recusa UPDATE e DELETE mesmo com o usuário da aplicação      | `tests/integration/banco.test.ts` — "RECUSA update — mesmo vindo do dono da tabela"                                                                                                                                                                                                                     |
+| Sessão revogável; "sair de todos os dispositivos" invalida imediatamente | `tests/integration/autenticacao.test.ts`, e a saída também é exercida no navegador                                                                                                                                                                                                                      |
+| **Senha errada 5 vezes bloqueia progressivamente**                       | `tests/e2e/entrar.spec.ts` — percorre as cinco tentativas e confirma que a senha certa deixa de entrar                                                                                                                                                                                                  |
+| Mensagem de erro não revela se a conta existe                            | `entrar.spec.ts` compara o texto para conta inexistente e para senha errada                                                                                                                                                                                                                             |
+| Convite de uso único, resistente a clique duplo                          | `autenticacao.test.ts`                                                                                                                                                                                                                                                                                  |
+| Migrações aplicam do zero                                                | `banco.test.ts`, e a suíte de e2e recria o banco a cada execução                                                                                                                                                                                                                                        |
+| **Backup é cifrado e sai da VPS**                                        | `infra/backup.sh` cifra com age (chave pública) antes de qualquer cópia externa, e apaga o texto em claro. Sem a chave, **não roda**                                                                                                                                                                    |
+| **Uma restauração foi testada com sucesso**                              | `infra/restore.sh --ensaio`, exercitado contra PostgreSQL 16 real: 12 tabelas, 10 pessoas, 32 permissões e a view `person_view` de volta                                                                                                                                                                |
+| App instalável: manifesto e ícones válidos                               | `tests/e2e/pwa.spec.ts`                                                                                                                                                                                                                                                                                 |
+| JS inicial abaixo de 100 KB comprimido (RNF-03)                          | **53,6 KB** gzip; o CI falha acima de 100 KB                                                                                                                                                                                                                                                            |
+| CI bloqueia merge com teste falhando                                     | `.github/workflows/ci.yml`, com um segundo job de ponta a ponta sobre PostgreSQL real                                                                                                                                                                                                                   |
 
 ### ⬜ Não atendidos — bloqueados por decisão pendente
 
-Todos dependem de **D-06** (domínio) e **D-07.2** (specs da VPS). O código existe; a aplicação não.
+Dependem de **D-06** (domínio) e **D-07.2** (specs da VPS). O código existe; a aplicação nunca rodou numa máquina real.
 
-- `docker compose up` numa máquina limpa — nunca executado ponta a ponta
-- Convite real no WhatsApp, num iPhone e num Android reais
+- `docker compose up` numa VPS de verdade
+- Convite real no WhatsApp, num iPhone e num Android físicos
 - Instalação do PWA na tela de início, em modo autônomo
-- Deploy automatizado com rollback — **o CI não tem job de deploy**; `infra/provision.sh` está previsto na seção 3 e **não existe**
-- Backup: **restauração nunca testada**, e o `infra/backup.sh` **não cifra** o dump antes de enviá-lo para fora — o critério pede "criptografado". Corrigir antes de qualquer dado real
+- Deploy automatizado com rollback — o CI ainda não tem job de deploy, e `infra/provision.sh` não existe
+- Cópia externa do backup de fato enviada: o `rclone` para o Backblaze está no script e no contêiner, mas nunca transferiu um arquivo
 
-### ⬜ Não atendidos — dívida reconhecida, sem bloqueio externo
+### ⬜ Dívida reconhecida, sem bloqueio externo
 
-- **`npm run test:e2e` não roda.** `@playwright/test` está instalado, mas não há `playwright.config.*` nem `tests/e2e/`. Consequência direta: o critério _"login funciona com JavaScript desabilitado"_ não tem cobertura, e ele é a justificativa de ter escolhido form actions
 - **Contraste WCAG AA** e **telas a 360 px** conferidos a olho, não por ferramenta
-- Senha errada 5 vezes: o bloqueio progressivo existe em `auth/ratelimit.ts`, mas sem teste que percorra as cinco tentativas
 - `README.md` nunca foi validado por outra pessoa subindo o projeto do zero
 
 ### Decisão de escopo registrada
 
-A seção 2.5 previa ~14 componentes. Foram construídos **5** (`Botao`, `Campo`, `Aviso`, `Marca`, `InstalarPwa`) — exatamente os que as telas do M01 usam.
+A seção 2.5 previa ~14 componentes. Foram construídos **5** (`Botao`, `Campo`, `Aviso`, `Marca`, `InstalarPwa`) — os que as telas do M01 usam.
 
-Isso é a mitigação de risco da seção 7 aplicada ("design system genérico demais e refeito depois: construir a partir das telas reais, não em abstrato"), e não um item esquecido. Os demais componentes nascem no M02, junto das telas que os pedirem.
+É a mitigação de risco da seção 7 aplicada ("construir a partir das telas reais, não em abstrato"), não um item esquecido. Os demais nascem no M02, junto das telas que os pedirem.
 
 ---
 

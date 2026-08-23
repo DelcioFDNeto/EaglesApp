@@ -50,3 +50,56 @@ jobs:
             echo "::error::JS de entrada passou de 100 KB comprimido (RNF-03)."
             exit 1
           fi
+
+  e2e:
+    name: Ponta a ponta
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Diferente dos testes de integração, que usam PGlite em WASM, a suíte de
+    # ponta a ponta precisa de um PostgreSQL real: ela sobe o build de produção
+    # com o adapter-node, que fala com o banco pela rede.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: eagles
+          POSTGRES_PASSWORD: eagles
+          POSTGRES_DB: eagles
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eagles"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Só o Chromium: é o motor do Chrome e do Edge, e o alvo real é Android.
+      # Instalar os três navegadores triplicaria o tempo sem cobrir mais nada
+      # que importe nesta fase.
+      - name: Navegador
+        run: npx playwright install --with-deps chromium
+
+      - name: Testes de ponta a ponta
+        run: npm run test:e2e
+        env:
+          E2E_DATABASE_URL: postgres://eagles:eagles@127.0.0.1:5432/eagles_e2e
+
+      # O relatório só interessa quando algo quebrou.
+      - name: Relatório
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

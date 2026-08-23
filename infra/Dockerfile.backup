@@ -1,0 +1,14 @@
+# Imagem do serviço de backup.
+#
+# Parte do mesmo postgres:16-alpine do banco — assim o pg_dump é exatamente da
+# mesma versão do servidor, o que evita a classe de erro mais chata de backup:
+# dump gerado por um cliente mais novo que o servidor não restaura.
+FROM postgres:16-alpine
+
+# age    cifra o dump com a chave pública antes de ele sair da máquina
+# rclone envia a cópia para fora da VPS
+RUN apk add --no-cache age rclone
+
+COPY backup.sh /backup.sh
+COPY restore.sh /restore.sh
+RUN chmod +x /backup.sh /restore.sh

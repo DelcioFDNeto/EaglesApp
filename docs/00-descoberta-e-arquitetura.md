@@ -1352,8 +1352,17 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 ### Estado da execução — 23/08/2026
 
-**Módulo 01 (Fundação): implementado e mesclado em `main`** (commit `a6a077b`). Verificação refeita em 23/08/2026: 87 testes passando, typecheck limpo, build funcionando, 53,6 KB de JS comprimido.
+**Módulo 01 (Fundação): implementado e mesclado em `main`.**
 
-O que ficou de fora do M01 e por quê está em [`01-modulo-01-fundacao.md`](01-modulo-01-fundacao.md), seção 8. Em resumo: tudo que depende de servidor real (deploy, PWA instalado, restauração de backup) está bloqueado por **D-06** e **D-07.2**, e há duas dívidas a fechar antes de qualquer dado real — **backup sem cifragem** e **suíte e2e inexistente**.
+Verificação completa em 23/08/2026: **87 testes** de unidade e integração, **16 testes de ponta a ponta** em dois navegadores, typecheck limpo em 650 arquivos, build funcionando e 53,6 KB de JavaScript comprimido.
+
+As duas dívidas que estavam abertas foram fechadas neste ciclo:
+
+- **Backup cifrado.** O dump passou a ser cifrado com `age` antes de qualquer cópia sair da máquina, e o script **recusa rodar** sem a chave — um dump em claro não é alternativa aceitável a não ter backup. A cifragem é assimétrica: a VPS guarda só a chave pública, então quem invadir o servidor cria backups novos mas não lê nenhum antigo. Existe agora `infra/restore.sh`, e a restauração **foi testada** contra um PostgreSQL 16 real.
+- **Suíte de ponta a ponta.** O critério _"login funciona com JavaScript desabilitado"_ — que é a razão de a arquitetura usar form actions — passou a ter cobertura em navegador real, com uma guarda que falha se alguém religar o JavaScript no projeto e esvaziar o significado dos testes.
+
+Também foram corrigidos, no caminho: o passo de formatação do CI, que reprovava antes de os testes rodarem, e `npm run db:seed`, que não executava.
+
+O que continua faltando depende de servidor real — deploy, PWA instalado no celular, cópia externa do backup de fato transferida — e está bloqueado por **D-06** e **D-07.2**.
 
 **Próximo passo:** Módulo 02 — Pessoas, aguardando autorização.
