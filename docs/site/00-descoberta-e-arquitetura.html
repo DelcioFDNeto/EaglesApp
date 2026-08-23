@@ -250,6 +250,7 @@ tbody tr:hover td{background:var(--surface-2)}
 .dcard.block{border-left:4px solid var(--brand)}
 .dcard.imp{border-left:4px solid var(--warn)}
 .dcard.quick{border-left:4px solid var(--ink-3)}
+.dcard.ok{border-left:4px solid var(--ok)}
 .dhead{display:flex; align-items:baseline; gap:.7rem; flex-wrap:wrap; margin-bottom:.7rem}
 .dcode{
   font-family:"JetBrains Mono",monospace; font-size:.72rem; font-weight:600;
@@ -263,6 +264,12 @@ tbody tr:hover td{background:var(--surface-2)}
 .s-block{background:var(--brand); color:#fff}
 .s-imp{background:var(--warn-soft); color:var(--warn); border:1px solid color-mix(in srgb,var(--warn) 35%,transparent)}
 .s-quick{background:var(--surface-3); color:var(--ink-2)}
+.s-ok{background:var(--ok-soft); color:var(--ok); border:1px solid color-mix(in srgb,var(--ok) 35%,transparent)}
+.taken{
+  margin:0; padding:.6rem .8rem; border-radius:8px; background:var(--ok-soft);
+  font-family:"Archivo",sans-serif; font-size:.88rem; font-weight:600; color:var(--ink);
+}
+.taken b{color:var(--ok)}
 .dcard p{font-size:.94rem; margin-bottom:.7rem}
 .dcard p:last-child{margin-bottom:0}
 .ask{
@@ -310,14 +317,15 @@ html{scroll-behavior:smooth}
 
   <header class="hero">
     <div class="col">
-      <p class="eyebrow">Documento de descoberta · versão 0.1 · aguardando aprovação</p>
+      <p class="eyebrow">Documento de descoberta · versão 0.2.1 · arquitetura aprovada</p>
       <h1>Organizar pessoas <em>sem</em> burocratizar a comunidade.</h1>
       <p class="lede">Descoberta, requisitos, modelo de dados, arquitetura e plano de entrega do Eagles App — a plataforma de gestão interna dos Eagles para o ano inteiro.</p>
       <div class="meta">
-        <div><b>Data</b><span>18 de agosto de 2026</span></div>
+        <div><b>Data</b><span>18 ago 2026 · rev. 23 ago</span></div>
         <div><b>Escopo</b><span>24 seções + anexo</span></div>
         <div><b>Stack recomendada</b><span>SvelteKit + PostgreSQL</span></div>
         <div><b>MVP</b><span>6 módulos · ~10 semanas</span></div>
+        <div><b>Estado</b><span>Módulo 01 entregue</span></div>
       </div>
       <div class="legend">
         <p>Todo o documento marca a <strong>origem de cada informação</strong>. É o que separa o que você pediu daquilo que eu sugeri ou supus:</p>
@@ -1697,30 +1705,34 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
   <section id="decisoes">
     <div class="wide">
       <div class="snum">25</div>
-      <h2>Decisões que precisam da sua aprovação</h2>
-      <div class="col"><p>Apenas as que <strong>bloqueiam</strong> o início da implementação.</p></div>
-
-      <div class="dcard block">
-        <div class="dhead"><span class="dcode">D-01</span><span class="dtitle">Stack tecnológica</span><span class="dstate s-block">bloqueante</span></div>
-        <p>Recomendo <strong>SvelteKit + TypeScript + PostgreSQL</strong>. Alternativa séria: <strong>Laravel + Livewire (PHP)</strong>, melhor se quem vai manter o sistema for mais forte em PHP.</p>
-        <p class="ask">Qual linguagem você domina mais, e quem vai manter isso daqui a um ano?</p>
+      <h2>Decisões</h2>
+      <div class="col">
+        <p><strong>D-01 a D-04 foram aprovadas em 18 de agosto de 2026</strong> e estão registradas como ADRs no repositório, em <code>docs/adr/</code>. O Módulo 01 — Fundação foi construído sobre elas e já está mesclado em <code>main</code>.</p>
+        <p>D-05 a D-07 continuam abertas. Nenhuma delas impede o desenvolvimento local; <strong>D-06 e D-07.2 impedem o deploy</strong>, e é por isso que o app ainda não está no ar.</p>
       </div>
 
-      <div class="dcard block">
-        <div class="dhead"><span class="dcode">D-02</span><span class="dtitle">Escopo do MVP</span><span class="dstate s-block">bloqueante</span></div>
-        <p>Recomendo <strong>6 módulos em ~10 semanas</strong> (Fundação, Pessoas, RBAC, Grupos, Eventos, Presença), com Financeiro na V1.2 e IA na V2.0.</p>
-        <p class="ask">Aceita adiar o financeiro, ou a prestação de contas é urgente a ponto de entrar já no MVP (+3 a 4 semanas)?</p>
+      <div class="dcard ok">
+        <div class="dhead"><span class="dcode">D-01</span><span class="dtitle">Stack tecnológica</span><span class="dstate s-ok">aprovada</span></div>
+        <p>Quatro alternativas foram pontuadas em 12 critérios: SvelteKit (4,6), Laravel + Livewire (4,3), Phoenix LiveView (3,9), Flutter + API (3,8). O desempate foi a rede instável do salão de PG — Livewire e LiveView vão ao servidor a cada toque.</p>
+        <p class="taken"><b>Escolhido:</b> SvelteKit 2 (Svelte 5) + TypeScript + PostgreSQL 16 + Drizzle, entregue como PWA. Registrado em <code>adr/0001-stack.md</code>.</p>
       </div>
 
-      <div class="dcard block">
-        <div class="dhead"><span class="dcode">D-03</span><span class="dtitle">Existem menores de 18 anos nos Eagles?</span><span class="dstate s-block">bloqueante · jurídico</span></div>
-        <p>A LGPD (art. 14) exige <strong>consentimento específico e destacado de pelo menos um dos pais ou responsável</strong> para tratar dados de menores. Se houver, isso muda o cadastro, a política de fotos e as regras de visibilidade — e precisa estar certo <strong>antes</strong> do primeiro cadastro real, não depois.</p>
+      <div class="dcard ok">
+        <div class="dhead"><span class="dcode">D-02</span><span class="dtitle">Escopo do MVP</span><span class="dstate s-ok">aprovada</span></div>
+        <p>Critério de corte: entra no MVP o que responde <em>sim</em> a “sem isso, a liderança não consegue usar o app no PG da próxima quinta?”. A IA ficou de fora porque quase toda funcionalidade dela depende de histórico que ainda não existe — e uma sugestão ruim na primeira semana queima a confiança de forma permanente.</p>
+        <p class="taken"><b>Escolhido:</b> 6 módulos em ~10 semanas. Financeiro na V1.2, IA na V2.0, com a redação de mensagens antecipada para a V1.1. Registrado em <code>adr/0002-escopo-mvp.md</code>.</p>
       </div>
 
-      <div class="dcard block">
-        <div class="dhead"><span class="dcode">D-04</span><span class="dtitle">Como as pessoas entram no app?</span><span class="dstate s-block">bloqueante</span></div>
-        <p>Três caminhos: <strong>(a)</strong> convite do líder por link do WhatsApp + senha; <strong>(b)</strong> telefone + código por SMS (tem custo por mensagem); <strong>(c)</strong> e-mail + senha, com autocadastro aberto.</p>
-        <p class="ask">Recomendo (a) — casa com o WhatsApp, evita cadastro de estranho e não tem custo.</p>
+      <div class="dcard ok">
+        <div class="dhead"><span class="dcode">D-03</span><span class="dtitle">Menores de idade</span><span class="dstate s-ok">aprovada · jurídico</span></div>
+        <p>Você confirmou que <strong>hoje não há menores</strong> e que a idade mínima daqui em diante é <strong>16 anos</strong>. Isso não cancela a obrigação: 16 e 17 anos ainda são menores perante a LGPD, então a estrutura de consentimento existe e fica inativa até que exista um menor cadastrado.</p>
+        <p class="taken"><b>Escolhido:</b> tabela <code>consent</code> e menoridade derivada na view <code>person_view</code> — nunca armazenada, porque idade depende da data de hoje. Registrado em <code>adr/0003-dados-de-menores.md</code>.</p>
+      </div>
+
+      <div class="dcard ok">
+        <div class="dhead"><span class="dcode">D-04</span><span class="dtitle">Como as pessoas entram no app</span><span class="dstate s-ok">aprovada</span></div>
+        <p>O convite casa com o canal que a comunidade já usa, tem custo zero (o SMS não tem) e mantém o cadastro sob controle de quem sabe quem realmente pertence ao grupo.</p>
+        <p class="taken"><b>Escolhido:</b> convite por link do WhatsApp + senha definida pela pessoa, com sessão em banco e revogação imediata — JWT foi rejeitado por não permitir revogar. Registrado em <code>adr/0004-autenticacao.md</code>.</p>
       </div>
 
       <div class="dcard imp">
@@ -1746,14 +1758,19 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
         </ol>
       </div>
 
-      <div class="col" style="margin-top:2rem">
-        <div class="close"><p>Nenhuma linha de código será escrita antes da sua aprovação destas decisões.</p></div>
+      <div class="col" style="margin-top:2.4rem">
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin-bottom:.6rem">Onde a construção está</h3>
+        <p><strong>Módulo 01 — Fundação: entregue e mesclado em <code>main</code>.</strong> Verificação refeita em 23 de agosto: 87 testes passando, verificação de tipos limpa em 637 arquivos, build funcionando e 53,6 KB de JavaScript comprimido — a meta era ficar abaixo de 100 KB.</p>
+        <p>O que existe hoje: banco com 12 tabelas e migrações versionadas, autenticação por convite com Argon2id, sessão revogável, camada de política que <em>nega por padrão</em> — uma rota sem permissão declarada reprova no teste — auditoria que o próprio banco recusa alterar, e o PWA instalável.</p>
+        <p>O que não existe: qualquer funcionalidade de negócio. Nenhuma pessoa se cadastra, nenhum evento é criado. Essa era exatamente a intenção do módulo.</p>
+        <p>Três pendências estão registradas com franqueza no plano do módulo: o deploy nunca rodou (falta domínio e as specs da VPS), o backup envia o dump para fora <strong>sem cifrar</strong>, e a suíte de ponta a ponta não existe — o que deixa sem cobertura justamente o critério de login funcionando com JavaScript desligado. As duas últimas são dívidas a fechar antes de qualquer dado real.</p>
+        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 02 — Pessoas, aguardando sua autorização.</p></div>
       </div>
     </div>
   </section>
 
   <footer>
-    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.1 · 18 de agosto de 2026<br>
+    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.2.1 · 18 de agosto de 2026, revisado em 23 de agosto<br>
     Fonte no repositório: <code>docs/00-descoberta-e-arquitetura.md</code>
   </footer>
 </div>
