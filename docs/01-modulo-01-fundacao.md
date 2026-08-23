@@ -1,6 +1,7 @@
 # Módulo 01 — Fundação
 
-- **Status:** planejado, aguardando autorização para implementar
+- **Status:** **implementado** no commit `a6a077b` (18/08/2026), mesclado em `main`. Verificação local refeita em 23/08/2026 — ver seção 8
+- **Pendente:** a infraestrutura de execução (2.7) está escrita, mas não aplicada — bloqueada por D-06 e D-07.2
 - **Ciclo:** MVP, semanas 1–2
 - **Depende de:** nada (é a base)
 - **Bloqueia:** todos os outros módulos
@@ -31,16 +32,16 @@ Ao final do M01, ninguém consegue cadastrar uma pessoa nem criar um evento — 
 
 Apenas as tabelas que o M01 usa de fato:
 
-| Tabela                                                 | Para quê                                                                   |
-| ------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `team`                                                 | Raiz multi-equipe (ADR: uma linha, "Eagles", sem interface)                |
-| `person`                                               | Mínimo viável: `full_name`, `birth_date`, `is_minor` gerada                |
-| `user_account`                                         | Credenciais, ligadas a `person`                                            |
-| `session`                                              | Sessão server-side revogável                                               |
-| `invite`                                               | Token de convite de uso único, com validade                                |
-| `role`, `permission`, `role_permission`, `person_role` | Estrutura do RBAC criada e semeada — a **verificação** completa vem no M03 |
-| `setting`, `feature_flag`                              | Chaves de funcionalidade, todas desligadas por padrão                      |
-| `audit_log`                                            | Append-only, já gravando login, logout e mudança de senha                  |
+| Tabela                                                 | Para quê                                                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `team`                                                 | Raiz multi-equipe (ADR: uma linha, "Eagles", sem interface)                                            |
+| `person`                                               | Mínimo viável: `full_name`, `birth_date` — a menoridade é derivada na view `person_view`, não é coluna |
+| `user_account`                                         | Credenciais, ligadas a `person`                                                                        |
+| `session`                                              | Sessão server-side revogável                                                                           |
+| `invite`                                               | Token de convite de uso único, com validade                                                            |
+| `role`, `permission`, `role_permission`, `person_role` | Estrutura do RBAC criada e semeada — a **verificação** completa vem no M03                             |
+| `setting`, `feature_flag`                              | Chaves de funcionalidade, todas desligadas por padrão                                                  |
+| `audit_log`                                            | Append-only, já gravando login, logout e mudança de senha                                              |
 
 As demais tabelas do modelo (grupos, eventos, presença, financeiro) **não** entram agora. Criar tabela vazia que ninguém usa é dívida, não adiantamento.
 
@@ -125,13 +126,13 @@ EaglesAPP/
 
 ## 4. Regras de negócio aplicáveis
 
-| ID    | Regra                                           | Como é garantida                                                                                         |
-| ----- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| RN-01 | Pessoa existe sem conta de acesso               | `user_account.person_id` é FK opcional na direção certa: a conta aponta para a pessoa, nunca o contrário |
-| RN-28 | Auditoria imutável                              | `audit_log` sem GRANT de UPDATE/DELETE para o usuário da aplicação                                       |
-| RN-29 | Funcionalidades opcionais funcionam desligadas  | Toda `feature_flag` nasce `false`; teste verifica que a aplicação sobe e opera com todas desligadas      |
-| RN-30 | Menor sem consentimento fica em cadastro mínimo | `is_minor` como coluna **gerada** a partir de `birth_date`; a política já sabe ler o sinal               |
-| A-02  | Sessão revogável                                | Tabela `session` com `revoked_at`; sem JWT                                                               |
+| ID    | Regra                                           | Como é garantida                                                                                                                                                                                                                                                                                             |
+| ----- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| RN-01 | Pessoa existe sem conta de acesso               | `user_account.person_id` é FK opcional na direção certa: a conta aponta para a pessoa, nunca o contrário                                                                                                                                                                                                     |
+| RN-28 | Auditoria imutável                              | `audit_log` sem GRANT de UPDATE/DELETE para o usuário da aplicação                                                                                                                                                                                                                                           |
+| RN-29 | Funcionalidades opcionais funcionam desligadas  | Toda `feature_flag` nasce `false`; teste verifica que a aplicação sobe e opera com todas desligadas                                                                                                                                                                                                          |
+| RN-30 | Menor sem consentimento fica em cadastro mínimo | `is_minor` **derivada na view `person_view`**, nunca armazenada — coluna gerada é impossível no PostgreSQL porque a idade depende da data de hoje (ver [ADR 0003, Revisão](adr/0003-dados-de-menores.md)). `NULL` quando a data de nascimento é desconhecida, e `NULL` significa _aplique o regime restrito_ |
+| A-02  | Sessão revogável                                | Tabela `session` com `revoked_at`; sem JWT                                                                                                                                                                                                                                                                   |
 
 ---
 
@@ -182,24 +183,44 @@ Conselheiro toca "Convidar" no perfil de alguém
 
 ## 8. Critérios de aceitação
 
-O módulo só é considerado concluído quando **todos** forem verificados:
+Estado verificado em **23/08/2026**, com a suíte executada localmente:
+`npm test` → **87 testes, 5 arquivos, todos passando** · `npm run check` → **0 erros em 637 arquivos** · `npm run build` → **sucesso**.
 
-- [ ] `docker compose up` sobe o ambiente completo do zero numa máquina limpa
-- [ ] Uma pessoa recebe convite pelo WhatsApp, define senha e entra, num iPhone e num Android reais
-- [ ] O app instala na tela de início e abre em modo autônomo nos dois sistemas
-- [ ] Sessão sobrevive a 30 dias; "sair de todos os dispositivos" invalida imediatamente em outro aparelho
-- [ ] Rota sem permissão declarada **falha no teste automatizado**
-- [ ] Senha errada 5 vezes bloqueia progressivamente; o bloqueio é registrado em auditoria
-- [ ] `audit_log` recusa UPDATE e DELETE mesmo com o usuário da aplicação
-- [ ] Aplicação sobe e opera com **todas** as chaves de funcionalidade desligadas
-- [ ] Tema claro e escuro corretos, com contraste WCAG AA verificado por ferramenta
-- [ ] Todas as telas usáveis a 360 px de largura
-- [ ] JS inicial abaixo de 100 KB comprimido
-- [ ] Login funciona com JavaScript desabilitado no navegador
-- [ ] CI roda em menos de 5 minutos e bloqueia merge com teste falhando
-- [ ] Deploy automatizado publica e, em falha de saúde, faz rollback sozinho
-- [ ] Backup roda, é criptografado, sai da VPS, e **uma restauração foi testada com sucesso**
-- [ ] `README.md` permite a outra pessoa subir o projeto do zero sem me perguntar nada
+### ✅ Atendidos e verificados
+
+| Critério                                                                 | Evidência                                                                                      |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Rota sem permissão declarada **falha no teste**                          | `tests/unit/rotas-declaram-permissao.test.ts` — "toda rota de servidor declara sua permissão"  |
+| `audit_log` recusa UPDATE e DELETE mesmo com o usuário da aplicação      | `tests/integration/banco.test.ts` — "RECUSA update — mesmo vindo do dono da tabela"            |
+| Sessão revogável; "sair de todos os dispositivos" invalida imediatamente | `tests/integration/autenticacao.test.ts` — "revogação tem efeito IMEDIATO", "preserva o atual" |
+| Convite de uso único, resistente a clique duplo                          | "só pode ser consumido UMA vez — a proteção contra clique duplo"                               |
+| Token em claro nunca persiste — só o hash                                | "o token em claro NÃO fica no banco — só o hash"                                               |
+| Migrações aplicam do zero                                                | "aplicam do zero e criam as 12 tabelas"                                                        |
+| JS inicial abaixo de 100 KB comprimido (RNF-03)                          | **53,6 KB** gzip somando todo o cliente; o CI falha acima de 100 KB                            |
+| CI bloqueia merge com teste falhando                                     | `.github/workflows/ci.yml`, `timeout-minutes: 10`, alvo de 5 min                               |
+
+### ⬜ Não atendidos — bloqueados por decisão pendente
+
+Todos dependem de **D-06** (domínio) e **D-07.2** (specs da VPS). O código existe; a aplicação não.
+
+- `docker compose up` numa máquina limpa — nunca executado ponta a ponta
+- Convite real no WhatsApp, num iPhone e num Android reais
+- Instalação do PWA na tela de início, em modo autônomo
+- Deploy automatizado com rollback — **o CI não tem job de deploy**; `infra/provision.sh` está previsto na seção 3 e **não existe**
+- Backup: **restauração nunca testada**, e o `infra/backup.sh` **não cifra** o dump antes de enviá-lo para fora — o critério pede "criptografado". Corrigir antes de qualquer dado real
+
+### ⬜ Não atendidos — dívida reconhecida, sem bloqueio externo
+
+- **`npm run test:e2e` não roda.** `@playwright/test` está instalado, mas não há `playwright.config.*` nem `tests/e2e/`. Consequência direta: o critério _"login funciona com JavaScript desabilitado"_ não tem cobertura, e ele é a justificativa de ter escolhido form actions
+- **Contraste WCAG AA** e **telas a 360 px** conferidos a olho, não por ferramenta
+- Senha errada 5 vezes: o bloqueio progressivo existe em `auth/ratelimit.ts`, mas sem teste que percorra as cinco tentativas
+- `README.md` nunca foi validado por outra pessoa subindo o projeto do zero
+
+### Decisão de escopo registrada
+
+A seção 2.5 previa ~14 componentes. Foram construídos **5** (`Botao`, `Campo`, `Aviso`, `Marca`, `InstalarPwa`) — exatamente os que as telas do M01 usam.
+
+Isso é a mitigação de risco da seção 7 aplicada ("design system genérico demais e refeito depois: construir a partir das telas reais, não em abstrato"), e não um item esquecido. Os demais componentes nascem no M02, junto das telas que os pedirem.
 
 ---
 

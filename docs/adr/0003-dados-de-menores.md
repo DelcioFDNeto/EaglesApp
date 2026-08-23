@@ -70,12 +70,12 @@ Isso NÃO cancela este ADR. Pessoas de 16 e 17 anos continuam sendo menores
 perante a LGPD — o piso de 16 garante que menores são possíveis no futuro,
 apenas não existem hoje. O que muda:
 
-| Item | Situação |
-|---|---|
-| Tabela `consent` e derivação de `is_minor` | **Mantidas.** Custam pouco agora e evitam migração de risco com dados em produção |
-| Regime de criança (menores de 12) | **Removido.** O piso de 16 o torna impossível |
+| Item                                            | Situação                                                                                                    |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Tabela `consent` e derivação de `is_minor`      | **Mantidas.** Custam pouco agora e evitam migração de risco com dados em produção                           |
+| Regime de criança (menores de 12)               | **Removido.** O piso de 16 o torna impossível                                                               |
 | Fluxo de consentimento parental (RN-30 a RN-35) | **Implementado, porém inativo.** Nenhuma tela de consentimento aparece enquanto não houver menor cadastrado |
-| Custo no M02 | Cai de +3–4 dias para **+1–2 dias** |
+| Custo no M02                                    | Cai de +3–4 dias para **+1–2 dias**                                                                         |
 
 O consentimento de **foto**, esse continua valendo para todos — é requisito de
 privacidade independente de idade (RNF-09).
@@ -100,6 +100,6 @@ FROM person p;
 ```
 
 `is_minor` é **NULL** quando a data de nascimento é desconhecida. Quem consome
-deve tratar NULL como *"aplique o regime restrito"*, nunca como *"é maior"* —
+deve tratar NULL como _"aplique o regime restrito"_, nunca como _"é maior"_ —
 há teste cobrindo os três casos em
 [`tests/integration/banco.test.ts`](../../tests/integration/banco.test.ts).

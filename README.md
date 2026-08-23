@@ -13,11 +13,11 @@ responsabilidades, participação e recursos financeiros — o ano inteiro.
 
 ## Comece por aqui
 
-| Documento | Para quê |
-|---|---|
+| Documento                                                                    | Para quê                                                              |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [`docs/00-descoberta-e-arquitetura.md`](docs/00-descoberta-e-arquitetura.md) | Requisitos, regras de negócio, modelo de dados, RBAC, riscos, roadmap |
-| [`docs/01-modulo-01-fundacao.md`](docs/01-modulo-01-fundacao.md) | O que o M01 entrega e seus critérios de aceitação |
-| [`docs/adr/`](docs/adr/) | Por que cada decisão importante foi tomada |
+| [`docs/01-modulo-01-fundacao.md`](docs/01-modulo-01-fundacao.md)             | O que o M01 entrega e seus critérios de aceitação                     |
+| [`docs/adr/`](docs/adr/)                                                     | Por que cada decisão importante foi tomada                            |
 
 Leia os ADRs antes de mudar algo estrutural. Em oito meses ninguém lembra por
 que o Redis foi descartado ou por que a sessão não é JWT.
@@ -41,12 +41,12 @@ npm run dev                 # http://localhost:5173
 
 Contas criadas pela semeadura (senha `eagles-desenvolvimento`):
 
-| Conta | Papel |
-|---|---|
-| `ana@eagles.local` | Líder — acesso global |
-| `pedro@eagles.local` | Conselheiro do PG A |
-| `marina@eagles.local` | Conselheira do PG B |
-| `joao@eagles.local` | Membro |
+| Conta                 | Papel                 |
+| --------------------- | --------------------- |
+| `ana@eagles.local`    | Líder — acesso global |
+| `pedro@eagles.local`  | Conselheiro do PG A   |
+| `marina@eagles.local` | Conselheira do PG B   |
+| `joao@eagles.local`   | Membro                |
 
 A semeadura também imprime um **link de convite** para testar o fluxo real de
 entrada, que é como toda pessoa vai receber acesso (ADR 0004).
@@ -67,16 +67,16 @@ Para levantar a aplicação, aí sim é preciso um Postgres acessível.
 
 ## Comandos
 
-| Comando | O que faz |
-|---|---|
-| `npm run dev` | Servidor de desenvolvimento |
-| `npm test` | Testes de unidade e integração |
-| `npm run check` | Verificação de tipos (`svelte-check`) |
-| `npm run format` | Formata o código |
-| `npm run build` | Build de produção |
-| `npm run db:generate` | Gera migração a partir do schema |
-| `npm run db:migrate` | Aplica migrações pendentes |
-| `npm run db:seed` | Semeia o ambiente de desenvolvimento |
+| Comando               | O que faz                             |
+| --------------------- | ------------------------------------- |
+| `npm run dev`         | Servidor de desenvolvimento           |
+| `npm test`            | Testes de unidade e integração        |
+| `npm run check`       | Verificação de tipos (`svelte-check`) |
+| `npm run format`      | Formata o código                      |
+| `npm run build`       | Build de produção                     |
+| `npm run db:generate` | Gera migração a partir do schema      |
+| `npm run db:migrate`  | Aplica migrações pendentes            |
+| `npm run db:seed`     | Semeia o ambiente de desenvolvimento  |
 
 ---
 

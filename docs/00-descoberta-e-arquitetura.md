@@ -1,15 +1,15 @@
 # Eagles App — Documento de Descoberta e Arquitetura Inicial
 
-**Versão:** 0.2
-**Data:** 18/08/2026
+**Versão:** 0.2.1
+**Data:** 18/08/2026 — revisado em 23/08/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
-| Decisão                   | Escolha aprovada                                                   |
-| ------------------------- | ------------------------------------------------------------------ |
-| **D-01** Stack            | SvelteKit 2 + TypeScript + PostgreSQL 16 + Drizzle                 |
-| **D-02** MVP              | 6 módulos, ~10 semanas — sem financeiro (V1.2) e sem IA (V2.0)     |
+| Decisão                   | Escolha aprovada                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **D-01** Stack            | SvelteKit 2 + TypeScript + PostgreSQL 16 + Drizzle                                                                                 |
+| **D-02** MVP              | 6 módulos, ~10 semanas — sem financeiro (V1.2) e sem IA (V2.0)                                                                     |
 | **D-03** Menores de idade | **Não há menores hoje; piso de 16 anos daqui em diante.** 16–17 ainda são menores na LGPD, então a estrutura fica pronta e inativa |
-| **D-04** Acesso           | Convite por link do WhatsApp + senha definida pela pessoa          |
+| **D-04** Acesso           | Convite por link do WhatsApp + senha definida pela pessoa                                                                          |
 
 > ⚠️ **D-03 alterou a arquitetura descrita neste documento.** O impacto está detalhado na seção 12.6 e em [`adr/0003-dados-de-menores.md`](adr/0003-dados-de-menores.md).
 
@@ -1350,4 +1350,10 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 ---
 
-**Próximo passo:** Módulo 01 — Fundação, planejado em [`01-modulo-01-fundacao.md`](01-modulo-01-fundacao.md).
+### Estado da execução — 23/08/2026
+
+**Módulo 01 (Fundação): implementado e mesclado em `main`** (commit `a6a077b`). Verificação refeita em 23/08/2026: 87 testes passando, typecheck limpo, build funcionando, 53,6 KB de JS comprimido.
+
+O que ficou de fora do M01 e por quê está em [`01-modulo-01-fundacao.md`](01-modulo-01-fundacao.md), seção 8. Em resumo: tudo que depende de servidor real (deploy, PWA instalado, restauração de backup) está bloqueado por **D-06** e **D-07.2**, e há duas dívidas a fechar antes de qualquer dado real — **backup sem cifragem** e **suíte e2e inexistente**.
+
+**Próximo passo:** Módulo 02 — Pessoas, aguardando autorização.
