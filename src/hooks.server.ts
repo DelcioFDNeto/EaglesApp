@@ -57,23 +57,12 @@ const handleSessao: Handle = async ({ event, resolve }) => {
 const handleSeguranca: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 
-	// CSP restritiva. `unsafe-inline` em style é necessário para os estilos
-	// que o Svelte injeta; script não recebe essa concessão.
-	response.headers.set(
-		'Content-Security-Policy',
-		[
-			"default-src 'self'",
-			"script-src 'self'",
-			"style-src 'self' 'unsafe-inline'",
-			"img-src 'self' data: blob:",
-			"font-src 'self'",
-			"connect-src 'self'",
-			"object-src 'none'",
-			"base-uri 'self'",
-			"form-action 'self'",
-			"frame-ancestors 'none'"
-		].join('; ')
-	);
+	// A CSP NÃO é definida aqui: ela vive em `svelte.config.js`, em `kit.csp`.
+	//
+	// Escrita à mão neste ponto, ela bloqueava o script inline que o próprio
+	// SvelteKit emite para iniciar a aplicação — e o app rodava sem hidratar,
+	// em silêncio, porque as telas vêm do servidor e os formulários funcionam
+	// sem JavaScript. Pela configuração do framework, o nonce entra sozinho.
 
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

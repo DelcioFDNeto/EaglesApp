@@ -41,12 +41,21 @@ export default defineConfig({
 
 	projects: [
 		{
-			name: 'celular',
+			// Autentica uma vez por papel e guarda a sessão. Sem isto, a suíte
+			// inteira sai do mesmo endereço e esgota o limite de login por IP.
+			name: 'autenticacao',
 			use: { ...CELULAR },
-			testIgnore: /sem-javascript\.spec\.ts/
+			testMatch: /auth\.setup\.ts/
 		},
 		{
-			// O projeto que justifica a arquitetura de formulários.
+			name: 'celular',
+			use: { ...CELULAR },
+			dependencies: ['autenticacao'],
+			testIgnore: /(sem-javascript\.spec|auth\.setup)\.ts/
+		},
+		{
+			// O projeto que justifica a arquitetura de formulários. NÃO reaproveita
+			// sessão: entrar pelo formulário é justamente o que ele testa.
 			name: 'sem-javascript',
 			use: { ...CELULAR, javaScriptEnabled: false },
 			testMatch: /sem-javascript\.spec\.ts/
@@ -76,7 +85,12 @@ export default defineConfig({
 			PORT: String(PORTA),
 			SESSION_TTL_DAYS: '30',
 			INVITE_TTL_DAYS: '7',
-			MAX_LOGIN_ATTEMPTS: '5'
+			MAX_LOGIN_ATTEMPTS: '5',
+			// A suíte toda sai de 127.0.0.1, então este ambiente é o mesmo caso de
+			// "muita gente atrás de um IP só" que o proxy cria em produção. O
+			// limite por CONTA continua no padrão e é o que o teste de bloqueio
+			// exercita.
+			LOGIN_MAX_POR_IP: '200'
 		}
 	}
 });

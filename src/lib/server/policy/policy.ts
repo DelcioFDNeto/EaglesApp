@@ -83,6 +83,34 @@ export function groupsWhere(actor: Actor | null, permission: Permission): string
 	return [...ids];
 }
 
+/**
+ * A pessoa detém `permission` em ALGUM escopo?
+ *
+ * Responde "este papel inclui esta permissão", não "pode fazer isto com aquele
+ * registro". Serve para recursos que **não pertencem a um grupo** — a lista de
+ * pessoas da equipe, o formulário de cadastro de alguém que ainda não tem
+ * grupo. Nesses casos exigir `groupId` seria pedir um contexto que não existe,
+ * e a política negaria por ambiguidade uma ação legítima.
+ *
+ * NUNCA use isto no lugar de uma verificação com contexto sobre um registro
+ * específico. "Pode editar alguém" e "pode editar ESTA pessoa" são perguntas
+ * diferentes, e trocar uma pela outra é exatamente como escopo vaza.
+ */
+export function canAnywhere(actor: Actor | null, permission: Permission): boolean {
+	if (!actor) return false;
+	return actor.assignments.some((a) => a.permissions.has(permission));
+}
+
+/** Versão imperativa de `canAnywhere`: autoriza ou lança. */
+export function authorizeAnywhere(
+	actor: Actor | null,
+	permission: Permission
+): asserts actor is Actor {
+	if (!canAnywhere(actor, permission)) {
+		throw new PolicyDenied(permission, {});
+	}
+}
+
 /** A pessoa tem `permission` de forma global (sem depender de grupo)? */
 export function canGlobally(actor: Actor | null, permission: Permission): boolean {
 	if (!actor) return false;

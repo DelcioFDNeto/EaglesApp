@@ -10,3 +10,4 @@ Thumbs.db
 /backups/
 test-results/
 playwright-report/
+tests/e2e/.sessoes/

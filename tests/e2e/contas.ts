@@ -7,6 +7,14 @@ import { E2E_DATABASE_URL } from './ambiente';
  */
 export const SENHA = 'eagles-desenvolvimento';
 
+/** Onde a sessão de cada papel é guardada por `auth.setup.ts`. */
+export const ESTADO_DE_SESSAO = {
+	lider: 'tests/e2e/.sessoes/lider.json',
+	conselheiro: 'tests/e2e/.sessoes/conselheiro.json',
+	membro: 'tests/e2e/.sessoes/membro.json',
+	bloqueio: 'tests/e2e/.sessoes/bloqueio.json'
+} as const;
+
 export const CONTAS = {
 	lider: 'ana@eagles.local',
 	conselheiro: 'pedro@eagles.local',
@@ -14,6 +22,32 @@ export const CONTAS = {
 	/** Usada só nos testes de bloqueio, para não travar as demais. */
 	bloqueio: 'leticia@eagles.local'
 } as const;
+
+/** Liga ou desliga uma chave de funcionalidade direto no banco. */
+export async function definirFuncionalidade(chave: string, ligada: boolean): Promise<void> {
+	const sql = postgres(E2E_DATABASE_URL, { max: 1 });
+	try {
+		await sql`UPDATE feature_flag SET enabled = ${ligada} WHERE key = ${chave}`;
+	} finally {
+		await sql.end({ timeout: 5 });
+	}
+}
+
+/**
+ * Tira da frente as pessoas criadas por um teste.
+ *
+ * Remoção LÓGICA, igual à de produção — e não por escolha de estilo: `person`
+ * tem histórico de estágio, e essa tabela é append-only por gatilho. Um DELETE
+ * em cascata bate no gatilho e falha. É a proteção fazendo o trabalho dela.
+ */
+export async function removerPessoasDeTeste(prefixo: string): Promise<void> {
+	const sql = postgres(E2E_DATABASE_URL, { max: 1 });
+	try {
+		await sql`UPDATE person SET deleted_at = now() WHERE full_name LIKE ${prefixo + '%'}`;
+	} finally {
+		await sql.end({ timeout: 5 });
+	}
+}
 
 /**
  * Devolve a conta ao estado limpo: sem tentativas falhas e sem bloqueio.

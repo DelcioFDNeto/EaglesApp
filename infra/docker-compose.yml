@@ -45,7 +45,15 @@ services:
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
       INVITE_TTL_DAYS: ${INVITE_TTL_DAYS:-7}
       MAX_LOGIN_ATTEMPTS: ${MAX_LOGIN_ATTEMPTS:-5}
+      LOGIN_MAX_POR_IP: ${LOGIN_MAX_POR_IP:-20}
       PORT: 3000
+      # SEM estas duas, `getClientAddress()` devolve o IP do Caddy para TODO
+      # mundo — e o limite de login por IP travaria a comunidade inteira numa
+      # noite de PG, além de encher a auditoria com o IP errado.
+      # XFF_DEPTH=1 porque há exatamente um proxy à frente: contar mais
+      # deixaria alguém forjar o cabeçalho e se passar por outro IP.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: 1
     volumes:
       # Anexos ficam FORA do diretório servido pela web (seção 16.4).
       - arquivos:/dados/arquivos

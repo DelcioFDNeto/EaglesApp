@@ -22,7 +22,7 @@ afterAll(async () => {
 });
 
 describe('migrações', () => {
-	it('aplicam do zero e criam as 12 tabelas', async () => {
+	it('aplicam do zero e criam as 16 tabelas', async () => {
 		const r = await ctx.db.execute(
 			sql`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'`
 		);
@@ -42,7 +42,12 @@ describe('migrações', () => {
 			'person_role',
 			'setting',
 			'feature_flag',
-			'audit_log'
+			'audit_log',
+			// Módulo 02
+			'membership_status',
+			'person_status_history',
+			'person_relation',
+			'consent'
 		]) {
 			expect(tabelas, `tabela "${esperada}" não foi criada`).toContain(esperada);
 		}

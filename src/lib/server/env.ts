@@ -22,7 +22,17 @@ const schema = z.object({
 	INVITE_TTL_DAYS: z.coerce.number().int().positive().max(60).default(7),
 
 	/** Tentativas de senha antes do bloqueio progressivo. */
-	MAX_LOGIN_ATTEMPTS: z.coerce.number().int().positive().default(5)
+	MAX_LOGIN_ATTEMPTS: z.coerce.number().int().positive().default(5),
+
+	/**
+	 * Tentativas de login por IP em 5 minutos.
+	 *
+	 * Precisa ser configurável porque o valor certo depende de como o app está
+	 * exposto. Atrás de um proxy sem `ADDRESS_HEADER`, TODA a comunidade chega
+	 * com o mesmo IP — e 20 tentativas travariam todo mundo numa noite de PG.
+	 * O padrão vale para o caso correto: cada pessoa com seu próprio IP.
+	 */
+	LOGIN_MAX_POR_IP: z.coerce.number().int().positive().default(20)
 });
 
 export type Env = z.infer<typeof schema>;

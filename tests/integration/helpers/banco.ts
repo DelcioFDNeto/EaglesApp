@@ -6,7 +6,14 @@ import * as schema from '../../../src/lib/server/db/schema';
 import type { Database } from '../../../src/lib/server/db';
 import { ALL_PERMISSIONS, PERMISSIONS } from '../../../src/lib/server/policy/permissions';
 import { ROLE_SEEDS } from '../../../src/lib/server/policy/roles';
-import { permission, role, rolePermission, team } from '../../../src/lib/server/db/schema';
+import {
+	membershipStatus,
+	permission,
+	role,
+	rolePermission,
+	team
+} from '../../../src/lib/server/db/schema';
+import { ESTAGIOS_SEMENTE } from '../../../src/lib/server/modules/pessoas/estagios-semente';
 
 /**
  * Banco de teste: PostgreSQL de verdade, sem Docker.
@@ -28,6 +35,8 @@ export type BancoDeTeste = {
 	cliente: PGlite;
 	teamId: string;
 	papeis: Record<string, string>;
+	/** Estágios da jornada, por chave. */
+	estagios: Record<string, string>;
 	fechar: () => Promise<void>;
 };
 
@@ -72,11 +81,26 @@ export async function criarBancoDeTeste(): Promise<BancoDeTeste> {
 			.values(semente.permissions.map((p) => ({ roleId: criado.id, permissionKey: p })));
 	}
 
+	// --- Estágios da jornada (M02) -------------------------------------------
+
+	const estagios: Record<string, string> = {};
+
+	for (const semente of ESTAGIOS_SEMENTE) {
+		const [criado] = await db
+			.insert(membershipStatus)
+			.values({ ...semente, teamId: equipe.id })
+			.returning({ id: membershipStatus.id });
+
+		if (!criado) throw new Error(`não foi possível semear o estágio ${semente.key}`);
+		estagios[semente.key] = criado.id;
+	}
+
 	return {
 		db,
 		cliente,
 		teamId: equipe.id,
 		papeis,
+		estagios,
 		fechar: () => cliente.close()
 	};
 }

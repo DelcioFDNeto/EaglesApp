@@ -24,6 +24,8 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
+import { env } from '../env';
+
 export type RateLimitRule = {
 	/** Tentativas permitidas dentro da janela. */
 	limit: number;
@@ -39,8 +41,24 @@ export const RULES = {
 	/** Login por IP: protege o servidor de varredura em muitas contas. */
 	loginPorIp: { limit: 20, windowSeconds: 300, blockSeconds: 900 },
 	/** Tentativas de resgatar convite: evita adivinhação de token. */
-	convitePorIp: { limit: 10, windowSeconds: 600, blockSeconds: 1800 }
+	convitePorIp: { limit: 10, windowSeconds: 600, blockSeconds: 1800 },
+	/**
+	 * Autocadastro de visitante: é o único formulário público que ESCREVE no
+	 * banco. O limite é generoso o bastante para várias pessoas atrás do mesmo
+	 * Wi-Fi na porta do PG, e apertado o bastante para não virar porta de robô.
+	 */
+	autocadastroPorIp: { limit: 5, windowSeconds: 600, blockSeconds: 1800 }
 } as const satisfies Record<string, RateLimitRule>;
+
+/**
+ * Limite de login por IP, com o teto vindo do ambiente.
+ *
+ * Existe como função, e não como constante, porque o valor correto depende do
+ * deploy — ver `LOGIN_MAX_POR_IP` em `env.ts`.
+ */
+export function regraLoginPorIp(): RateLimitRule {
+	return { ...RULES.loginPorIp, limit: env().LOGIN_MAX_POR_IP };
+}
 
 export type RateLimitResult =
 	{ allowed: true; remaining: number } | { allowed: false; retryAfterSeconds: number };

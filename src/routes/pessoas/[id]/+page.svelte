@@ -1,0 +1,370 @@
+<script lang="ts">
+	import { enhance } from '$app/forms';
+	import BarraDeTopo from '$ui/BarraDeTopo.svelte';
+	import Botao from '$ui/Botao.svelte';
+	import Etiqueta from '$ui/Etiqueta.svelte';
+	import Aviso from '$ui/Aviso.svelte';
+	import Seletor from '$ui/Seletor.svelte';
+	import Campo from '$ui/Campo.svelte';
+	import { formatarTelefone, SITUACOES_DE_RELACIONAMENTO } from '$shared/pessoa';
+	import type { ActionData, PageData } from './$types';
+
+	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	const p = $derived(data.pessoa);
+
+	const dataLonga = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' });
+	const dataCurta = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' });
+
+	function formatarData(iso: string | null): string {
+		if (!iso) return '—';
+		const d = new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);
+		return Number.isNaN(d.getTime()) ? '—' : dataLonga.format(d);
+	}
+
+	const rotuloRelacionamento = $derived(
+		SITUACOES_DE_RELACIONAMENTO.find((s) => s.valor === p.sensiveis?.relationshipStatus)?.rotulo ??
+			null
+	);
+
+	let trocandoEstagio = $state(false);
+</script>
+
+<svelte:head>
+	<title>{p.fullName} · Eagles</title>
+</svelte:head>
+
+<!--
+	A barra NÃO repete o nome: ele já é o título da página, logo abaixo. Dois
+	elementos com o mesmo texto viram dois `h1` — confunde leitor de tela e
+	duplica a informação em telas estreitas, onde espaço é o que falta.
+-->
+<BarraDeTopo voltar="/pessoas">
+	{#snippet acoes()}
+		{#if data.podeEditar}
+			<Botao href="/pessoas/{p.id}/editar" variante="secundario">Editar</Botao>
+		{/if}
+	{/snippet}
+</BarraDeTopo>
+
+<main class="conteudo">
+	{#if data.acabouDeCriar}
+		<Aviso tom="sucesso" titulo="Pessoa cadastrada">
+			{p.fullName} está no sistema. Você pode completar o cadastro quando souber mais.
+		</Aviso>
+	{/if}
+
+	{#if form?.erro}
+		<Aviso tom="erro">{form.erro}</Aviso>
+	{/if}
+	{#if form?.sucesso}
+		<Aviso tom="sucesso">{form.sucesso}</Aviso>
+	{/if}
+
+	{#if p.regime.restrito}
+		<!--
+			Regime restrito não é erro: é a proteção funcionando. O tom é
+			informativo, e o texto explica o porquê em vez de só bloquear.
+		-->
+		<Aviso tom="info" titulo="Cadastro em regime restrito">{p.regime.motivo}</Aviso>
+	{/if}
+
+	<section class="cartao identidade" aria-label="Identificação">
+		<h1>{p.fullName}</h1>
+		<div class="chips">
+			{#if p.statusNome}
+				<Etiqueta cor={p.statusCor}>{p.statusNome}</Etiqueta>
+			{/if}
+			{#if p.idadeAnos !== null}
+				<span class="idade">{p.idadeAnos} anos</span>
+			{/if}
+		</div>
+	</section>
+
+	{#if p.sensiveis}
+		<section class="cartao" aria-label="Contato">
+			<h3>Contato</h3>
+			<dl>
+				<dt>Telefone</dt>
+				<dd>{formatarTelefone(p.sensiveis.phone) || '—'}</dd>
+				<dt>WhatsApp</dt>
+				<dd>{formatarTelefone(p.sensiveis.whatsapp) || '—'}</dd>
+				<dt>E-mail</dt>
+				<dd>{p.sensiveis.email ?? '—'}</dd>
+				<dt>Relacionamento</dt>
+				<dd>{rotuloRelacionamento ?? '—'}</dd>
+				<dt>Nascimento</dt>
+				<dd>{formatarData(p.birthDate)}</dd>
+				<dt>Participa desde</dt>
+				<dd>{formatarData(p.joinedAt)}</dd>
+			</dl>
+
+			{#if p.sensiveis.notes}
+				<div class="observacoes">
+					<h4>Observações</h4>
+					<p>{p.sensiveis.notes}</p>
+				</div>
+			{/if}
+		</section>
+	{:else}
+		<section class="cartao" aria-label="Contato">
+			<h3>Contato</h3>
+			<p class="legenda">
+				As informações de contato desta pessoa são visíveis apenas para quem tem permissão para ver
+				dados sensíveis.
+			</p>
+		</section>
+	{/if}
+
+	{#if data.vinculos.length > 0}
+		<section class="cartao">
+			<h3>Vínculos</h3>
+			<ul class="vinculos">
+				{#each data.vinculos as v (v.id)}
+					<li>
+						<a href="/pessoas/{v.outraPessoaId}">{v.outraPessoaNome}</a>
+						<span class="tipo">
+							{#if v.tipo === 'responsavel_legal'}
+								{v.souOResponsavel ? 'é responsável por esta pessoa' : 'responsável legal'}
+							{:else if v.tipo === 'irmao'}
+								irmão(ã)
+							{:else if v.tipo === 'conjuge'}
+								cônjuge
+							{:else}
+								namorado(a)
+							{/if}
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
+	{#if data.podeEditar}
+		<section class="cartao">
+			<h3>Mudar de estágio</h3>
+			<p class="legenda">
+				A mudança fica registrada com seu nome e a data. Nada promove ninguém automaticamente.
+			</p>
+
+			<form
+				method="POST"
+				action="?/mudarEstagio"
+				use:enhance={() => {
+					trocandoEstagio = true;
+					return async ({ update }) => {
+						await update();
+						trocandoEstagio = false;
+					};
+				}}
+			>
+				<Seletor
+					id="estagioId"
+					rotulo="Novo estágio"
+					opcoes={data.estagios}
+					vazio="Escolha o estágio"
+				/>
+				<Campo id="motivo" rotulo="Motivo (opcional)" ajuda="Ajuda quem ler o histórico depois." />
+				<Botao tipo="submit" variante="secundario" carregando={trocandoEstagio}>
+					Registrar mudança
+				</Botao>
+			</form>
+		</section>
+	{/if}
+
+	<section class="cartao">
+		<h3>Linha do tempo</h3>
+		{#if data.linhaDoTempo.length === 0}
+			<p class="legenda">Nada registrado ainda.</p>
+		{:else}
+			<ol class="tempo">
+				{#each data.linhaDoTempo as item (item.id)}
+					<li>
+						<time datetime={item.quando}>{dataCurta.format(new Date(item.quando))}</time>
+						<div>
+							<strong>
+								{#if item.de}{item.de} → {item.para}{:else}Entrou como {item.para}{/if}
+							</strong>
+							{#if item.motivo}<span class="motivo">{item.motivo}</span>{/if}
+						</div>
+					</li>
+				{/each}
+			</ol>
+		{/if}
+	</section>
+
+	{#if data.consentimentos.length > 0}
+		<section class="cartao">
+			<h3>Consentimentos</h3>
+			<ul class="consentimentos">
+				{#each data.consentimentos as c (c.id)}
+					<li>
+						<span class:concedido={c.granted}>{c.granted ? 'Concedido' : 'Revogado'}</span>
+						<code>{c.kind}</code>
+						<time datetime={c.at}>{dataCurta.format(new Date(c.at))}</time>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+</main>
+
+<style>
+	.conteudo {
+		max-width: 560px;
+		margin-inline: auto;
+		padding: var(--esp-4) var(--esp-3) var(--esp-6);
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-4);
+	}
+
+	.cartao {
+		background: var(--cor-superficie);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio-lg);
+		padding: var(--esp-4);
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+	}
+
+	.identidade h1 {
+		font-size: var(--texto-2xl);
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		text-wrap: balance;
+	}
+
+	.chips {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--esp-2);
+	}
+
+	.idade {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-3);
+	}
+
+	h3 {
+		font-size: var(--texto-lg);
+		font-weight: 700;
+		letter-spacing: -0.02em;
+	}
+
+	h4 {
+		font-size: var(--texto-sm);
+		font-weight: 700;
+		color: var(--cor-texto-2);
+	}
+
+	.legenda {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-3);
+		text-wrap: pretty;
+	}
+
+	dl {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: var(--esp-2) var(--esp-4);
+		font-size: var(--texto-sm);
+	}
+
+	dt {
+		color: var(--cor-texto-3);
+	}
+
+	dd {
+		margin: 0;
+		font-weight: 500;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.observacoes p {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
+		text-wrap: pretty;
+	}
+
+	form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+	}
+
+	.vinculos,
+	.consentimentos {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+		font-size: var(--texto-sm);
+	}
+
+	.vinculos li {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--esp-2);
+		align-items: baseline;
+	}
+
+	.vinculos a {
+		color: var(--cor-marca);
+		font-weight: 600;
+	}
+
+	.tipo {
+		color: var(--cor-texto-3);
+	}
+
+	.tempo {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+		font-size: var(--texto-sm);
+	}
+
+	.tempo li {
+		display: grid;
+		grid-template-columns: 5.5rem 1fr;
+		gap: var(--esp-3);
+	}
+
+	.tempo time {
+		color: var(--cor-texto-3);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.motivo {
+		display: block;
+		color: var(--cor-texto-3);
+	}
+
+	.consentimentos li {
+		display: flex;
+		gap: var(--esp-2);
+		align-items: baseline;
+	}
+
+	.consentimentos span {
+		font-weight: 700;
+		color: var(--cor-texto-3);
+	}
+
+	.consentimentos span.concedido {
+		color: var(--cor-sucesso);
+	}
+
+	@media (max-width: 380px) {
+		.tempo li {
+			grid-template-columns: 1fr;
+			gap: var(--esp-1);
+		}
+	}
+</style>

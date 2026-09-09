@@ -99,3 +99,30 @@ test.describe('bloqueio progressivo', () => {
 		await expect(page).toHaveURL(/\/entrar/);
 	});
 });
+
+test.describe('todo papel alcança o próprio painel', () => {
+	/**
+	 * Guarda contra a classe de defeito que passou despercebida no M01: o
+	 * conselheiro tem os papéis atribuídos a um GRUPO, e uma verificação de
+	 * permissão com escopo errado o barrava logo na tela inicial. Nenhum teste
+	 * entrava como conselheiro, então ninguém percebeu.
+	 *
+	 * Entrar e ver o painel é o mínimo que qualquer papel precisa conseguir.
+	 */
+	// `bloqueio` fica de fora: é a mesma pessoa de `membro`, reservada para o
+	// teste de travamento de conta, e entraria travada dependendo da ordem.
+	const PAPEIS = ['lider', 'conselheiro', 'membro'] as const;
+
+	for (const papel of PAPEIS) {
+		const email = CONTAS[papel];
+		test(`${papel} entra e vê o painel`, async ({ page }) => {
+			await page.goto('/entrar');
+			await page.getByLabel('E-mail ou telefone').fill(email);
+			await page.getByLabel('Senha').fill(SENHA);
+			await page.getByRole('button', { name: 'Entrar' }).click();
+
+			await page.waitForURL('**/inicio');
+			await expect(page.getByRole('heading', { level: 1 })).toContainText('Olá');
+		});
+	}
+});

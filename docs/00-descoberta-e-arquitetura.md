@@ -1,7 +1,7 @@
 # Eagles App — Documento de Descoberta e Arquitetura Inicial
 
-**Versão:** 0.2.1
-**Data:** 18/08/2026 — revisado em 23/08/2026
+**Versão:** 0.3
+**Data:** 18/08/2026 — revisado em 09/09/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
 | Decisão                   | Escolha aprovada                                                                                                                   |
@@ -1350,19 +1350,26 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 ---
 
-### Estado da execução — 23/08/2026
+### Estado da execução — 09/09/2026
 
-**Módulo 01 (Fundação): implementado e mesclado em `main`.**
+**Módulos 01 (Fundação) e 02 (Pessoas) implementados.**
 
-Verificação completa em 23/08/2026: **87 testes** de unidade e integração, **16 testes de ponta a ponta** em dois navegadores, typecheck limpo em 650 arquivos, build funcionando e 53,6 KB de JavaScript comprimido.
+Verificação de 09/09/2026: **156 testes** de unidade e integração, **43 de ponta a ponta** em dois projetos de navegador, tipos limpos em 694 arquivos, build funcionando.
 
-As duas dívidas que estavam abertas foram fechadas neste ciclo:
+O M02 entregou o cadastro progressivo (só o nome é obrigatório), a jornada de visitante a membro com histórico imutável, vínculos familiares, a estrutura de consentimento do ADR 0003 — implementada, testada e inativa, já que hoje não há menores —, detecção de duplicidade que avisa sem bloquear, e o autocadastro público atrás de uma chave desligada por padrão.
 
-- **Backup cifrado.** O dump passou a ser cifrado com `age` antes de qualquer cópia sair da máquina, e o script **recusa rodar** sem a chave — um dump em claro não é alternativa aceitável a não ter backup. A cifragem é assimétrica: a VPS guarda só a chave pública, então quem invadir o servidor cria backups novos mas não lê nenhum antigo. Existe agora `infra/restore.sh`, e a restauração **foi testada** contra um PostgreSQL 16 real.
-- **Suíte de ponta a ponta.** O critério _"login funciona com JavaScript desabilitado"_ — que é a razão de a arquitetura usar form actions — passou a ter cobertura em navegador real, com uma guarda que falha se alguém religar o JavaScript no projeto e esvaziar o significado dos testes.
+Ficaram para a fatia B do módulo: foto, campos personalizados e importação por planilha. O detalhamento está em [`02-modulo-02-pessoas.md`](02-modulo-02-pessoas.md).
 
-Também foram corrigidos, no caminho: o passo de formatação do CI, que reprovava antes de os testes rodarem, e `npm run db:seed`, que não executava.
+#### Três defeitos do M01 que só apareceram agora
 
-O que continua faltando depende de servidor real — deploy, PWA instalado no celular, cópia externa do backup de fato transferida — e está bloqueado por **D-06** e **D-07.2**.
+O mais grave: **a CSP escrita à mão impedia a aplicação de hidratar**. O SvelteKit emite um script inline para iniciar o app, e `script-src 'self'` o bloqueava. Como as telas vêm do servidor e os formulários funcionam sem JavaScript, tudo continuava funcionando — sem navegação no cliente, sem service worker, sem nenhuma reatividade. Numa arquitetura escolhida justamente por processar a interação no dispositivo quando a rede é ruim, a característica principal estava desligada desde o primeiro dia, e nenhum teste pegava porque todos verificavam resultado.
 
-**Próximo passo:** Módulo 02 — Pessoas, aguardando autorização.
+Os outros dois: **o conselheiro não conseguia abrir o app** (verificação de permissão com escopo errado na tela inicial, e nenhum teste entrava com esse papel), e, atrás do proxy, **o limite de login por IP travaria a comunidade inteira**, porque `ADDRESS_HEADER` não estava configurado e todos chegariam com o IP do Caddy.
+
+Os três estão corrigidos, cada um com uma guarda automatizada que reprova se voltarem.
+
+#### O que continua bloqueado
+
+Tudo que depende de servidor real — deploy, PWA instalado no celular, cópia do backup efetivamente enviada — segue parado em **D-06** (domínio) e **D-07.2** (specs da VPS).
+
+**Próximo passo:** Módulo 03 — RBAC, ou a fatia B do M02. Aguardando sua decisão.

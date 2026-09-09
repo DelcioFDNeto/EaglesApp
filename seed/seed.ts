@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm';
 import postgres from 'postgres';
 import {
 	featureFlag,
+	membershipStatus,
+	personStatusHistory,
 	permission,
 	person,
 	personRole,
@@ -12,6 +14,8 @@ import {
 	userAccount
 } from '../src/lib/server/db/schema';
 import { ALL_PERMISSIONS, PERMISSIONS } from '../src/lib/server/policy/permissions';
+import { FUNCIONALIDADES, TODAS_AS_FUNCIONALIDADES } from '../src/lib/server/settings/flags';
+import { ESTAGIOS_SEMENTE } from '../src/lib/server/modules/pessoas/estagios-semente';
 import { ROLE_SEEDS } from '../src/lib/server/policy/roles';
 import { hashPassword } from '../src/lib/server/auth/password';
 import { issueInvite } from '../src/lib/server/auth/invite';
@@ -90,49 +94,89 @@ try {
 	console.log(`${ROLE_SEEDS.length} papéis semeados.`);
 
 	// --- Chaves de funcionalidade: TODAS desligadas (RN-29) -----------------
-	const FUNCIONALIDADES = [
-		['checkin_qrcode', 'Check-in por QR Code nos encontros'],
-		['aprovacao_despesas', 'Fluxo de aprovação antes de registrar despesa'],
-		['notificacoes_push', 'Lembretes por notificação no celular'],
-		['ia_assistente', 'Assistente de IA para líderes e conselheiros'],
-		['campos_personalizados', 'Campos extras no cadastro de pessoas']
-	] as const;
-
 	await db
 		.insert(featureFlag)
 		.values(
-			FUNCIONALIDADES.map(([key, description]) => ({
+			TODAS_AS_FUNCIONALIDADES.map((key) => ({
 				teamId: equipe!.id,
 				key,
-				description,
+				description: FUNCIONALIDADES[key],
 				enabled: false
 			}))
 		)
 		.onConflictDoNothing();
-	console.log(`${FUNCIONALIDADES.length} funcionalidades cadastradas, todas desligadas.`);
+	console.log(`${TODAS_AS_FUNCIONALIDADES.length} funcionalidades cadastradas, todas desligadas.`);
+
+	// --- Estágios da jornada (RN-02) ----------------------------------------
+	await db
+		.insert(membershipStatus)
+		.values(ESTAGIOS_SEMENTE.map((e) => ({ ...e, teamId: equipe!.id })))
+		.onConflictDoNothing();
+
+	const estagios = await db
+		.select({ id: membershipStatus.id, key: membershipStatus.key })
+		.from(membershipStatus)
+		.where(eq(membershipStatus.teamId, equipe!.id));
+	const estagioPorChave = new Map(estagios.map((e) => [e.key, e.id]));
+	console.log(`${estagios.length} estágios da jornada semeados.`);
 
 	// --- Pessoas -------------------------------------------------------------
-	const PESSOAS: Array<{ nome: string; papel: string; email?: string; grupo?: string }> = [
-		{ nome: 'Ana Beatriz Nogueira', papel: 'lider', email: 'ana@eagles.local' },
+	const PESSOAS: Array<{
+		nome: string;
+		papel: string;
+		email?: string;
+		grupo?: string;
+		estagio?: string;
+		telefone?: string;
+		nascimento?: string;
+	}> = [
+		{
+			nome: 'Ana Beatriz Nogueira',
+			papel: 'lider',
+			email: 'ana@eagles.local',
+			estagio: 'membro',
+			telefone: '11987650001',
+			nascimento: '1994-03-12'
+		},
 		{
 			nome: 'Pedro Henrique Vasconcelos',
 			papel: 'conselheiro',
 			email: 'pedro@eagles.local',
-			grupo: '018f0000-0000-7000-8000-00000000a001'
+			grupo: '018f0000-0000-7000-8000-00000000a001',
+			estagio: 'membro',
+			telefone: '11987650002',
+			nascimento: '1996-05-18'
 		},
 		{
 			nome: 'Marina Souza Albuquerque',
 			papel: 'conselheiro',
 			email: 'marina@eagles.local',
-			grupo: '018f0000-0000-7000-8000-00000000a002'
+			grupo: '018f0000-0000-7000-8000-00000000a002',
+			estagio: 'membro',
+			telefone: '11987650003',
+			nascimento: '1997-09-02'
 		},
-		{ nome: 'João Vitor Cavalcanti', papel: 'membro', email: 'joao@eagles.local' },
-		{ nome: 'Letícia Ferreira dos Santos', papel: 'membro', email: 'leticia@eagles.local' },
-		{ nome: 'Rafael Monteiro', papel: 'membro' },
-		{ nome: 'Camila Rodrigues Nascimento', papel: 'membro' },
-		{ nome: 'Gustavo Lima', papel: 'membro' },
-		{ nome: 'Isabela Martins Carvalho', papel: 'visitante' },
-		{ nome: 'Thiago Barbosa', papel: 'visitante' }
+		{
+			nome: 'João Vitor Cavalcanti',
+			papel: 'membro',
+			email: 'joao@eagles.local',
+			estagio: 'membro',
+			telefone: '11987650004',
+			nascimento: '2001-07-30'
+		},
+		{
+			nome: 'Letícia Ferreira dos Santos',
+			papel: 'membro',
+			email: 'leticia@eagles.local',
+			estagio: 'membro',
+			telefone: '11987650005',
+			nascimento: '2000-11-05'
+		},
+		{ nome: 'Rafael Monteiro', papel: 'membro', estagio: 'membro', nascimento: '1999-01-22' },
+		{ nome: 'Camila Rodrigues Nascimento', papel: 'membro', estagio: 'participante_recorrente' },
+		{ nome: 'Gustavo Lima', papel: 'membro', estagio: 'participante_recorrente' },
+		{ nome: 'Isabela Martins Carvalho', papel: 'visitante', estagio: 'visitante' },
+		{ nome: 'Thiago Barbosa', papel: 'visitante', estagio: 'visitante' }
 	];
 
 	const senhaHash = await hashPassword(SENHA_DEV);
@@ -151,11 +195,31 @@ try {
 			continue;
 		}
 
+		const estagioId = estagioPorChave.get(p.estagio ?? 'visitante') ?? null;
+
 		const [criada] = await db
 			.insert(person)
-			.values({ teamId: equipe.id, fullName: p.nome })
+			.values({
+				teamId: equipe.id,
+				fullName: p.nome,
+				phone: p.telefone ?? null,
+				whatsapp: p.telefone ?? null,
+				birthDate: p.nascimento ?? null,
+				currentStatusId: estagioId
+			})
 			.returning({ id: person.id });
 		if (!criada) continue;
+
+		// A primeira atribuição também é histórico (RN-04): sem ela a linha do
+		// tempo começaria no ar.
+		if (estagioId) {
+			await db.insert(personStatusHistory).values({
+				personId: criada.id,
+				fromStatusId: null,
+				toStatusId: estagioId,
+				reason: 'Semeadura de desenvolvimento'
+			});
+		}
 
 		if (p.papel === 'lider') liderId = criada.id;
 

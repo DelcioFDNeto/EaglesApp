@@ -28,6 +28,13 @@ export type AuditAction =
 	| 'person.criada'
 	| 'person.atualizada'
 	| 'person.removida'
+	| 'person.status_alterado'
+	| 'person.vinculo_criado'
+	| 'person.vinculo_removido'
+	| 'person.autocadastro'
+	// Consentimento (ADR 0003)
+	| 'consent.concedido'
+	| 'consent.revogado'
 	// RBAC
 	| 'rbac.papel_atribuido'
 	| 'rbac.papel_removido'

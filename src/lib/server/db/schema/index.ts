@@ -1,9 +1,9 @@
 /**
- * Schema do Eagles App — Módulo 01 (Fundação).
+ * Schema do Eagles App — Módulos 01 (Fundação) e 02 (Pessoas).
  *
- * Só entram aqui as tabelas que o M01 usa de fato. Grupos, eventos, presença,
- * responsabilidades e financeiro chegam nos seus próprios módulos: tabela vazia
- * que ninguém usa é dívida, não adiantamento.
+ * Só entram aqui as tabelas que os módulos entregues usam de fato. Grupos,
+ * eventos, presença, responsabilidades e financeiro chegam nos seus próprios
+ * módulos: tabela vazia que ninguém usa é dívida, não adiantamento.
  *
  * Convenções (seção 12 da arquitetura):
  *   - snake_case no banco, camelCase no TypeScript
@@ -21,6 +21,7 @@ import {
 	integer,
 	jsonb,
 	pgTable,
+	pgView,
 	text,
 	timestamp,
 	uniqueIndex,
@@ -64,6 +65,51 @@ export const person = pgTable(
 		fullName: text('full_name').notNull(),
 
 		/**
+		 * Nome sem acento e em minúsculas, para busca. Coluna GERADA: derivar no
+		 * banco garante que nunca fique dessincronizada do nome.
+		 *
+		 * `lower()` e `translate()` são imutáveis, então aqui a coluna gerada
+		 * funciona — diferente de `is_minor`, que depende da data de hoje e por
+		 * isso vive numa view (ADR 0003).
+		 *
+		 * Evita depender da extensão `unaccent`, que exigiria privilégio de
+		 * superusuário na VPS e não existe no PGlite dos testes.
+		 */
+		fullNameNormalized: text('full_name_normalized').generatedAlwaysAs(
+			sql`translate(lower("full_name"),
+				'áàâãäéèêëíìîïóòôõöúùûüçñ',
+				'aaaaaeeeeiiiiooooouuuucn')`
+		),
+
+		/**
+		 * Contato. Todos opcionais — o cadastro é progressivo, e exigir telefone
+		 * de quem apareceu uma vez no PG é o tipo de atrito que o briefing pede
+		 * para evitar.
+		 *
+		 * Para menor de idade sem consentimento, estes campos ficam vazios por
+		 * imposição do serviço, não por escolha de quem cadastra (RN-30).
+		 */
+		phone: text('phone'),
+		whatsapp: text('whatsapp'),
+		email: text('email'),
+
+		/** 'solteiro' | 'namorando' | 'noivo' | 'casado' — validado na aplicação. */
+		relationshipStatus: text('relationship_status'),
+
+		/** Quando passou a fazer parte. Não é a data do cadastro. */
+		joinedAt: date('joined_at'),
+
+		/** Estágio atual da jornada. Nulo só entre o INSERT e o primeiro status. */
+		currentStatusId: uuid('current_status_id').references(() => membershipStatus.id),
+
+		/**
+		 * Como a pessoa chegou ao sistema: 'cadastro' (alguém digitou),
+		 * 'autocadastro' (ela mesma preencheu) ou 'importacao' (planilha, M02b).
+		 * Serve para a liderança saber o quanto confiar no que está preenchido.
+		 */
+		source: text('source').notNull().default('cadastro'),
+
+		/**
 		 * Determina o regime de tratamento de dados (ADR 0003).
 		 * Opcional no primeiro contato; enquanto vazio, vale o regime restrito.
 		 *
@@ -79,7 +125,197 @@ export const person = pgTable(
 		updatedAt: updatedAt(),
 		deletedAt: timestamp('deleted_at', { withTimezone: true })
 	},
-	(t) => [index('person_team_idx').on(t.teamId), index('person_name_idx').on(t.teamId, t.fullName)]
+	(t) => [
+		index('person_team_idx').on(t.teamId),
+		index('person_name_idx').on(t.teamId, t.fullName),
+		index('person_status_idx').on(t.currentStatusId)
+	]
+);
+
+/**
+ * View com idade e menoridade DERIVADAS (ADR 0003, migração 0003).
+ *
+ * `.existing()` declara que a view é criada pela migração, não pelo Drizzle —
+ * o Drizzle só precisa saber o formato para poder consultá-la com tipos.
+ *
+ * Existe declarada aqui por um motivo concreto: a versão anterior consultava a
+ * view com `db.execute()` e SQL cru, e o formato do retorno DIVERGE entre os
+ * drivers — o PGlite dos testes devolve `{ rows }`, o postgres.js da produção
+ * devolve o array direto. O teste de integração passava e a aplicação quebrava
+ * com 500. Pelo construtor de consultas, os dois se comportam igual.
+ *
+ * `isMinor` é NULL quando a data de nascimento é desconhecida. Quem consome
+ * trata NULL como "aplique o regime restrito", nunca como "é maior".
+ */
+export const personView = pgView('person_view', {
+	id: uuid('id').notNull(),
+	ageYears: integer('age_years'),
+	isMinor: boolean('is_minor')
+}).existing();
+
+// ---------------------------------------------------------------------------
+// Jornada — estágios configuráveis, não enum de código (RN-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Os estágios pelos quais uma pessoa passa: visitante → participante
+ * recorrente → membro. A semeadura cria esses três; a liderança pode criar
+ * outros sem que ninguém toque no código.
+ *
+ * Nenhuma regra do sistema compara `key` com um literal. Onde o comportamento
+ * depende do estágio, ele lê uma PROPRIEDADE da linha — é o que permite um
+ * estágio novo funcionar sem deploy.
+ */
+export const membershipStatus = pgTable(
+	'membership_status',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id),
+
+		key: text('key').notNull(),
+		name: text('name').notNull(),
+		description: text('description'),
+
+		/** Ordem na jornada. Usada para exibir, nunca para inferir promoção. */
+		position: integer('position').notNull().default(0),
+
+		/** Cor da etiqueta na interface. */
+		color: text('color'),
+
+		/** Estágio final (ex.: "saiu"). Não aparece como destino sugerido. */
+		isTerminal: boolean('is_terminal').notNull().default(false),
+
+		/** Estágio de quem acabou de chegar. Exatamente um por equipe. */
+		isDefault: boolean('is_default').notNull().default(false),
+
+		/**
+		 * Papel concedido ao entrar neste estágio. Nulo = nenhum.
+		 * A concessão é sempre explícita e auditada — nunca silenciosa.
+		 */
+		grantsRoleId: uuid('grants_role_id').references(() => role.id),
+
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		uniqueIndex('membership_status_team_key_idx').on(t.teamId, t.key),
+		index('membership_status_position_idx').on(t.teamId, t.position)
+	]
+);
+
+/**
+ * Histórico de mudança de status (RN-04).
+ *
+ * Append-only garantido por gatilho no banco, como a auditoria: é a linha do
+ * tempo da pessoa nos Eagles, e reescrever passado apaga exatamente a
+ * informação que dá sentido ao acompanhamento.
+ */
+export const personStatusHistory = pgTable(
+	'person_status_history',
+	{
+		id: pk(),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+
+		/** Nulo na primeira atribuição — não havia estágio anterior. */
+		fromStatusId: uuid('from_status_id').references(() => membershipStatus.id),
+		toStatusId: uuid('to_status_id')
+			.notNull()
+			.references(() => membershipStatus.id),
+
+		changedByPersonId: uuid('changed_by_person_id').references(() => person.id),
+		reason: text('reason'),
+		occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('person_status_history_person_idx').on(t.personId, t.occurredAt)]
+);
+
+// ---------------------------------------------------------------------------
+// Vínculos entre pessoas
+// ---------------------------------------------------------------------------
+
+/**
+ * Irmão, cônjuge, namorado e responsável legal.
+ *
+ * Os três primeiros são simétricos e guardam UMA linha, com `person_a` sempre
+ * menor que `person_b` (CHECK na migração 0002). Duas linhas para o mesmo fato
+ * divergem em silêncio quando alguém apaga só uma.
+ *
+ * `responsavel_legal` é dirigido: `person_a` é o responsável, `person_b` é o
+ * menor. Só esse tipo escapa da ordenação canônica.
+ */
+export const personRelation = pgTable(
+	'person_relation',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id),
+
+		personA: uuid('person_a')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		personB: uuid('person_b')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+
+		/** 'irmao' | 'conjuge' | 'namorado' | 'responsavel_legal' */
+		relationType: text('relation_type').notNull(),
+
+		createdByPersonId: uuid('created_by_person_id').references(() => person.id),
+		createdAt: createdAt()
+	},
+	(t) => [
+		uniqueIndex('person_relation_par_idx').on(t.personA, t.personB, t.relationType),
+		index('person_relation_a_idx').on(t.personA),
+		index('person_relation_b_idx').on(t.personB)
+	]
+);
+
+// ---------------------------------------------------------------------------
+// Consentimento (ADR 0003) — log de eventos, append-only
+// ---------------------------------------------------------------------------
+
+/**
+ * Uma linha por EVENTO de consentimento, não por consentimento.
+ *
+ * Conceder grava uma linha com `granted = true`; revogar grava outra com
+ * `false`. O estado atual é a linha mais recente de cada (pessoa, tipo). Nada
+ * é atualizado nem apagado — o banco recusa, por gatilho.
+ *
+ * É a leitura fiel do que o ADR 0003 determina ("revogar cria linha nova; nada
+ * é apagado do histórico"). Uma coluna `revoked_at` atualizável diria o
+ * contrário do que a tabela promete.
+ */
+export const consent = pgTable(
+	'consent',
+	{
+		id: pk(),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+
+		/** 'dados_cadastrais' | 'foto' | 'compartilhamento_externo' | 'uso_ia' */
+		kind: text('kind').notNull(),
+
+		/** true = concedido, false = revogado. */
+		granted: boolean('granted').notNull(),
+
+		/** Quem consentiu: o responsável legal, quando a pessoa é menor. */
+		grantedByPersonId: uuid('granted_by_person_id').references(() => person.id),
+
+		/** Quem registrou no sistema — normalmente o conselheiro. */
+		recordedByPersonId: uuid('recorded_by_person_id').references(() => person.id),
+
+		/** Como foi coletado: "termo em papel assinado, foto no arquivo X". */
+		evidence: text('evidence'),
+
+		at: timestamp('at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('consent_person_kind_idx').on(t.personId, t.kind, t.at)]
 );
 
 // ---------------------------------------------------------------------------
@@ -328,10 +564,45 @@ export const auditLog = pgTable(
 // Relações
 // ---------------------------------------------------------------------------
 
+export const membershipStatusRelations = relations(membershipStatus, ({ many }) => ({
+	pessoas: many(person),
+	historico: many(personStatusHistory)
+}));
+
+export const personStatusHistoryRelations = relations(personStatusHistory, ({ one }) => ({
+	pessoa: one(person, {
+		fields: [personStatusHistory.personId],
+		references: [person.id]
+	}),
+	de: one(membershipStatus, {
+		fields: [personStatusHistory.fromStatusId],
+		references: [membershipStatus.id],
+		relationName: 'statusAnterior'
+	}),
+	para: one(membershipStatus, {
+		fields: [personStatusHistory.toStatusId],
+		references: [membershipStatus.id],
+		relationName: 'statusNovo'
+	})
+}));
+
+export const consentRelations = relations(consent, ({ one }) => ({
+	pessoa: one(person, {
+		fields: [consent.personId],
+		references: [person.id]
+	})
+}));
+
 export const personRelations = relations(person, ({ one, many }) => ({
 	team: one(team, { fields: [person.teamId], references: [team.id] }),
 	account: one(userAccount, { fields: [person.id], references: [userAccount.personId] }),
-	roles: many(personRole)
+	roles: many(personRole),
+	status: one(membershipStatus, {
+		fields: [person.currentStatusId],
+		references: [membershipStatus.id]
+	}),
+	historicoDeStatus: many(personStatusHistory),
+	consentimentos: many(consent)
 }));
 
 export const userAccountRelations = relations(userAccount, ({ one, many }) => ({

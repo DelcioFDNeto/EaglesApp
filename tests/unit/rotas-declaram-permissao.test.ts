@@ -32,8 +32,26 @@ const ROTAS_PUBLICAS: Record<string, string> = {
 	'convite/[token]/+page.server.ts':
 		'Aceite de convite: protegido pelo token de 256 bits e por rate limit.',
 	'sair/+page.server.ts': 'Encerra a própria sessão; sem sessão, nada acontece.',
-	'api/health/+server.ts': 'Monitor externo e CI consultam sem credencial; não devolve dado.'
+	'api/health/+server.ts': 'Monitor externo e CI consultam sem credencial; não devolve dado.',
+	'sou-novo/+page.server.ts':
+		'Autocadastro de visitante: público por decisão, atrás de chave desligada por padrão e com limite por IP.'
 };
+
+/**
+ * Os pontos de entrada da política. Uma rota protegida chama pelo menos um.
+ *
+ * A lista fica aqui, explícita, porque foi exatamente o que falhou quando o
+ * M02 acrescentou `canAnywhere`: o teste passou a acusar rotas protegidas como
+ * desprotegidas. Melhor uma lista que alguém atualiza conscientemente do que
+ * um regex esperto que erra em silêncio.
+ */
+const VERIFICADORES = [
+	'authorize',
+	'authorizeAnywhere',
+	'can',
+	'canAnywhere',
+	'canGlobally'
+] as const;
 
 function listarArquivosDeRota(dir: string, acumulado: string[] = []): string[] {
 	for (const entrada of readdirSync(dir)) {
@@ -65,7 +83,9 @@ describe('toda rota de servidor declara sua permissão', () => {
 		it(`${rota}`, () => {
 			const fonte = readFileSync(arquivo, 'utf8');
 
-			const verificaPermissao = /\bauthorize\s*\(/.test(fonte) || /\bcan\s*\(/.test(fonte);
+			const verificaPermissao = VERIFICADORES.some((nome) =>
+				new RegExp(`\\b${nome}\\s*\\(`).test(fonte)
+			);
 
 			const publicaPorDecisao = rota in ROTAS_PUBLICAS;
 

@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { db } from '$server/db';
-import { authorize } from '$server/policy/policy';
+import { authorizeAnywhere } from '$server/policy/policy';
 import { PERMISSIONS } from '$server/policy/permissions';
 import { featureFlag } from '$server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -20,7 +20,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	// Declaração explícita da permissão desta rota. A ausência desta linha é
 	// pega pelo teste `rotas-declaram-permissao`.
-	authorize(locals.actor, 'event.view', { personId: locals.actor.personId });
+	//
+	// `authorizeAnywhere`, e não `authorize` com contexto de pessoa: o painel é
+	// do próprio usuário e não pertence a grupo nenhum. Com a verificação
+	// escopada, quem tem o papel atribuído a um GRUPO — todo conselheiro —
+	// recebia acesso negado ao abrir o app, porque uma atribuição de grupo não
+	// autoriza sem um `groupId` no contexto. O papel estava certo; a pergunta
+	// é que era a errada.
+	authorizeAnywhere(locals.actor, 'event.view');
 
 	const banco = db();
 
