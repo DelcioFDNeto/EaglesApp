@@ -317,15 +317,15 @@ html{scroll-behavior:smooth}
 
   <header class="hero">
     <div class="col">
-      <p class="eyebrow">Documento de descoberta · versão 0.2.1 · arquitetura aprovada</p>
+      <p class="eyebrow">Documento de descoberta · versão 0.3 · arquitetura aprovada</p>
       <h1>Organizar pessoas <em>sem</em> burocratizar a comunidade.</h1>
       <p class="lede">Descoberta, requisitos, modelo de dados, arquitetura e plano de entrega do Eagles App — a plataforma de gestão interna dos Eagles para o ano inteiro.</p>
       <div class="meta">
-        <div><b>Data</b><span>18 ago 2026 · rev. 23 ago</span></div>
+        <div><b>Data</b><span>18 ago 2026 · rev. 9 set</span></div>
         <div><b>Escopo</b><span>24 seções + anexo</span></div>
         <div><b>Stack recomendada</b><span>SvelteKit + PostgreSQL</span></div>
         <div><b>MVP</b><span>6 módulos · ~10 semanas</span></div>
-        <div><b>Estado</b><span>Módulo 01 entregue</span></div>
+        <div><b>Estado</b><span>Módulos 01 e 02 entregues</span></div>
       </div>
       <div class="legend">
         <p>Todo o documento marca a <strong>origem de cada informação</strong>. É o que separa o que você pediu daquilo que eu sugeri ou supus:</p>
@@ -1760,19 +1760,22 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
 
       <div class="col" style="margin-top:2.4rem">
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin-bottom:.6rem">Onde a construção está</h3>
-        <p><strong>Módulo 01 — Fundação: entregue e mesclado em <code>main</code>.</strong> Verificação de 23 de agosto: <strong>87 testes</strong> de unidade e integração, <strong>16 de ponta a ponta</strong> em dois navegadores, tipos limpos em 650 arquivos, build funcionando e 53,6 KB de JavaScript comprimido — a meta era ficar abaixo de 100 KB.</p>
-        <p>O que existe hoje: banco com 12 tabelas e migrações versionadas, autenticação por convite com Argon2id, sessão revogável, camada de política que <em>nega por padrão</em> — uma rota sem permissão declarada reprova no teste — auditoria que o próprio banco recusa alterar, e o PWA instalável.</p>
-        <p>O que não existe: qualquer funcionalidade de negócio. Nenhuma pessoa se cadastra, nenhum evento é criado. Essa era exatamente a intenção do módulo.</p>
-        <p><strong>Duas dívidas foram fechadas neste ciclo.</strong> O backup passou a ser <strong>cifrado</strong> antes de sair da máquina, com chave assimétrica: a VPS guarda apenas a chave pública, então quem invadir o servidor consegue criar backups novos mas não consegue ler nenhum dos antigos. O script recusa rodar sem a chave — um dump em claro com os dados da comunidade não é alternativa aceitável a não ter backup. E a restauração <strong>foi testada</strong>, contra um PostgreSQL real.</p>
-        <p>A segunda foi a suíte de ponta a ponta. O critério de que o <strong>login funciona com o JavaScript desligado</strong> — que é a razão de a arquitetura usar formulários em vez de chamadas de API — passou a ser verificado em navegador real, com uma guarda que falha se alguém religar o JavaScript e esvaziar o sentido dos testes.</p>
-        <p>Ainda falta tudo que depende de um servidor de verdade: o deploy, o app instalado no celular e a cópia do backup efetivamente enviada para fora. Isso segue parado no domínio e nas specs da VPS.</p>
-        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 02 — Pessoas, aguardando sua autorização.</p></div>
+        <p><strong>Módulos 01 (Fundação) e 02 (Pessoas) implementados.</strong> Verificação de 9 de setembro: <strong>156 testes</strong> de unidade e integração, <strong>43 de ponta a ponta</strong> em dois projetos de navegador, tipos limpos em 694 arquivos e build funcionando.</p>
+        <p>O M02 entregou o cadastro progressivo — só o nome é obrigatório —, a jornada de visitante a membro com histórico que o banco recusa alterar, vínculos familiares, a estrutura de consentimento do ADR 0003 (implementada, testada e inativa, já que hoje não há menores), detecção de duplicidade que avisa sem bloquear, e o autocadastro público atrás de uma chave desligada por padrão.</p>
+        <p>Ficaram para a segunda fatia do módulo: foto, campos personalizados e importação por planilha. Nenhuma delas bloqueia os módulos seguintes.</p>
+
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Três defeitos que só apareceram agora</h3>
+        <p>O mais grave: <strong>a política de segurança de conteúdo impedia a aplicação de hidratar</strong>. O SvelteKit emite um script inline para iniciar o app, e a política — escrita à mão — o bloqueava. Como as telas vêm prontas do servidor e os formulários funcionam sem JavaScript, <em>tudo continuava funcionando</em>: sem navegação no cliente, sem service worker, sem nenhuma reatividade. Numa arquitetura escolhida justamente por processar a interação no aparelho quando a rede é ruim, a característica principal estava desligada desde o primeiro dia — e nenhum teste percebia, porque todos verificavam o resultado, e o resultado era idêntico.</p>
+        <p>Os outros dois: <strong>o conselheiro não conseguia abrir o app</strong>, barrado por uma verificação de permissão com o escopo errado na tela inicial — e nenhum teste entrava com esse papel; e, atrás do servidor de borda, <strong>o limite de tentativas de login travaria a comunidade inteira</strong>, porque todos chegariam com o mesmo endereço.</p>
+        <p>Os três estão corrigidos, cada um com uma verificação automática que reprova se voltarem.</p>
+        <p>Continua faltando tudo que depende de um servidor de verdade: o deploy, o app instalado no celular e a cópia do backup efetivamente enviada. Isso segue parado no domínio e nas specs da VPS.</p>
+        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 03 — RBAC, ou a segunda fatia do M02.</p></div>
       </div>
     </div>
   </section>
 
   <footer>
-    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.2.1 · 18 de agosto de 2026, revisado em 23 de agosto<br>
+    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.3 · 18 de agosto de 2026, revisado em 9 de setembro<br>
     Fonte no repositório: <code>docs/00-descoberta-e-arquitetura.md</code>
   </footer>
 </div>
