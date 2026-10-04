@@ -50,6 +50,25 @@ export async function removerPessoasDeTeste(prefixo: string): Promise<void> {
 }
 
 /**
+ * Faz a confirmação de senha das sessões de uma conta parecer antiga.
+ *
+ * O login conta como reautenticação, então toda sessão nasce "confirmada há
+ * pouco". Para exercitar o pedido de senha antes de alterar acessos, é
+ * preciso envelhecer essa marca.
+ */
+export async function envelhecerReautenticacao(email: string): Promise<void> {
+	const sql = postgres(E2E_DATABASE_URL, { max: 1 });
+	try {
+		await sql`
+			UPDATE session SET reauthenticated_at = now() - interval '1 hour'
+			WHERE account_id IN (SELECT id FROM user_account WHERE lower(email) = ${email.toLowerCase()})
+		`;
+	} finally {
+		await sql.end({ timeout: 5 });
+	}
+}
+
+/**
  * Devolve a conta ao estado limpo: sem tentativas falhas e sem bloqueio.
  *
  * O bloqueio progressivo grava no banco, então o teste que o exercita deixaria

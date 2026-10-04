@@ -9,7 +9,9 @@
 import { describe, expect, it } from 'vitest';
 import {
 	authorize,
+	authorizeAnywhere,
 	can,
+	canAnywhere,
 	canGlobally,
 	groupsWhere,
 	PolicyDenied,
@@ -247,5 +249,36 @@ describe('integridade da semente de papéis', () => {
 		const usadas = new Set(ROLE_SEEDS.flatMap((r) => r.permissions));
 		const orfas = ALL_PERMISSIONS.filter((p) => !usadas.has(p));
 		expect(orfas, `permissões que nenhum papel concede: ${orfas.join(', ')}`).toEqual([]);
+	});
+});
+
+describe('canAnywhere — detém a permissão em algum escopo?', () => {
+	it('é falso para quem não está autenticado', () => {
+		expect(canAnywhere(null, 'person.view')).toBe(false);
+	});
+
+	it('reconhece a permissão de um papel com escopo de grupo SEM pedir o grupo', () => {
+		// É a razão de existir: a lista de pessoas e o painel inicial não
+		// pertencem a grupo nenhum, e exigir groupId negaria uma ação legítima.
+		expect(can(conselheiroAzul, 'person.view')).toBe(false);
+		expect(canAnywhere(conselheiroAzul, 'person.view')).toBe(true);
+	});
+
+	it('continua negando o que nenhum papel da pessoa inclui', () => {
+		expect(canAnywhere(conselheiroAzul, 'finance.view_all')).toBe(false);
+		expect(canAnywhere(visitante, 'person.view')).toBe(false);
+	});
+
+	it('NÃO substitui a verificação sobre um registro concreto', () => {
+		// "Pode editar alguém" e "pode editar ESTA pessoa" são perguntas
+		// diferentes. canAnywhere responde só a primeira.
+		expect(canAnywhere(conselheiroAzul, 'person.update')).toBe(true);
+		expect(can(conselheiroAzul, 'person.update', { groupId: PG_VERDE })).toBe(false);
+	});
+
+	it('authorizeAnywhere lança PolicyDenied quando nega', () => {
+		expect(() => authorizeAnywhere(visitante, 'person.view')).toThrow(PolicyDenied);
+		expect(() => authorizeAnywhere(null, 'event.view')).toThrow(PolicyDenied);
+		expect(() => authorizeAnywhere(conselheiroAzul, 'person.view')).not.toThrow();
 	});
 });

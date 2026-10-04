@@ -4,6 +4,7 @@ import type { Database } from '../db';
 import { session, userAccount } from '../db/schema';
 import { env } from '../env';
 import { generateToken, hashToken } from './token';
+import { REAUTH_WINDOW_MINUTES } from '$shared/sessao';
 
 /**
  * Sessões server-side.
@@ -16,8 +17,8 @@ import { generateToken, hashToken } from './token';
 
 export const SESSION_COOKIE = 'eagles_sessao';
 
-/** Janela em que uma reautenticação recente ainda vale para ação sensível. */
-export const REAUTH_WINDOW_MINUTES = 15;
+/** Janela em que uma reautenticação recente ainda vale — fonte em `$shared/sessao`. */
+export { REAUTH_WINDOW_MINUTES };
 
 export type SessionRecord = typeof session.$inferSelect;
 

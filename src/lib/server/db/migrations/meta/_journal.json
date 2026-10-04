@@ -29,6 +29,13 @@
       "when": 1788984970096,
       "tag": "0003_regras_de_pessoas",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791089065773,
+      "tag": "0004_rbac",
+      "breakpoints": true
     }
   ]
 }

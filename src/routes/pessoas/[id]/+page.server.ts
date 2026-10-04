@@ -5,6 +5,7 @@ import { verPessoa } from '$server/modules/pessoas/pessoas';
 import { linhaDoTempo, listarEstagios, mudarEstagio } from '$server/modules/pessoas/status';
 import { vinculosDe } from '$server/modules/pessoas/relacoes';
 import { historicoDeConsentimento } from '$server/modules/pessoas/consentimento';
+import { atribuicoesDe } from '$server/modules/rbac/atribuicoes';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -24,13 +25,14 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 
 	if (!detalhe) error(404, 'Pessoa não encontrada.');
 
-	const [tempo, vinculos, estagios, consentimentos] = await Promise.all([
+	const [tempo, vinculos, estagios, consentimentos, atribuicoes] = await Promise.all([
 		linhaDoTempo(banco, params.id),
 		vinculosDe(banco, params.id),
 		listarEstagios(banco, locals.actor.teamId),
 		canAnywhere(locals.actor, 'person.view_sensitive')
 			? historicoDeConsentimento(banco, params.id)
-			: Promise.resolve([])
+			: Promise.resolve([]),
+		atribuicoesDe(banco, params.id)
 	]);
 
 	return {
@@ -51,6 +53,13 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			at: c.at.toISOString()
 		})),
 		podeEditar: can(locals.actor, 'person.update', { personId: params.id }),
+		// Quem tem qual papel não é dado sensível: na comunidade todo mundo sabe
+		// quem é da liderança. Só os NOMES dos papéis — escopo e histórico ficam
+		// na tela de acesso, para quem administra.
+		papeis: [...new Set(atribuicoes.map((a) => a.papel))],
+		podeGerenciarAcesso:
+			can(locals.actor, 'rbac.manage') ||
+			can(locals.actor, 'person.invite', { personId: params.id }),
 		acabouDeCriar: url.searchParams.get('criada') === '1'
 	};
 };

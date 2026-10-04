@@ -1,6 +1,6 @@
 import { error, redirect } from '@sveltejs/kit';
 import { db } from '$server/db';
-import { authorizeAnywhere } from '$server/policy/policy';
+import { canAnywhere } from '$server/policy/policy';
 import { PERMISSIONS } from '$server/policy/permissions';
 import { featureFlag } from '$server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -21,13 +21,22 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Declaração explícita da permissão desta rota. A ausência desta linha é
 	// pega pelo teste `rotas-declaram-permissao`.
 	//
-	// `authorizeAnywhere`, e não `authorize` com contexto de pessoa: o painel é
-	// do próprio usuário e não pertence a grupo nenhum. Com a verificação
-	// escopada, quem tem o papel atribuído a um GRUPO — todo conselheiro —
-	// recebia acesso negado ao abrir o app, porque uma atribuição de grupo não
-	// autoriza sem um `groupId` no contexto. O papel estava certo; a pergunta
-	// é que era a errada.
-	authorizeAnywhere(locals.actor, 'event.view');
+	// `canAnywhere`, e não `authorize` com contexto de pessoa: o painel é do
+	// próprio usuário e não pertence a grupo nenhum (correção do M02).
+	//
+	// E não LANÇA quando falta a permissão: quem entrou mas ainda não tem papel
+	// recebia uma tela de erro genérica. Agora recebe a explicação do que
+	// aconteceu e a quem procurar (M03).
+	if (!canAnywhere(locals.actor, 'event.view')) {
+		return {
+			semAcesso: true as const,
+			nome: locals.displayName ?? 'Eagles',
+			papeis: [],
+			permissoes: [],
+			catalogoPermissoes: {},
+			funcionalidades: {}
+		};
+	}
 
 	const banco = db();
 
@@ -43,6 +52,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	].sort();
 
 	return {
+		semAcesso: false as const,
 		nome: locals.displayName ?? 'Eagles',
 		papeis: [...new Set(locals.actor.assignments.map((a) => a.roleKey))],
 		permissoes: minhasPermissoes,

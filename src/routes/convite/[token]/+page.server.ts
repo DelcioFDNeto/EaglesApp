@@ -1,13 +1,10 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { userAccount } from '$server/db/schema';
-import { consumeInvite, INVITE_REASON_MESSAGE, lookupInvite } from '$server/auth/invite';
-import { hashPassword, PASSWORD_PROBLEM_MESSAGE, validatePassword } from '$server/auth/password';
+import { INVITE_REASON_MESSAGE, lookupInvite } from '$server/auth/invite';
+import { aceitarConvite } from '$server/auth/conta';
 import { createSession, setSessionCookie } from '$server/auth/session';
 import { checkRateLimit, RULES } from '$server/auth/ratelimit';
-import { audit } from '$server/audit/log';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -15,8 +12,10 @@ import type { Actions, PageServerLoad } from './$types';
  *
  * PERMISSÃO: pública, protegida pelo token de 256 bits + rate limit por IP.
  *
- * Fluxo: a pessoa abre o link do WhatsApp, vê o próprio nome, define a senha
- * uma vez e já entra autenticada. Nada de "confirme seu e-mail" no meio.
+ * Serve a dois casos: PRIMEIRO ACESSO e RECUPERAÇÃO de acesso (quem esqueceu a
+ * senha recebe um novo convite). A regra de cada um vive em
+ * `$server/auth/conta`, e não aqui — foi a lógica inline nesta rota que deixou
+ * passar a conta criada sem identificador de entrada.
  */
 
 /**
@@ -26,10 +25,12 @@ import type { Actions, PageServerLoad } from './$types';
  * literalmente `undefined` ao inferir o `ActionData`, e dois `fail()` com
  * formas diferentes viram uma união onde nenhuma chave existe com segurança.
  */
-type ErrosConvite = { senha?: string; confirmacao?: string };
+type ErrosConvite = { identificador?: string; senha?: string; confirmacao?: string };
+type FalhaConvite = { erro?: string; erros?: ErrosConvite; identificador?: string };
 
 const schema = z
 	.object({
+		identificador: z.string().trim().min(1, 'Informe seu e-mail ou telefone.'),
 		senha: z.string().min(1, 'Escolha uma senha.'),
 		confirmacao: z.string().min(1, 'Repita a senha.')
 	})
@@ -50,7 +51,11 @@ export const load: PageServerLoad = async ({ params, getClientAddress }) => {
 		return { estado: 'invalido' as const, mensagem: INVITE_REASON_MESSAGE[resultado.reason] };
 	}
 
-	return { estado: 'valido' as const, nome: resultado.fullName };
+	return {
+		estado: 'valido' as const,
+		nome: resultado.fullName,
+		recuperacao: resultado.recuperacao
+	};
 };
 
 export const actions: Actions = {
@@ -60,94 +65,50 @@ export const actions: Actions = {
 
 		const limite = checkRateLimit(`convite:ip:${ip}`, RULES.convitePorIp);
 		if (!limite.allowed) {
-			return fail(429, { erro: 'Muitas tentativas. Aguarde alguns minutos.' });
-		}
-
-		const banco = db();
-
-		// Revalida o convite no envio: entre carregar a página e enviar o
-		// formulário, ele pode ter sido usado ou revogado.
-		const convite = await lookupInvite(banco, params.token);
-		if (!convite.ok) {
-			return fail(400, { erro: INVITE_REASON_MESSAGE[convite.reason] });
+			const falha: FalhaConvite = { erro: 'Muitas tentativas. Aguarde alguns minutos.' };
+			return fail(429, falha);
 		}
 
 		const form = await request.formData();
+		const identificadorDigitado = String(form.get('identificador') ?? '');
 		const parsed = schema.safeParse({
+			identificador: identificadorDigitado,
 			senha: form.get('senha'),
 			confirmacao: form.get('confirmacao')
 		});
 
 		if (!parsed.success) {
 			const campos = parsed.error.flatten().fieldErrors;
-			const erros: ErrosConvite = {
-				senha: campos.senha?.[0],
-				confirmacao: campos.confirmacao?.[0]
+			const falha: FalhaConvite = {
+				identificador: identificadorDigitado,
+				erros: {
+					identificador: campos.identificador?.[0],
+					senha: campos.senha?.[0],
+					confirmacao: campos.confirmacao?.[0]
+				}
 			};
-			return fail(400, { erros });
+			return fail(400, falha);
 		}
 
-		const problema = validatePassword(parsed.data.senha, convite.fullName);
-		if (problema) {
-			const erros: ErrosConvite = { senha: PASSWORD_PROBLEM_MESSAGE[problema] };
-			return fail(400, { erros });
+		const banco = db();
+		const resultado = await aceitarConvite(banco, {
+			token: params.token,
+			senha: parsed.data.senha,
+			identificador: parsed.data.identificador,
+			ip,
+			userAgent
+		});
+
+		if (!resultado.ok) {
+			const falha: FalhaConvite = resultado.campo
+				? { identificador: identificadorDigitado, erros: { [resultado.campo]: resultado.mensagem } }
+				: { identificador: identificadorDigitado, erro: resultado.mensagem };
+			return fail(400, falha);
 		}
 
-		// Consome o convite ANTES de criar a conta: se dois envios chegarem
-		// juntos, só um passa pelo UPDATE condicional. Sem isso, um clique
-		// duplo criaria duas contas para a mesma pessoa.
-		const consumido = await consumeInvite(banco, convite.inviteId);
-		if (!consumido) {
-			return fail(400, { erro: INVITE_REASON_MESSAGE.usado });
-		}
-
-		const passwordHash = await hashPassword(parsed.data.senha);
-
-		const existentes = await banco
-			.select({ id: userAccount.id })
-			.from(userAccount)
-			.where(eq(userAccount.personId, convite.personId))
-			.limit(1);
-
-		let contaId: string;
-
-		if (existentes[0]) {
-			contaId = existentes[0].id;
-			await banco
-				.update(userAccount)
-				.set({ passwordHash, updatedAt: new Date() })
-				.where(eq(userAccount.id, contaId));
-		} else {
-			const [criada] = await banco
-				.insert(userAccount)
-				.values({ personId: convite.personId, passwordHash })
-				.returning({ id: userAccount.id });
-			if (!criada) return fail(500, { erro: 'Não foi possível criar seu acesso. Tente de novo.' });
-			contaId = criada.id;
-		}
-
-		const { token, record } = await createSession(banco, contaId, { ip, userAgent });
+		const { token, record } = await createSession(banco, resultado.contaId, { ip, userAgent });
 		setSessionCookie(cookies, token, record.expiresAt);
 
-		await audit(banco, {
-			teamId: convite.teamId,
-			actorPersonId: convite.personId,
-			action: 'invite.aceito',
-			entity: 'user_account',
-			entityId: contaId,
-			ip,
-			userAgent
-		});
-		await audit(banco, {
-			teamId: convite.teamId,
-			actorPersonId: convite.personId,
-			action: 'auth.senha_definida',
-			entity: 'user_account',
-			entityId: contaId,
-			ip,
-			userAgent
-		});
-
-		redirect(303, '/inicio?boas-vindas=1');
+		redirect(303, resultado.recuperacao ? '/inicio?acesso-recuperado=1' : '/inicio?boas-vindas=1');
 	}
 };

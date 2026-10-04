@@ -69,7 +69,8 @@ export async function criarBancoDeTeste(): Promise<BancoDeTeste> {
 				key: semente.key,
 				name: semente.name,
 				description: semente.description,
-				isSystem: semente.isSystem
+				isSystem: semente.isSystem,
+				defaultScope: semente.defaultScope
 			})
 			.returning({ id: role.id });
 

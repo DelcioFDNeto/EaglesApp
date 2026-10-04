@@ -1,8 +1,9 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { person, userAccount } from '$server/db/schema';
+import { userAccount } from '$server/db/schema';
+import { chaveDoIdentificador, encontrarContaPorIdentificador } from '$server/auth/conta';
 import { verifyPassword, hashPassword, needsRehash } from '$server/auth/password';
 import { createSession, setSessionCookie } from '$server/auth/session';
 import { checkRateLimit, clearRateLimit, regraLoginPorIp, RULES } from '$server/auth/ratelimit';
@@ -68,7 +69,10 @@ export const actions: Actions = {
 		}
 
 		const { identificador, senha } = parsed.data;
-		const chaveConta = identificador.toLowerCase();
+		// Chave NORMALIZADA: `(11) 98765-4321` e `11987654321` são a mesma conta.
+		// Com a chave crua, bastava variar a formatação do telefone para zerar o
+		// limite de tentativas por conta.
+		const chaveConta = chaveDoIdentificador(identificador);
 
 		// 2. Limite por conta — antes do Argon2id.
 		const porConta = checkRateLimit(`login:conta:${chaveConta}`, RULES.loginPorConta);
@@ -81,21 +85,10 @@ export const actions: Actions = {
 
 		const banco = db();
 
-		// 3. Busca a conta por e-mail (sem diferenciar maiúsculas) ou telefone.
-		const linhas = await banco
-			.select({ conta: userAccount, pessoa: person })
-			.from(userAccount)
-			.innerJoin(person, eq(userAccount.personId, person.id))
-			.where(
-				and(
-					sql`(lower(${userAccount.email}) = ${chaveConta} or ${userAccount.phone} = ${identificador})`,
-					isNull(userAccount.disabledAt),
-					isNull(person.deletedAt)
-				)
-			)
-			.limit(1);
-
-		const linha = linhas[0];
+		// 3. Busca a conta — e-mail sem diferenciar maiúsculas, telefone só pelos
+		// dígitos. A regra vive em `$server/auth/conta`, a mesma que o aceite do
+		// convite usa para gravar: as duas pontas não podem divergir.
+		const linha = await encontrarContaPorIdentificador(banco, identificador);
 		// Estreitado ANTES de desestruturar: o TypeScript não propaga a guarda
 		// de `linha.conta.passwordHash` através de `const { conta } = linha`.
 		const hashArmazenado = linha?.conta.passwordHash ?? null;

@@ -431,6 +431,15 @@ export const role = pgTable(
 		description: text('description'),
 		/** Protege contra exclusão acidental. NÃO congela as permissões. */
 		isSystem: boolean('is_system').notNull().default(false),
+
+		/**
+		 * Escopo com que este papel é atribuído: 'global' | 'group' | 'self'.
+		 *
+		 * Quem atribui escolhe o PAPEL, não o escopo (D-M03-1). Deixar o escopo
+		 * livre na tela convidaria o erro silencioso de dar "Conselheiro" com
+		 * escopo global — um superconselheiro que ninguém pretendeu criar.
+		 */
+		defaultScope: text('default_scope').notNull().default('self'),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},

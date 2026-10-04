@@ -49,8 +49,20 @@ export async function issueInvite(
 }
 
 export type InviteLookup =
-	| { ok: true; inviteId: string; personId: string; teamId: string; fullName: string }
-	| { ok: false; reason: 'inexistente' | 'expirado' | 'usado' | 'revogado' | 'ja_tem_conta' };
+	| {
+			ok: true;
+			inviteId: string;
+			personId: string;
+			teamId: string;
+			fullName: string;
+			/**
+			 * A pessoa já tem senha: este convite é uma RECUPERAÇÃO de acesso
+			 * (ADR 0004), não um primeiro acesso. Aceitá-lo troca a senha e
+			 * encerra todas as sessões abertas.
+			 */
+			recuperacao: boolean;
+	  }
+	| { ok: false; reason: 'inexistente' | 'expirado' | 'usado' | 'revogado' };
 
 /**
  * Resolve um token de convite.
@@ -78,14 +90,16 @@ export async function lookupInvite(db: Database, token: string): Promise<InviteL
 	if (convite.revokedAt) return { ok: false, reason: 'revogado' };
 	if (convite.usedAt) return { ok: false, reason: 'usado' };
 	if (convite.expiresAt <= new Date()) return { ok: false, reason: 'expirado' };
-	if (conta?.passwordHash) return { ok: false, reason: 'ja_tem_conta' };
-
+	// Quem já tem senha NÃO é recusado. O ADR 0004 define o novo convite como o
+	// caminho de recuperação de acesso; recusar aqui deixava sem saída
+	// justamente quem esqueceu a senha (defeito do M01, corrigido no M03).
 	return {
 		ok: true,
 		inviteId: convite.id,
 		personId: pessoa.id,
 		teamId: pessoa.teamId,
-		fullName: pessoa.fullName
+		fullName: pessoa.fullName,
+		recuperacao: !!conta?.passwordHash
 	};
 }
 
@@ -105,6 +119,5 @@ export const INVITE_REASON_MESSAGE: Record<Exclude<InviteLookup, { ok: true }>['
 		inexistente: 'Este convite não existe. Peça um novo link ao seu conselheiro.',
 		expirado: 'Este convite expirou. Peça um novo link ao seu conselheiro.',
 		usado: 'Este convite já foi usado. Entre com a sua senha.',
-		revogado: 'Este convite foi cancelado. Peça um novo link ao seu conselheiro.',
-		ja_tem_conta: 'Você já tem acesso. Entre com a sua senha.'
+		revogado: 'Este convite foi cancelado. Peça um novo link ao seu conselheiro.'
 	};

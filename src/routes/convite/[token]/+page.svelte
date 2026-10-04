@@ -22,7 +22,14 @@
 			<Marca tamanho={56} />
 			{#if data.estado === 'valido'}
 				<h1>Oi, {data.nome.split(' ')[0]}!</h1>
-				<p class="sub">Escolha uma senha para entrar no Eagles.</p>
+				<p class="sub">
+					{#if data.recuperacao}
+						Vamos recuperar seu acesso. Escolha uma senha nova — a antiga deixa de valer e os
+						aparelhos que estavam conectados saem da conta.
+					{:else}
+						Escolha como você vai entrar no Eagles.
+					{/if}
+				</p>
 			{:else}
 				<h1>Eagles</h1>
 			{/if}
@@ -46,6 +53,25 @@
 					};
 				}}
 			>
+				<!--
+					O identificador é OBRIGATÓRIO. A versão do M01 criava a conta só com
+					a senha, e o login procura a conta por e-mail ou telefone — quem
+					entrava por convite ficava trancado para fora ao sair.
+
+					Sem preenchimento automático com o cadastro, de propósito: o link
+					pode ser encaminhado, e a página não deve entregar o contato de
+					ninguém a quem o abrir.
+				-->
+				<Campo
+					id="identificador"
+					rotulo="E-mail ou telefone"
+					valor={form?.identificador ?? ''}
+					erro={form?.erros?.identificador}
+					autocomplete="username"
+					ajuda="É com ele e a senha que você entra da próxima vez. Use o que você usa no dia a dia."
+					obrigatorio
+				/>
+
 				<Campo
 					id="senha"
 					rotulo="Sua senha"
@@ -65,7 +91,9 @@
 					obrigatorio
 				/>
 
-				<Botao tipo="submit" largura="cheia" carregando={enviando}>Criar meu acesso</Botao>
+				<Botao tipo="submit" largura="cheia" carregando={enviando}>
+					{data.recuperacao ? 'Salvar nova senha' : 'Criar meu acesso'}
+				</Botao>
 			</form>
 
 			<p class="rodape">

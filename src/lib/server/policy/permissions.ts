@@ -63,6 +63,50 @@ export const PERMISSIONS = {
 
 export type Permission = keyof typeof PERMISSIONS;
 
+/**
+ * Recursos, na ordem em que aparecem para quem administra papéis.
+ *
+ * A chave é o prefixo da permissão (`person` em `person.view`). Agrupar por
+ * recurso é o que torna legível uma lista de trinta e tantas permissões.
+ */
+export const RECURSOS = [
+	{ prefixo: 'person', rotulo: 'Pessoas' },
+	{ prefixo: 'group', rotulo: 'Grupos' },
+	{ prefixo: 'event', rotulo: 'Eventos' },
+	{ prefixo: 'attendance', rotulo: 'Presença' },
+	{ prefixo: 'responsibility', rotulo: 'Responsabilidades' },
+	{ prefixo: 'finance', rotulo: 'Financeiro' },
+	{ prefixo: 'announcement', rotulo: 'Comunicação' },
+	{ prefixo: 'ai', rotulo: 'Inteligência artificial' },
+	{ prefixo: 'settings', rotulo: 'Configurações' },
+	{ prefixo: 'rbac', rotulo: 'Papéis e permissões' },
+	{ prefixo: 'audit', rotulo: 'Auditoria' }
+] as const;
+
+/**
+ * Permissões que dão acesso a dado sensível ou a poder administrativo.
+ *
+ * A tela de papéis as destaca: conceder uma delas merece um segundo olhar de
+ * quem está marcando a caixa. Não muda nada na verificação — só na atenção.
+ */
+export const PERMISSOES_SENSIVEIS: ReadonlySet<Permission> = new Set<Permission>([
+	'person.view_sensitive',
+	'person.export',
+	'person.delete',
+	'finance.view_all',
+	'finance.approve',
+	'finance.reverse',
+	'ai.use_finance',
+	'settings.manage',
+	'rbac.manage',
+	'audit.view'
+]);
+
+/** Prefixo de recurso de uma permissão: `person` em `person.view`. */
+export function recursoDe(permissao: Permission): string {
+	return permissao.split('.')[0]!;
+}
+
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
 
 export function isPermission(value: string): value is Permission {

@@ -116,6 +116,18 @@
 		</section>
 	{/if}
 
+	<section class="cartao" aria-label="Acesso ao app">
+		<h3>Acesso ao app</h3>
+		{#if data.papeis.length > 0}
+			<p class="papeis">{data.papeis.join(' · ')}</p>
+		{:else}
+			<p class="legenda">Sem papel no app.</p>
+		{/if}
+		{#if data.podeGerenciarAcesso}
+			<Botao href="/pessoas/{p.id}/acesso" variante="secundario">Gerenciar acesso</Botao>
+		{/if}
+	</section>
+
 	{#if data.vinculos.length > 0}
 		<section class="cartao">
 			<h3>Vínculos</h3>
@@ -258,6 +270,10 @@
 		font-size: var(--texto-sm);
 		font-weight: 700;
 		color: var(--cor-texto-2);
+	}
+
+	.papeis {
+		font-weight: 600;
 	}
 
 	.legenda {

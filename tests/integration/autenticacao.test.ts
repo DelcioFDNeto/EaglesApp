@@ -8,8 +8,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { criarBancoDeTeste, type BancoDeTeste } from './helpers/banco';
-import { person, personRole, userAccount } from '../../src/lib/server/db/schema';
+import { person, personRole, session, userAccount } from '../../src/lib/server/db/schema';
 import { consumeInvite, issueInvite, lookupInvite } from '../../src/lib/server/auth/invite';
+import {
+	aceitarConvite,
+	encontrarContaPorIdentificador,
+	interpretarIdentificador
+} from '../../src/lib/server/auth/conta';
 import { hashPassword, verifyPassword } from '../../src/lib/server/auth/password';
 import {
 	createSession,
@@ -130,11 +135,20 @@ describe('convite', () => {
 		expect((await lookupInvite(ctx.db, novo.token)).ok).toBe(true);
 	});
 
-	it('recusa convite para quem já tem senha definida', async () => {
-		const pessoaId = await criarPessoa('Ja Tem Acesso');
-		await ctx.db
+	it('convite para quem JÁ tem conta é recuperação de acesso, não recusa (ADR 0004)', async () => {
+		// O M01 recusava este caso com "você já tem acesso, entre com a sua
+		// senha" — deixando sem saída justamente quem esqueceu a senha.
+		const pessoaId = await criarPessoa('Esqueceu A Senha');
+		const [conta] = await ctx.db
 			.insert(userAccount)
-			.values({ personId: pessoaId, passwordHash: await hashPassword('uma senha qualquer') });
+			.values({
+				personId: pessoaId,
+				email: 'esqueceu@eagles.test',
+				passwordHash: await hashPassword('senha antiga e esquecida')
+			})
+			.returning({ id: userAccount.id });
+
+		const aberta = await createSession(ctx.db, conta!.id);
 
 		const { token } = await issueInvite(ctx.db, {
 			teamId: ctx.teamId,
@@ -142,7 +156,28 @@ describe('convite', () => {
 			createdByPersonId: conselheiroId
 		});
 
-		expect(await lookupInvite(ctx.db, token)).toEqual({ ok: false, reason: 'ja_tem_conta' });
+		const encontrado = await lookupInvite(ctx.db, token);
+		expect(encontrado).toMatchObject({ ok: true, recuperacao: true });
+
+		const r = await aceitarConvite(ctx.db, {
+			token,
+			senha: 'minha senha nova de quinta',
+			identificador: 'esqueceu@eagles.test'
+		});
+		expect(r).toMatchObject({ ok: true, recuperacao: true, contaId: conta!.id });
+
+		// A senha antiga deixou de valer, a nova vale.
+		const achada = await encontrarContaPorIdentificador(ctx.db, 'esqueceu@eagles.test');
+		expect(await verifyPassword(achada!.conta.passwordHash!, 'minha senha nova de quinta')).toBe(
+			true
+		);
+		expect(await verifyPassword(achada!.conta.passwordHash!, 'senha antiga e esquecida')).toBe(
+			false
+		);
+
+		// E a sessão que estava aberta morreu junto: aparelho perdido ou sessão
+		// roubada não sobrevivem à troca de senha.
+		expect(await validateSession(ctx.db, aberta.token)).toBeNull();
 	});
 });
 
@@ -329,22 +364,34 @@ describe('fluxo completo: convite → senha → entrada', () => {
 		if (!encontrado.ok) return;
 		expect(encontrado.fullName).toBe('Membro Novo');
 
-		// 3. Define a senha
-		expect(await consumeInvite(ctx.db, encontrado.inviteId)).toBe(true);
+		// 3. Define a senha e COMO vai entrar — pelo mesmo serviço que a rota usa.
+		//
+		// A versão anterior deste teste inseria a conta à mão, sem identificador,
+		// e no passo 5 conferia o hash da senha. Passava — enquanto a conta real
+		// ficava inalcançável pelo login. Agora o teste percorre o código da rota.
 		const senha = 'meu encontro de quinta';
-		const [conta] = await ctx.db
-			.insert(userAccount)
-			.values({ personId: encontrado.personId, passwordHash: await hashPassword(senha) })
-			.returning({ id: userAccount.id, passwordHash: userAccount.passwordHash });
+		const aceite = await aceitarConvite(ctx.db, {
+			token: convite.token,
+			senha,
+			identificador: '(11) 98888-7766'
+		});
+		expect(aceite.ok).toBe(true);
+		if (!aceite.ok) return;
+		expect(aceite.recuperacao).toBe(false);
 
 		// 4. Já entra autenticada
-		const { token } = await createSession(ctx.db, conta!.id);
+		const { token } = await createSession(ctx.db, aceite.contaId);
 		const sessao = await validateSession(ctx.db, token);
 		expect(sessao!.personId).toBe(novaPessoaId);
 
-		// 5. E a senha realmente funciona no login seguinte
-		expect(await verifyPassword(conta!.passwordHash, senha)).toBe(true);
-		expect(await verifyPassword(conta!.passwordHash, 'senha errada aqui')).toBe(false);
+		// 5. E CONSEGUE ENTRAR DE NOVO depois de sair — achada do jeito que o
+		// login acha, com o telefone escrito de outra forma.
+		await revokeSession(ctx.db, sessao!.session.id);
+		const naEntrada = await encontrarContaPorIdentificador(ctx.db, '11988887766');
+		expect(naEntrada, 'quem entrou por convite precisa conseguir entrar de novo').not.toBeNull();
+		expect(naEntrada!.pessoa.id).toBe(novaPessoaId);
+		expect(await verifyPassword(naEntrada!.conta.passwordHash!, senha)).toBe(true);
+		expect(await verifyPassword(naEntrada!.conta.passwordHash!, 'senha errada aqui')).toBe(false);
 
 		// 6. Com as permissões de membro, e só elas
 		const actor = await loadActor(ctx.db, novaPessoaId);
@@ -355,5 +402,140 @@ describe('fluxo completo: convite → senha → entrada', () => {
 
 		// 7. O convite não serve de novo
 		expect(await lookupInvite(ctx.db, convite.token)).toEqual({ ok: false, reason: 'usado' });
+	});
+});
+
+describe('conta de acesso — identificador e aceite', () => {
+	it('interpreta e-mail sem caixa e telefone só pelos dígitos', () => {
+		expect(interpretarIdentificador('  Ana@Eagles.Test ')).toEqual({
+			tipo: 'email',
+			valor: 'ana@eagles.test'
+		});
+		expect(interpretarIdentificador('(11) 98765-4321')).toEqual({
+			tipo: 'telefone',
+			valor: '11987654321'
+		});
+		expect(interpretarIdentificador('+55 11 98765-4321')).toEqual({
+			tipo: 'telefone',
+			valor: '5511987654321'
+		});
+		expect(interpretarIdentificador('123')).toBeNull();
+		expect(interpretarIdentificador('sem-arroba')).toBeNull();
+		expect(interpretarIdentificador('')).toBeNull();
+	});
+
+	it('identificador já usado por OUTRA conta é recusado — e o convite continua valendo', async () => {
+		const donoId = await criarPessoa('Dono Do Telefone');
+		await ctx.db.insert(userAccount).values({
+			personId: donoId,
+			phone: '11977776666',
+			passwordHash: await hashPassword('senha do dono do telefone')
+		});
+
+		const novaId = await criarPessoa('Quer O Mesmo Telefone');
+		const conselheiro = await criarPessoa('Emissor Do Convite');
+		const { token } = await issueInvite(ctx.db, {
+			teamId: ctx.teamId,
+			personId: novaId,
+			createdByPersonId: conselheiro
+		});
+
+		const r = await aceitarConvite(ctx.db, {
+			token,
+			senha: 'uma senha boa e comprida',
+			identificador: '(11) 97777-6666'
+		});
+		expect(r).toMatchObject({ ok: false, campo: 'identificador' });
+
+		// O convite não foi queimado pela tentativa: a pessoa tenta de novo
+		// com outro identificador, sem precisar pedir um link novo.
+		expect(await lookupInvite(ctx.db, token)).toMatchObject({ ok: true });
+
+		const segunda = await aceitarConvite(ctx.db, {
+			token,
+			senha: 'uma senha boa e comprida',
+			identificador: 'quer.o.mesmo@eagles.test'
+		});
+		expect(segunda.ok).toBe(true);
+	});
+
+	it('senha fraca é recusada ANTES de consumir o convite', async () => {
+		const pessoaId = await criarPessoa('Senha Fraca Silva');
+		const conselheiro = await criarPessoa('Emissor Dois');
+		const { token } = await issueInvite(ctx.db, {
+			teamId: ctx.teamId,
+			personId: pessoaId,
+			createdByPersonId: conselheiro
+		});
+
+		const r = await aceitarConvite(ctx.db, {
+			token,
+			senha: 'curta',
+			identificador: 'fraca@eagles.test'
+		});
+		expect(r).toMatchObject({ ok: false, campo: 'senha' });
+		expect(await lookupInvite(ctx.db, token)).toMatchObject({ ok: true });
+	});
+
+	it('identificador inválido é recusado com mensagem de campo', async () => {
+		const pessoaId = await criarPessoa('Identificador Ruim');
+		const conselheiro = await criarPessoa('Emissor Tres');
+		const { token } = await issueInvite(ctx.db, {
+			teamId: ctx.teamId,
+			personId: pessoaId,
+			createdByPersonId: conselheiro
+		});
+
+		const r = await aceitarConvite(ctx.db, {
+			token,
+			senha: 'uma senha boa e comprida',
+			identificador: '1234'
+		});
+		expect(r).toMatchObject({ ok: false, campo: 'identificador' });
+	});
+
+	it('conta desativada não é encontrada pelo login', async () => {
+		const pessoaId = await criarPessoa('Conta Desativada');
+		await ctx.db.insert(userAccount).values({
+			personId: pessoaId,
+			email: 'desativada@eagles.test',
+			passwordHash: await hashPassword('qualquer senha comprida'),
+			disabledAt: new Date()
+		});
+
+		expect(await encontrarContaPorIdentificador(ctx.db, 'desativada@eagles.test')).toBeNull();
+	});
+
+	it('a recuperação de acesso encerra TODAS as sessões da conta', async () => {
+		const pessoaId = await criarPessoa('Celular Roubado');
+		const [conta] = await ctx.db
+			.insert(userAccount)
+			.values({
+				personId: pessoaId,
+				email: 'roubado@eagles.test',
+				passwordHash: await hashPassword('senha que vazou junto')
+			})
+			.returning({ id: userAccount.id });
+
+		await createSession(ctx.db, conta!.id);
+		await createSession(ctx.db, conta!.id);
+
+		const conselheiro = await criarPessoa('Emissor Quatro');
+		const { token } = await issueInvite(ctx.db, {
+			teamId: ctx.teamId,
+			personId: pessoaId,
+			createdByPersonId: conselheiro
+		});
+		await aceitarConvite(ctx.db, {
+			token,
+			senha: 'senha nova depois do roubo',
+			identificador: 'roubado@eagles.test'
+		});
+
+		const abertas = await ctx.db
+			.select({ id: session.id, revogada: session.revokedAt })
+			.from(session)
+			.where(eq(session.accountId, conta!.id));
+		expect(abertas.every((s) => s.revogada !== null)).toBe(true);
 	});
 });

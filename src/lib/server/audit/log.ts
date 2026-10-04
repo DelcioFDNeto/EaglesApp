@@ -20,6 +20,9 @@ export type AuditAction =
 	| 'auth.senha_definida'
 	| 'auth.senha_alterada'
 	| 'auth.sessoes_revogadas'
+	| 'auth.acesso_recuperado'
+	| 'auth.reautenticado'
+	| 'auth.reautenticacao_falhou'
 	// Convite
 	| 'invite.emitido'
 	| 'invite.aceito'
@@ -35,10 +38,14 @@ export type AuditAction =
 	// Consentimento (ADR 0003)
 	| 'consent.concedido'
 	| 'consent.revogado'
-	// RBAC
+	// RBAC — `papel_atribuido`/`papel_removido` são sobre a PESSOA; os demais,
+	// sobre o papel em si.
 	| 'rbac.papel_atribuido'
 	| 'rbac.papel_removido'
 	| 'rbac.permissoes_alteradas'
+	| 'rbac.papel_criado'
+	| 'rbac.papel_editado'
+	| 'rbac.papel_excluido'
 	// Sistema
 	| 'settings.alterada'
 	| 'feature_flag.alterada';

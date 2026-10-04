@@ -9,6 +9,7 @@
 	let { data }: { data: PageData } = $props();
 
 	const boasVindas = $derived(page.url.searchParams.get('boas-vindas') === '1');
+	const acessoRecuperado = $derived(page.url.searchParams.get('acesso-recuperado') === '1');
 	const primeiroNome = $derived(data.nome.split(' ')[0]);
 </script>
 
@@ -33,68 +34,90 @@
 			</Aviso>
 		{/if}
 
+		{#if acessoRecuperado}
+			<Aviso tom="sucesso" titulo="Acesso recuperado">
+				Sua senha nova já vale. Os aparelhos que estavam conectados foram desconectados.
+			</Aviso>
+		{/if}
+
 		<h1>Olá, {primeiroNome}</h1>
 
-		<InstalarPwa />
+		{#if data.semAcesso}
+			<!--
+				Quem entrou mas ainda não tem papel. Antes do M03 esta pessoa via uma
+				tela de erro genérica; agora entende o que houve e a quem procurar.
+			-->
+			<section class="cartao vazio">
+				<Marca tamanho={44} />
+				<h2>Seu acesso ainda não foi configurado</h2>
+				<p>
+					Você já entrou, mas ninguém da liderança definiu ainda o que você pode ver aqui. Fale com
+					seu conselheiro ou com a liderança dos Eagles.
+				</p>
+			</section>
+		{:else}
+			<InstalarPwa />
 
-		<!--
+			<!--
 			Estado vazio verdadeiro: no M01 não existe evento porque o módulo de
 			eventos é o M05. A mensagem diz isso com voz humana, sem fingir que
 			há um erro nem escrever "Nenhum registro encontrado".
 		-->
-		<section class="cartao vazio">
-			<Marca tamanho={44} />
-			<h2>Ainda não há encontros por aqui</h2>
-			<p>
-				Quando a agenda dos Eagles estiver no ar, seus próximos encontros aparecem nesta tela — e
-				você confirma presença em um toque.
-			</p>
-		</section>
+			<section class="cartao vazio">
+				<Marca tamanho={44} />
+				<h2>Ainda não há encontros por aqui</h2>
+				<p>
+					Quando a agenda dos Eagles estiver no ar, seus próximos encontros aparecem nesta tela — e
+					você confirma presença em um toque.
+				</p>
+			</section>
 
-		<section class="cartao">
-			<h2>Seu acesso</h2>
-			<p class="legenda">
-				O que você pode fazer no app depende do seu papel. Esta lista vem do servidor, não da tela.
-			</p>
+			<section class="cartao">
+				<h2>Seu acesso</h2>
+				<p class="legenda">
+					O que você pode fazer no app depende do seu papel. Esta lista vem do servidor, não da
+					tela.
+				</p>
 
-			<dl>
-				<dt>Papel</dt>
-				<dd>{data.papeis.join(', ') || '—'}</dd>
-				<dt>Permissões</dt>
-				<dd>{data.permissoes.length}</dd>
-			</dl>
+				<dl>
+					<dt>Papel</dt>
+					<dd>{data.papeis.join(', ') || '—'}</dd>
+					<dt>Permissões</dt>
+					<dd>{data.permissoes.length}</dd>
+				</dl>
 
-			<details>
-				<summary>Ver minhas permissões</summary>
-				<ul>
-					{#each data.permissoes as p (p)}
-						<li>
-							<code>{p}</code>
-							<span>{data.catalogoPermissoes[p] ?? ''}</span>
-						</li>
-					{/each}
-				</ul>
-			</details>
-		</section>
+				<details>
+					<summary>Ver minhas permissões</summary>
+					<ul>
+						{#each data.permissoes as p (p)}
+							<li>
+								<code>{p}</code>
+								<span>{data.catalogoPermissoes[p] ?? ''}</span>
+							</li>
+						{/each}
+					</ul>
+				</details>
+			</section>
 
-		<section class="cartao">
-			<h2>Funcionalidades opcionais</h2>
-			<p class="legenda">
-				Tudo nasce desligado. Ligar cada recurso é decisão da liderança, não padrão do sistema.
-			</p>
-			{#if Object.keys(data.funcionalidades).length === 0}
-				<p class="legenda">Nenhuma configurada ainda.</p>
-			{:else}
-				<ul class="flags">
-					{#each Object.entries(data.funcionalidades) as [chave, ligada] (chave)}
-						<li>
-							<code>{chave}</code>
-							<span class="pino" class:ligada>{ligada ? 'ligada' : 'desligada'}</span>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</section>
+			<section class="cartao">
+				<h2>Funcionalidades opcionais</h2>
+				<p class="legenda">
+					Tudo nasce desligado. Ligar cada recurso é decisão da liderança, não padrão do sistema.
+				</p>
+				{#if Object.keys(data.funcionalidades).length === 0}
+					<p class="legenda">Nenhuma configurada ainda.</p>
+				{:else}
+					<ul class="flags">
+						{#each Object.entries(data.funcionalidades) as [chave, ligada] (chave)}
+							<li>
+								<code>{chave}</code>
+								<span class="pino" class:ligada>{ligada ? 'ligada' : 'desligada'}</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+		{/if}
 
 		<nav class="atalhos">
 			<a href="/conta/sessoes">Meus dispositivos conectados</a>

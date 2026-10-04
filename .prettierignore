@@ -5,3 +5,7 @@ package-lock.json
 src/lib/server/db/migrations
 docs/site
 static/*.png
+
+# Gerado pela matriz de permissões — o formatador realinharia a tabela e o
+# snapshot deixaria de conferir.
+tests/unit/__snapshots__/

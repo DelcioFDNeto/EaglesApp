@@ -2,7 +2,6 @@ import { fail, redirect } from '@sveltejs/kit';
 import { and, desc, eq, gt, isNull } from 'drizzle-orm';
 import { db } from '$server/db';
 import { session } from '$server/db/schema';
-import { authorize } from '$server/policy/policy';
 import { revokeOtherSessions } from '$server/auth/session';
 import { audit } from '$server/audit/log';
 import type { Actions, PageServerLoad } from './$types';
@@ -10,15 +9,19 @@ import type { Actions, PageServerLoad } from './$types';
 /**
  * Dispositivos conectados.
  *
- * PERMISSÃO: `person.view` sobre a própria pessoa — é dado da própria conta.
+ * PERMISSÃO: nenhuma — PRÓPRIA CONTA. Basta estar autenticado.
+ *
+ * Exigia `person.view` sobre a própria pessoa, e isso barrava o conselheiro:
+ * os papéis dele são atribuídos a um GRUPO, e uma atribuição de grupo não
+ * autoriza sem um `groupId` no contexto. Ver e encerrar as próprias sessões não
+ * depende de papel nenhum — é segurança da própria conta, e negá-la a alguém é
+ * negar-lhe a forma de se proteger de um aparelho perdido.
  *
  * A tela existe no M01 porque é o outro lado da decisão de usar sessão em
  * banco (ADR 0004): revogação real só vale se a pessoa conseguir revogar.
  */
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.actor || !locals.session) redirect(303, '/entrar');
-
-	authorize(locals.actor, 'person.view', { personId: locals.actor.personId });
 
 	const ativas = await db()
 		.select({
@@ -65,8 +68,6 @@ function descreverAparelho(ua: string | null): string {
 export const actions: Actions = {
 	revogarOutras: async ({ locals, request, getClientAddress }) => {
 		if (!locals.actor || !locals.session) redirect(303, '/entrar');
-
-		authorize(locals.actor, 'person.view', { personId: locals.actor.personId });
 
 		const banco = db();
 		const quantas = await revokeOtherSessions(banco, locals.session.accountId, locals.session.id);

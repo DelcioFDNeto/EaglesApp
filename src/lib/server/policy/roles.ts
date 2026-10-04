@@ -17,7 +17,7 @@ export type RoleSeed = {
 	name: string;
 	description: string;
 	isSystem: boolean;
-	/** Escopo em que este papel costuma ser atribuído. Documental — o escopo real fica em `person_role`. */
+	/** Escopo com que este papel é atribuído (gravado em `role.default_scope`). */
 	defaultScope: ScopeType;
 	permissions: Permission[];
 };

@@ -1,7 +1,7 @@
 # Eagles App — Documento de Descoberta e Arquitetura Inicial
 
-**Versão:** 0.3
-**Data:** 18/08/2026 — revisado em 09/09/2026
+**Versão:** 0.4
+**Data:** 18/08/2026 — revisado em 04/10/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
 | Decisão                   | Escolha aprovada                                                                                                                   |
@@ -1350,26 +1350,22 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 ---
 
-### Estado da execução — 09/09/2026
+### Estado da execução — 04/10/2026
 
-**Módulos 01 (Fundação) e 02 (Pessoas) implementados.**
+**Módulos 01 (Fundação), 02 (Pessoas) e 03 (RBAC e gestão de acesso) implementados.**
 
-Verificação de 09/09/2026: **156 testes** de unidade e integração, **43 de ponta a ponta** em dois projetos de navegador, tipos limpos em 694 arquivos, build funcionando.
+Verificação de 04/10/2026: **225 testes** de unidade e integração, **53 de ponta a ponta** em dois projetos de navegador, tipos limpos em 733 arquivos, build funcionando.
 
-O M02 entregou o cadastro progressivo (só o nome é obrigatório), a jornada de visitante a membro com histórico imutável, vínculos familiares, a estrutura de consentimento do ADR 0003 — implementada, testada e inativa, já que hoje não há menores —, detecção de duplicidade que avisa sem bloquear, e o autocadastro público atrás de uma chave desligada por padrão.
+O M03 entregou o que o roteiro pedia — **a matriz de permissões inteira testada**, cada papel × cada permissão × cada tipo de contexto, conferida contra uma especificação escrita à mão — e a administração de acesso dentro do app: papéis personalizados, permissões editáveis, atribuição e retirada de papel, convite com envio pelo WhatsApp e a barra de navegação que faltava. Toda alteração de acesso passa por quatro travas: só quem administra globalmente altera; ninguém concede o que não tem; ninguém altera o próprio acesso; e sempre resta ao menos um administrador capaz de entrar. Detalhe em [`03-modulo-03-rbac.md`](03-modulo-03-rbac.md).
 
-Ficaram para a fatia B do módulo: foto, campos personalizados e importação por planilha. O detalhamento está em [`02-modulo-02-pessoas.md`](02-modulo-02-pessoas.md).
+#### Ninguém que entrasse por convite tinha caminho de volta
 
-#### Três defeitos do M01 que só apareceram agora
+O defeito mais grave encontrado até aqui. O aceite do convite criava a conta **sem e-mail e sem telefone**, e o login procura a conta por um dos dois: quem entrava por convite ficava trancado para fora ao sair. E a recuperação — que o ADR 0004 manda fazer por um novo convite — era recusada para quem já tinha conta, justamente quem esqueceu a senha. Nenhuma tela emitia convite, então ninguém tinha percebido.
 
-O mais grave: **a CSP escrita à mão impedia a aplicação de hidratar**. O SvelteKit emite um script inline para iniciar o app, e `script-src 'self'` o bloqueava. Como as telas vêm do servidor e os formulários funcionam sem JavaScript, tudo continuava funcionando — sem navegação no cliente, sem service worker, sem nenhuma reatividade. Numa arquitetura escolhida justamente por processar a interação no dispositivo quando a rede é ruim, a característica principal estava desligada desde o primeiro dia, e nenhum teste pegava porque todos verificavam resultado.
-
-Os outros dois: **o conselheiro não conseguia abrir o app** (verificação de permissão com escopo errado na tela inicial, e nenhum teste entrava com esse papel), e, atrás do proxy, **o limite de login por IP travaria a comunidade inteira**, porque `ADDRESS_HEADER` não estava configurado e todos chegariam com o IP do Caddy.
-
-Os três estão corrigidos, cada um com uma guarda automatizada que reprova se voltarem.
+Os três estão corrigidos, com o ADR 0004 revisado e um teste de ponta a ponta que faz a pessoa aceitar o convite, **sair e entrar de novo**.
 
 #### O que continua bloqueado
 
-Tudo que depende de servidor real — deploy, PWA instalado no celular, cópia do backup efetivamente enviada — segue parado em **D-06** (domínio) e **D-07.2** (specs da VPS).
+Deploy, PWA instalado no celular e cópia do backup efetivamente enviada seguem parados em **D-06** (domínio) e **D-07.2** (specs da VPS).
 
-**Próximo passo:** Módulo 03 — RBAC, ou a fatia B do M02. Aguardando sua decisão.
+**Próximo passo:** Módulo 04 — Grupos/PGs, que destrava o conselheiro: com grupos existindo, o escopo de grupo passa a ter o que apontar, e o conselheiro edita, convida e acompanha as pessoas do próprio PG.
