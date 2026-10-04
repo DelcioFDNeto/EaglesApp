@@ -317,7 +317,7 @@ html{scroll-behavior:smooth}
 
   <header class="hero">
     <div class="col">
-      <p class="eyebrow">Documento de descoberta · versão 0.4 · arquitetura aprovada</p>
+      <p class="eyebrow">Documento de descoberta · versão 0.5 · arquitetura aprovada</p>
       <h1>Organizar pessoas <em>sem</em> burocratizar a comunidade.</h1>
       <p class="lede">Descoberta, requisitos, modelo de dados, arquitetura e plano de entrega do Eagles App — a plataforma de gestão interna dos Eagles para o ano inteiro.</p>
       <div class="meta">
@@ -325,7 +325,7 @@ html{scroll-behavior:smooth}
         <div><b>Escopo</b><span>24 seções + anexo</span></div>
         <div><b>Stack recomendada</b><span>SvelteKit + PostgreSQL</span></div>
         <div><b>MVP</b><span>6 módulos · ~10 semanas</span></div>
-        <div><b>Estado</b><span>Módulos 01 a 03 entregues</span></div>
+        <div><b>Estado</b><span>Módulos 01 a 04 entregues</span></div>
       </div>
       <div class="legend">
         <p>Todo o documento marca a <strong>origem de cada informação</strong>. É o que separa o que você pediu daquilo que eu sugeri ou supus:</p>
@@ -531,7 +531,7 @@ html{scroll-behavior:smooth}
         <tbody>
           <tr><td><code>RN-06</code></td><td>Uma pessoa pertence a no máximo um grupo por vez — restrição garantida <strong>no banco</strong>, não só na aplicação.</td><td><span class="tag t-req">REQ</span></td></tr>
           <tr><td><code>RN-07</code></td><td>Transferência encerra o vínculo anterior com data de saída e cria um novo; nada é sobrescrito.</td><td><span class="tag t-dec">DEC</span></td></tr>
-          <tr><td><code>RN-08</code></td><td>Só altera composição quem tem <code>group.manage</code> global ou no escopo daquele grupo.</td><td><span class="tag t-req">REQ</span></td></tr>
+          <tr><td><code>RN-08</code></td><td>Só altera composição quem tem <code>group.assign_member</code> global ou no escopo do grupo — <strong>de origem e de destino</strong>: ninguém empurra uma pessoa para o grupo de outro.</td><td><span class="tag t-req">REQ</span></td></tr>
           <tr><td><code>RN-09</code></td><td>Sugestões de reorganização <strong>nunca</strong> alteram grupos: produzem proposta que exige confirmação humana e pode ser aceita parcialmente.</td><td><span class="tag t-req">REQ</span></td></tr>
         </tbody>
       </table></div>
@@ -967,8 +967,8 @@ settings.manage      rbac.manage          audit.view</pre>
       <div class="tw"><table>
         <thead><tr><th>Tabela</th><th>Papel</th><th>Observações</th></tr></thead>
         <tbody>
-          <tr><td><code>group</code></td><td>O PG</td><td><code>name</code>, <code>color</code>, <code>advisor_person_id</code>, <code>meeting_weekday</code>, <code>location</code>, <code>active</code></td></tr>
-          <tr><td><code>group_membership</code></td><td>Vínculo <strong>temporal</strong> (RN-06, RN-07)</td><td><code>joined_at</code>, <code>left_at</code>, <code>left_reason</code>. Índice único parcial garante <strong>um grupo ativo por pessoa</strong></td></tr>
+          <tr><td><code>small_group</code></td><td>O PG (<code>group</code> é palavra reservada do SQL)</td><td><code>name</code>, <code>color</code>, <code>meeting_weekday</code>, <code>meeting_time</code>, <code>location</code>, <code>archived_at</code>. <strong>Sem coluna de conselheiro:</strong> quem cuida do grupo é o papel com escopo nele — uma resposta só para a mesma pergunta</td></tr>
+          <tr><td><code>group_membership</code></td><td>Vínculo <strong>temporal</strong> (RN-06, RN-07)</td><td><code>joined_at</code>, <code>left_at</code>, <code>left_reason</code>, <code>batch_id</code>. Índice único parcial garante <strong>um grupo ativo por pessoa</strong>; um gatilho só permite <strong>encerrar</strong> um vínculo</td></tr>
           <tr><td><code>event_type</code></td><td>Configurável (RN-10)</td><td><code>name</code>, <code>icon</code>, <code>default_rsvp_set</code>, <code>allows_checkin</code>, <code>counts_for_attendance</code></td></tr>
           <tr><td><code>event</code></td><td>Compromisso</td><td><code>title</code>, <code>starts_at</code>, <code>location</code>, <code>owner_person_id</code>, <code>group_id</code>, <code>status</code>, <code>recurrence_rule</code> (RRULE), <code>parent_event_id</code></td></tr>
           <tr><td><code>event_audience</code></td><td>Quem é convidado</td><td><code>scope</code> = todos · grupo · pessoas · status</td></tr>
@@ -1760,21 +1760,23 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
 
       <div class="col" style="margin-top:2.4rem">
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin-bottom:.6rem">Onde a construção está</h3>
-        <p><strong>Módulos 01, 02 e 03 implementados</strong> — fundação, pessoas, e papéis com gestão de acesso. Verificação de 4 de outubro: <strong>225 testes</strong> de unidade e integração, <strong>53 de ponta a ponta</strong> em dois projetos de navegador, tipos limpos em 733 arquivos e build funcionando.</p>
-        <p>O M03 entregou o que o roteiro pedia: <strong>a matriz de permissões inteira testada</strong> — cada papel, cada permissão, cada tipo de contexto, conferida contra uma especificação escrita à mão. E a administração de acesso dentro do app: papéis personalizados, permissões ajustáveis, atribuição de papel, convite enviado pelo WhatsApp e a barra de navegação que faltava.</p>
-        <p>Toda alteração de acesso passa por quatro travas: só quem administra a equipe inteira altera; <strong>ninguém concede o que não tem</strong>; <strong>ninguém altera o próprio acesso</strong>; e sempre resta ao menos uma pessoa capaz de entrar e administrar. Alterar exige confirmar a senha nos 15 minutos anteriores.</p>
+        <p><strong>Módulos 01 a 04 implementados</strong> — fundação, pessoas, papéis com gestão de acesso, e grupos. Verificação de 4 de outubro: <strong>274 testes</strong> de unidade e integração, <strong>63 de ponta a ponta</strong> em dois projetos de navegador — com e sem JavaScript —, tipos limpos e build funcionando.</p>
+        <p>O M04 entregou o que o roteiro pedia: <strong>PGs criados, pessoas distribuídas, transferência com histórico e a visão do conselheiro</strong> — quem está no grupo, desde quando, o contato e o que está pendente. E a reorganização em lote: a liderança escolhe o destino de cada pessoa, vê o antes e o depois de cada grupo, desmarca o que não quer e só então aplica. Se alguém mudou de grupo no meio do caminho, nada é aplicado.</p>
+        <p>"Uma pessoa, um grupo por vez" e "transferir nunca apaga o passado" são garantias <strong>do banco de dados</strong>, testadas sem passar pelo código da aplicação.</p>
 
-        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Ninguém que entrasse por convite tinha caminho de volta</h3>
-        <p>O defeito mais grave encontrado até aqui. O aceite do convite criava a conta <strong>sem e-mail e sem telefone</strong>, e a entrada procura a conta por um dos dois: quem entrava por convite ficava trancado para fora assim que saía. E a recuperação de acesso — que a decisão de autenticação manda fazer por um novo convite — era recusada para quem já tinha conta, justamente quem esqueceu a senha.</p>
-        <p>Nenhuma tela emitia convite, então ninguém tinha percebido. Agora o convite pede como a pessoa vai entrar, um novo convite recupera o acesso e desconecta todos os aparelhos, e um teste automático faz a pessoa aceitar o convite, <strong>sair e entrar de novo</strong>.</p>
-        <p>Continua faltando tudo que depende de um servidor de verdade: o deploy, o app instalado no celular e a cópia do backup efetivamente enviada. Isso segue parado no domínio e nas specs da VPS.</p>
-        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 04 — Grupos, que destrava o conselheiro.</p></div>
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">O conselheiro via o contato de todo mundo</h3>
+        <p>O defeito que este módulo fechou. Sem grupos, o módulo de pessoas decidia "pode ver o contato" pela permissão em qualquer grupo — e o conselheiro de um PG via o telefone das pessoas de todos os outros. O outro lado da mesma falha: o conselheiro também <strong>não conseguia editar nem convidar ninguém</strong>, nem do próprio PG.</p>
+        <p>Agora toda decisão sobre uma pessoa leva em conta o grupo em que ela está: o conselheiro do PG Azul vê, edita e convida quem está no PG Azul, e mais ninguém. A revisão achou mais duas portas da mesma família, também fechadas — e cada correção tem um teste que reprova se ela for desfeita.</p>
+
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Deploy fica para o fim</h3>
+        <p>Por decisão de 4 de outubro, a implantação na VPS — domínio, app instalado no celular e cópia do backup enviada para fora — vem <strong>depois dos módulos</strong>. Até lá, cada módulo é entregue e verificado localmente e na integração contínua.</p>
+        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 05 — Eventos, com o PG semanal como evento recorrente do grupo.</p></div>
       </div>
     </div>
   </section>
 
   <footer>
-    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.4 · 18 de agosto de 2026, revisado em 4 de outubro<br>
+    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.5 · 18 de agosto de 2026, revisado em 4 de outubro<br>
     Fonte no repositório: <code>docs/00-descoberta-e-arquitetura.md</code>
   </footer>
 </div>
