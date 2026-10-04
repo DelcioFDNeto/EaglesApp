@@ -317,15 +317,15 @@ html{scroll-behavior:smooth}
 
   <header class="hero">
     <div class="col">
-      <p class="eyebrow">Documento de descoberta · versão 0.3 · arquitetura aprovada</p>
+      <p class="eyebrow">Documento de descoberta · versão 0.4 · arquitetura aprovada</p>
       <h1>Organizar pessoas <em>sem</em> burocratizar a comunidade.</h1>
       <p class="lede">Descoberta, requisitos, modelo de dados, arquitetura e plano de entrega do Eagles App — a plataforma de gestão interna dos Eagles para o ano inteiro.</p>
       <div class="meta">
-        <div><b>Data</b><span>18 ago 2026 · rev. 9 set</span></div>
+        <div><b>Data</b><span>18 ago 2026 · rev. 4 out</span></div>
         <div><b>Escopo</b><span>24 seções + anexo</span></div>
         <div><b>Stack recomendada</b><span>SvelteKit + PostgreSQL</span></div>
         <div><b>MVP</b><span>6 módulos · ~10 semanas</span></div>
-        <div><b>Estado</b><span>Módulos 01 e 02 entregues</span></div>
+        <div><b>Estado</b><span>Módulos 01 a 03 entregues</span></div>
       </div>
       <div class="legend">
         <p>Todo o documento marca a <strong>origem de cada informação</strong>. É o que separa o que você pediu daquilo que eu sugeri ou supus:</p>
@@ -1760,22 +1760,21 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
 
       <div class="col" style="margin-top:2.4rem">
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin-bottom:.6rem">Onde a construção está</h3>
-        <p><strong>Módulos 01 (Fundação) e 02 (Pessoas) implementados.</strong> Verificação de 9 de setembro: <strong>156 testes</strong> de unidade e integração, <strong>43 de ponta a ponta</strong> em dois projetos de navegador, tipos limpos em 694 arquivos e build funcionando.</p>
-        <p>O M02 entregou o cadastro progressivo — só o nome é obrigatório —, a jornada de visitante a membro com histórico que o banco recusa alterar, vínculos familiares, a estrutura de consentimento do ADR 0003 (implementada, testada e inativa, já que hoje não há menores), detecção de duplicidade que avisa sem bloquear, e o autocadastro público atrás de uma chave desligada por padrão.</p>
-        <p>Ficaram para a segunda fatia do módulo: foto, campos personalizados e importação por planilha. Nenhuma delas bloqueia os módulos seguintes.</p>
+        <p><strong>Módulos 01, 02 e 03 implementados</strong> — fundação, pessoas, e papéis com gestão de acesso. Verificação de 4 de outubro: <strong>225 testes</strong> de unidade e integração, <strong>53 de ponta a ponta</strong> em dois projetos de navegador, tipos limpos em 733 arquivos e build funcionando.</p>
+        <p>O M03 entregou o que o roteiro pedia: <strong>a matriz de permissões inteira testada</strong> — cada papel, cada permissão, cada tipo de contexto, conferida contra uma especificação escrita à mão. E a administração de acesso dentro do app: papéis personalizados, permissões ajustáveis, atribuição de papel, convite enviado pelo WhatsApp e a barra de navegação que faltava.</p>
+        <p>Toda alteração de acesso passa por quatro travas: só quem administra a equipe inteira altera; <strong>ninguém concede o que não tem</strong>; <strong>ninguém altera o próprio acesso</strong>; e sempre resta ao menos uma pessoa capaz de entrar e administrar. Alterar exige confirmar a senha nos 15 minutos anteriores.</p>
 
-        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Três defeitos que só apareceram agora</h3>
-        <p>O mais grave: <strong>a política de segurança de conteúdo impedia a aplicação de hidratar</strong>. O SvelteKit emite um script inline para iniciar o app, e a política — escrita à mão — o bloqueava. Como as telas vêm prontas do servidor e os formulários funcionam sem JavaScript, <em>tudo continuava funcionando</em>: sem navegação no cliente, sem service worker, sem nenhuma reatividade. Numa arquitetura escolhida justamente por processar a interação no aparelho quando a rede é ruim, a característica principal estava desligada desde o primeiro dia — e nenhum teste percebia, porque todos verificavam o resultado, e o resultado era idêntico.</p>
-        <p>Os outros dois: <strong>o conselheiro não conseguia abrir o app</strong>, barrado por uma verificação de permissão com o escopo errado na tela inicial — e nenhum teste entrava com esse papel; e, atrás do servidor de borda, <strong>o limite de tentativas de login travaria a comunidade inteira</strong>, porque todos chegariam com o mesmo endereço.</p>
-        <p>Os três estão corrigidos, cada um com uma verificação automática que reprova se voltarem.</p>
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Ninguém que entrasse por convite tinha caminho de volta</h3>
+        <p>O defeito mais grave encontrado até aqui. O aceite do convite criava a conta <strong>sem e-mail e sem telefone</strong>, e a entrada procura a conta por um dos dois: quem entrava por convite ficava trancado para fora assim que saía. E a recuperação de acesso — que a decisão de autenticação manda fazer por um novo convite — era recusada para quem já tinha conta, justamente quem esqueceu a senha.</p>
+        <p>Nenhuma tela emitia convite, então ninguém tinha percebido. Agora o convite pede como a pessoa vai entrar, um novo convite recupera o acesso e desconecta todos os aparelhos, e um teste automático faz a pessoa aceitar o convite, <strong>sair e entrar de novo</strong>.</p>
         <p>Continua faltando tudo que depende de um servidor de verdade: o deploy, o app instalado no celular e a cópia do backup efetivamente enviada. Isso segue parado no domínio e nas specs da VPS.</p>
-        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 03 — RBAC, ou a segunda fatia do M02.</p></div>
+        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 04 — Grupos, que destrava o conselheiro.</p></div>
       </div>
     </div>
   </section>
 
   <footer>
-    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.3 · 18 de agosto de 2026, revisado em 9 de setembro<br>
+    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.4 · 18 de agosto de 2026, revisado em 4 de outubro<br>
     Fonte no repositório: <code>docs/00-descoberta-e-arquitetura.md</code>
   </footer>
 </div>
