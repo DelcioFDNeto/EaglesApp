@@ -58,6 +58,23 @@
 		{:else}
 			<InstalarPwa />
 
+			{#if data.grupos.length > 0}
+				<section class="cartao" aria-label="Seu grupo">
+					<h2>{data.grupos.length === 1 ? 'Seu grupo' : 'Seus grupos'}</h2>
+					<ul class="grupos">
+						{#each data.grupos as g (g.id)}
+							<li>
+								<a href="/grupos/{g.id}" style={g.cor ? `--cor-grupo: ${g.cor}` : undefined}>
+									<span class="ponto" aria-hidden="true"></span>
+									<span class="nome">{g.nome}</span>
+									<span class="legenda">{g.membros} {g.membros === 1 ? 'pessoa' : 'pessoas'}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+
 			<!--
 			Estado vazio verdadeiro: no M01 não existe evento porque o módulo de
 			eventos é o M05. A mensagem diz isso com voz humana, sem fingir que
@@ -126,6 +143,43 @@
 </main>
 
 <style>
+	.grupos {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.grupos a {
+		display: flex;
+		align-items: center;
+		gap: var(--esp-2);
+		min-height: var(--toque-min);
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.grupos a:hover .nome {
+		color: var(--cor-marca);
+	}
+
+	.grupos .ponto {
+		width: 0.625rem;
+		height: 0.625rem;
+		border-radius: 50%;
+		background: var(--cor-grupo, var(--cor-texto-3));
+	}
+
+	.grupos .nome {
+		font-weight: 600;
+	}
+
+	.grupos .legenda {
+		margin-left: auto;
+	}
+
 	header {
 		border-bottom: 1px solid var(--cor-linha);
 		background: var(--cor-superficie);

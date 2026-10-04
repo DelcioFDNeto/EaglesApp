@@ -4,6 +4,7 @@ import { can } from '$server/policy/policy';
 import { hasFreshReauth } from '$server/auth/session';
 import { situacaoDaConta } from '$server/auth/conta';
 import { verPessoa } from '$server/modules/pessoas/pessoas';
+import { contextoDaPessoa } from '$server/modules/grupos/contexto';
 import { listarPapeis } from '$server/modules/rbac/papeis';
 import { atribuicoesDe, atribuirPapel, removerAtribuicao } from '$server/modules/rbac/atribuicoes';
 import { emitirConvite, linkDoWhatsapp, textoDoConvite } from '$server/modules/rbac/convites';
@@ -15,7 +16,7 @@ import type { Actions, PageServerLoad } from './$types';
  * Acesso de uma pessoa ao app: papéis, conta e convite.
  *
  * PERMISSÃO: `rbac.manage` global para papéis; `person.invite` SOBRE a pessoa
- * para convidar. Sem nenhuma das duas, 403.
+ * — no grupo em que ela está — para convidar. Sem nenhuma das duas, 403.
  */
 
 const NEGADO = 'Você não tem permissão para gerenciar o acesso desta pessoa.';
@@ -24,10 +25,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.actor || !locals.session) redirect(303, '/entrar');
 
 	const podeAdministrar = can(locals.actor, 'rbac.manage');
-	const podeConvidar = can(locals.actor, 'person.invite', { personId: params.id });
+	const banco = db();
+	const podeConvidar = can(locals.actor, 'person.invite', await contextoDaPessoa(banco, params.id));
 	if (!podeAdministrar && !podeConvidar) error(403, NEGADO);
 
-	const banco = db();
 	const pessoa = await verPessoa(banco, locals.actor, params.id);
 	if (!pessoa) error(404, 'Pessoa não encontrada.');
 
@@ -143,7 +144,9 @@ export const actions: Actions = {
 
 	convidar: async ({ locals, params, request, getClientAddress }) => {
 		if (!locals.actor || !locals.session) redirect(303, '/entrar');
-		if (!can(locals.actor, 'person.invite', { personId: params.id })) error(403, NEGADO);
+		if (!can(locals.actor, 'person.invite', await contextoDaPessoa(db(), params.id))) {
+			error(403, NEGADO);
+		}
 
 		const actor = locals.actor;
 		return executar(async () => {

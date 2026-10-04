@@ -1,15 +1,24 @@
 import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import type { Database } from '$server/db';
 import {
+	groupMembership,
 	membershipStatus,
 	person,
 	personRelation,
 	personStatusHistory,
-	personView
+	personView,
+	smallGroup
 } from '$server/db/schema';
 import { audit } from '$server/audit/log';
-import { authorize, authorizeAnywhere, canAnywhere, type Actor } from '$server/policy/policy';
+import { authorize, authorizeAnywhere, can, type Actor } from '$server/policy/policy';
 import { normalizarTexto, type OrigemDoCadastro } from '$shared/pessoa';
+import { SEM_GRUPO } from '$shared/grupo';
+import { contextoDaPessoa } from '$server/modules/grupos/contexto';
+import {
+	auditarMovimento,
+	moverNaTransacao,
+	type Movimento
+} from '$server/modules/grupos/composicao';
 import { consentimentosDe } from './consentimento';
 import { regimeDe, type Regime } from './regime';
 import { estagioPadrao } from './status';
@@ -26,7 +35,14 @@ import type { AtualizarPessoaEntrada, CriarPessoaEntrada } from './validacao';
  * Toda leitura devolve o que o ator pode ver, não o que existe. Filtrar na
  * tela deixaria o dado sensível trafegar até o navegador de quem não pode vê-lo
  * — e ele estaria no HTML, a um "ver código-fonte" de distância.
+ *
+ * Desde o M04, toda verificação SOBRE uma pessoa leva o grupo dela no
+ * contexto (D-M04-4). O conselheiro do PG Azul vê o contato e edita as pessoas
+ * do PG Azul — e de mais ninguém. Quem está sem grupo só é alcançado por
+ * escopo global.
  */
+
+export type GrupoDaPessoa = { id: string; nome: string; cor: string | null };
 
 export type PessoaResumo = {
 	id: string;
@@ -34,7 +50,8 @@ export type PessoaResumo = {
 	statusId: string | null;
 	statusNome: string | null;
 	statusCor: string | null;
-	/** Nulo quando o ator não tem `person.view_sensitive`. */
+	grupo: GrupoDaPessoa | null;
+	/** Nulo quando o ator não tem `person.view_sensitive` no grupo da pessoa. */
 	phone: string | null;
 	ehMenor: boolean | null;
 };
@@ -50,8 +67,9 @@ export type PessoaDetalhe = {
 	statusId: string | null;
 	statusNome: string | null;
 	statusCor: string | null;
+	grupo: (GrupoDaPessoa & { desde: Date }) | null;
 	createdAt: Date;
-	/** Campos sensíveis: presentes só para quem tem permissão. */
+	/** Campos sensíveis: presentes só para quem tem permissão no grupo da pessoa. */
 	sensiveis: {
 		phone: string | null;
 		whatsapp: string | null;
@@ -70,7 +88,7 @@ export type PessoaDetalhe = {
  * postgres.js da produção, e essa divergência já custou um 500 que os testes
  * de integração não pegavam.
  */
-async function sinaisDeIdade(
+export async function sinaisDeIdade(
 	db: Database,
 	ids: string[]
 ): Promise<Map<string, { ehMenor: boolean | null; idadeAnos: number | null }>> {
@@ -92,7 +110,7 @@ async function sinaisDeIdade(
 }
 
 /** Alguém está vinculado como responsável legal desta pessoa? */
-async function temResponsavelVinculado(db: Database, personId: string): Promise<boolean> {
+export async function temResponsavelVinculado(db: Database, personId: string): Promise<boolean> {
 	const [linha] = await db
 		.select({ id: personRelation.id })
 		.from(personRelation)
@@ -113,14 +131,13 @@ async function temResponsavelVinculado(db: Database, personId: string): Promise<
 export async function listarPessoas(
 	db: Database,
 	actor: Actor,
-	filtros: { busca?: string; statusId?: string | null } = {}
+	filtros: { busca?: string; statusId?: string | null; grupoId?: string | null } = {}
 ): Promise<PessoaResumo[]> {
 	// A lista da equipe não pertence a nenhum grupo: quem tem `person.view` em
 	// qualquer escopo pode ver quem faz parte dos Eagles. O que é sensível —
-	// contato, nascimento, observações — continua atrás de outra permissão.
+	// contato, nascimento, observações — continua atrás de outra permissão,
+	// decidida linha a linha com o grupo de cada pessoa.
 	authorizeAnywhere(actor, 'person.view');
-
-	const podeVerContato = canAnywhere(actor, 'person.view_sensitive');
 
 	const condicoes: (SQL | undefined)[] = [
 		eq(person.teamId, actor.teamId),
@@ -136,6 +153,12 @@ export async function listarPessoas(
 		condicoes.push(eq(person.currentStatusId, filtros.statusId));
 	}
 
+	if (filtros.grupoId === SEM_GRUPO) {
+		condicoes.push(isNull(groupMembership.id));
+	} else if (filtros.grupoId) {
+		condicoes.push(eq(groupMembership.groupId, filtros.grupoId));
+	}
+
 	const linhas = await db
 		.select({
 			id: person.id,
@@ -143,10 +166,18 @@ export async function listarPessoas(
 			phone: person.phone,
 			statusId: person.currentStatusId,
 			statusNome: membershipStatus.name,
-			statusCor: membershipStatus.color
+			statusCor: membershipStatus.color,
+			grupoId: smallGroup.id,
+			grupoNome: smallGroup.name,
+			grupoCor: smallGroup.color
 		})
 		.from(person)
 		.leftJoin(membershipStatus, eq(person.currentStatusId, membershipStatus.id))
+		.leftJoin(
+			groupMembership,
+			and(eq(groupMembership.personId, person.id), isNull(groupMembership.leftAt))
+		)
+		.leftJoin(smallGroup, eq(smallGroup.id, groupMembership.groupId))
 		.where(and(...condicoes))
 		.orderBy(asc(person.fullNameNormalized))
 		.limit(200);
@@ -159,18 +190,42 @@ export async function listarPessoas(
 	return linhas.map((l) => {
 		const idade = idades.get(l.id) ?? { ehMenor: null, idadeAnos: null };
 
+		// RN-32 — contato só para quem tem `person.view_sensitive` NO GRUPO da
+		// pessoa. Até o M03 isto era `canAnywhere`, e o conselheiro de um PG
+		// via o telefone de todos os outros (lacuna G1 do M04).
+		const podeVerContato =
+			l.id === actor.personId ||
+			can(actor, 'person.view_sensitive', { personId: l.id, groupId: l.grupoId });
+
 		return {
 			id: l.id,
 			fullName: l.fullName,
 			statusId: l.statusId,
 			statusNome: l.statusNome,
 			statusCor: l.statusCor,
-			// RN-32 — contato só para quem tem `person.view_sensitive`. Vale para
-			// qualquer pessoa, e com mais razão para menor de idade.
+			grupo: l.grupoId ? { id: l.grupoId, nome: l.grupoNome!, cor: l.grupoCor } : null,
 			phone: podeVerContato ? l.phone : null,
 			ehMenor: idade.ehMenor
 		};
 	});
+}
+
+/**
+ * Nome e id de todas as pessoas ativas — para seletores ("quem será o
+ * responsável?"). Sem contato, sem limite de 200: escolher de uma lista
+ * cortada deixaria gente de fora sem aviso.
+ */
+export async function pessoasParaEscolha(
+	db: Database,
+	actor: Actor
+): Promise<{ id: string; nome: string }[]> {
+	authorizeAnywhere(actor, 'person.view');
+
+	return db
+		.select({ id: person.id, nome: person.fullName })
+		.from(person)
+		.where(and(eq(person.teamId, actor.teamId), isNull(person.deletedAt)))
+		.orderBy(asc(person.fullNameNormalized));
 }
 
 export async function verPessoa(
@@ -202,9 +257,23 @@ export async function verPessoa(
 		temResponsavelVinculado: await temResponsavelVinculado(db, personId)
 	});
 
+	const [grupo] = await db
+		.select({
+			id: smallGroup.id,
+			nome: smallGroup.name,
+			cor: smallGroup.color,
+			desde: groupMembership.joinedAt
+		})
+		.from(groupMembership)
+		.innerJoin(smallGroup, eq(smallGroup.id, groupMembership.groupId))
+		.where(and(eq(groupMembership.personId, personId), isNull(groupMembership.leftAt)))
+		.limit(1);
+
 	// Ver os próprios dados nunca exige `view_sensitive` — é o escopo `self`.
+	// Para os outros, a permissão vale no grupo da pessoa (D-M04-4).
 	const ehEla = actor.personId === personId;
-	const contatoVisivel = ehEla || canAnywhere(actor, 'person.view_sensitive');
+	const contatoVisivel =
+		ehEla || can(actor, 'person.view_sensitive', { personId, groupId: grupo?.id ?? null });
 
 	return {
 		id: linha.p.id,
@@ -217,6 +286,7 @@ export async function verPessoa(
 		statusId: linha.p.currentStatusId,
 		statusNome: linha.statusNome,
 		statusCor: linha.statusCor,
+		grupo: grupo ?? null,
 		createdAt: linha.p.createdAt,
 		sensiveis: contatoVisivel
 			? {
@@ -270,11 +340,25 @@ export async function criarPessoa(
 	db: Database,
 	actor: Actor,
 	dados: CriarPessoaEntrada,
-	contexto: { ip?: string | null; userAgent?: string | null; source?: OrigemDoCadastro } = {}
+	contexto: {
+		ip?: string | null;
+		userAgent?: string | null;
+		source?: OrigemDoCadastro;
+		/** Grupo em que a pessoa já entra. Obrigatório para quem não cadastra globalmente. */
+		grupoId?: string | null;
+	} = {}
 ): Promise<string> {
-	// Quem ainda não existe não pertence a grupo nenhum, então não há escopo a
-	// verificar além de deter a permissão.
-	authorizeAnywhere(actor, 'person.create');
+	// Com grupo, a permissão vale no escopo dele — e colocar alguém no grupo é
+	// também `group.assign_member` ali. Sem grupo, só o escopo global: um
+	// conselheiro criaria alguém que ele mesmo deixaria de enxergar no
+	// instante seguinte (D-M04-4).
+	const grupoId = contexto.grupoId ?? null;
+	if (grupoId) {
+		authorize(actor, 'person.create', { groupId: grupoId });
+		authorize(actor, 'group.assign_member', { groupId: grupoId });
+	} else {
+		authorize(actor, 'person.create');
+	}
 
 	// Regime avaliado ANTES de gravar: pessoa nova nunca tem responsável
 	// vinculado nem consentimento registrado, então menor de idade entra
@@ -286,7 +370,7 @@ export async function criarPessoa(
 	const padrao = dados.statusId ? null : await estagioPadrao(db, actor.teamId);
 	const statusId = dados.statusId ?? padrao?.id ?? null;
 
-	const criada = await db.transaction(async (tx) => {
+	const { criada, movimento } = await db.transaction(async (tx) => {
 		const [nova] = await tx
 			.insert(person)
 			.values({
@@ -318,7 +402,17 @@ export async function criarPessoa(
 			});
 		}
 
-		return nova.id;
+		// No mesmo commit: se o grupo estiver arquivado ou não existir, a
+		// pessoa também não é criada — e o cadastro não fica pela metade.
+		const movimento: Movimento | null = grupoId
+			? await moverNaTransacao(tx as unknown as Database, actor, {
+					personId: nova.id,
+					paraGrupoId: grupoId,
+					motivo: 'Cadastro inicial'
+				})
+			: null;
+
+		return { criada: nova.id, movimento };
 	});
 
 	await audit(db, {
@@ -332,6 +426,14 @@ export async function criarPessoa(
 		userAgent: contexto.userAgent
 	});
 
+	if (movimento) {
+		await auditarMovimento(db, actor, movimento, {
+			motivo: 'Cadastro inicial',
+			ip: contexto.ip,
+			userAgent: contexto.userAgent
+		});
+	}
+
 	return criada;
 }
 
@@ -342,7 +444,7 @@ export async function atualizarPessoa(
 	dados: AtualizarPessoaEntrada,
 	contexto: { ip?: string | null; userAgent?: string | null } = {}
 ): Promise<void> {
-	authorize(actor, 'person.update', { personId });
+	authorize(actor, 'person.update', await contextoDaPessoa(db, personId));
 
 	const [antes] = await db
 		.select()
@@ -408,16 +510,30 @@ export async function removerPessoa(
 	personId: string,
 	contexto: { ip?: string | null; userAgent?: string | null } = {}
 ): Promise<void> {
-	authorize(actor, 'person.delete', { personId });
+	authorize(actor, 'person.delete', await contextoDaPessoa(db, personId));
 
 	if (personId === actor.personId) {
 		throw new Error('Você não pode remover o próprio cadastro.');
 	}
 
-	await db
-		.update(person)
-		.set({ deletedAt: new Date(), updatedAt: new Date() })
-		.where(and(eq(person.id, personId), eq(person.teamId, actor.teamId)));
+	await db.transaction(async (tx) => {
+		await tx
+			.update(person)
+			.set({ deletedAt: new Date(), updatedAt: new Date() })
+			.where(and(eq(person.id, personId), eq(person.teamId, actor.teamId)));
+
+		// Quem sai do cadastro sai também do grupo — senão continuaria contando
+		// como membro e impediria o grupo de ser arquivado. O vínculo é
+		// encerrado, não apagado: a passagem pelo grupo continua na história.
+		await tx
+			.update(groupMembership)
+			.set({
+				leftAt: sql`now()`,
+				leftReason: 'Cadastro removido',
+				endedByPersonId: actor.personId
+			})
+			.where(and(eq(groupMembership.personId, personId), isNull(groupMembership.leftAt)));
+	});
 
 	await audit(db, {
 		teamId: actor.teamId,

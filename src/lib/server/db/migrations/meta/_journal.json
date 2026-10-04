@@ -36,6 +36,20 @@
       "when": 1791089065773,
       "tag": "0004_rbac",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791091781561,
+      "tag": "0005_grupos",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791091782561,
+      "tag": "0006_regras_de_grupos",
+      "breakpoints": true
     }
   ]
 }

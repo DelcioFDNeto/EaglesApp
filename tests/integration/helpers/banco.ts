@@ -11,6 +11,7 @@ import {
 	permission,
 	role,
 	rolePermission,
+	smallGroup,
 	team
 } from '../../../src/lib/server/db/schema';
 import { ESTAGIOS_SEMENTE } from '../../../src/lib/server/modules/pessoas/estagios-semente';
@@ -104,4 +105,24 @@ export async function criarBancoDeTeste(): Promise<BancoDeTeste> {
 		estagios,
 		fechar: () => cliente.close()
 	};
+}
+
+/**
+ * Cria um grupo direto no banco, sem passar pelo serviço.
+ *
+ * Desde o M04, `person_role.scope_id` tem chave estrangeira para
+ * `small_group`: um teste que atribui papel de grupo precisa que o grupo
+ * exista. Aceita o id para os testes que já fixavam um.
+ */
+export async function criarGrupo(
+	ctx: Pick<BancoDeTeste, 'db' | 'teamId'>,
+	nome: string,
+	id?: string
+): Promise<string> {
+	const [g] = await ctx.db
+		.insert(smallGroup)
+		.values({ ...(id ? { id } : {}), teamId: ctx.teamId, name: nome })
+		.returning({ id: smallGroup.id });
+	if (!g) throw new Error(`não foi possível criar o grupo ${nome}`);
+	return g.id;
 }

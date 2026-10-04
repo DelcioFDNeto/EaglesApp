@@ -7,7 +7,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { criarBancoDeTeste, type BancoDeTeste } from './helpers/banco';
+import { criarBancoDeTeste, criarGrupo, type BancoDeTeste } from './helpers/banco';
 import { person, personRole, session, userAccount } from '../../src/lib/server/db/schema';
 import { consumeInvite, issueInvite, lookupInvite } from '../../src/lib/server/auth/invite';
 import {
@@ -259,8 +259,8 @@ describe('sessão', () => {
 describe('actor carregado do banco', () => {
 	it('conselheiro de um grupo só age naquele grupo', async () => {
 		const personId = await criarPessoa('Conselheiro do Azul');
-		const PG_AZUL = '018f0000-0000-7000-8000-00000000aaaa';
-		const PG_VERDE = '018f0000-0000-7000-8000-00000000bbbb';
+		const PG_AZUL = await criarGrupo(ctx, 'PG Azul');
+		const PG_VERDE = await criarGrupo(ctx, 'PG Verde');
 
 		await ctx.db.insert(personRole).values({
 			personId,
@@ -324,8 +324,8 @@ describe('actor carregado do banco', () => {
 
 	it('mesmo papel em dois grupos vira duas atribuições', async () => {
 		const personId = await criarPessoa('Conselheiro Duplo');
-		const A = '018f0000-0000-7000-8000-00000000cccc';
-		const B = '018f0000-0000-7000-8000-00000000dddd';
+		const A = await criarGrupo(ctx, 'PG A');
+		const B = await criarGrupo(ctx, 'PG B');
 
 		await ctx.db.insert(personRole).values([
 			{ personId, roleId: ctx.papeis.conselheiro!, scopeType: 'group', scopeId: A },

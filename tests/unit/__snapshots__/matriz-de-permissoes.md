@@ -23,7 +23,7 @@ permissões são editados na tela de administração, e o banco passa a valer.
 | Permissão | Líder | Conselheiro | Membro | Visitante |
 | --- | --- | --- | --- | --- |
 | `group.view` | ✓ global | ✓ no grupo | ✓ próprio | — |
-| `group.manage` | ✓ global | — | — | — |
+| `group.manage` | ✓ global | ✓ no grupo | — | — |
 | `group.assign_member` | ✓ global | ✓ no grupo | — | — |
 
 ## Eventos

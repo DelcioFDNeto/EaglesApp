@@ -5,6 +5,7 @@ import { audit } from '$server/audit/log';
 import { issueInvite } from '$server/auth/invite';
 import { situacaoDaConta } from '$server/auth/conta';
 import { authorize, type Actor } from '$server/policy/policy';
+import { contextoDaPessoa } from '$server/modules/grupos/contexto';
 import { verPessoa } from '$server/modules/pessoas/pessoas';
 import { AcessoRecusado, exigirReautenticacao, type ContextoSensivel } from './regras';
 
@@ -45,7 +46,7 @@ export async function emitirConvite(
 	personId: string,
 	contexto: ContextoSensivel
 ): Promise<ConviteEmitido> {
-	authorize(actor, 'person.invite', { personId });
+	authorize(actor, 'person.invite', await contextoDaPessoa(db, personId));
 
 	const pessoa = await verPessoa(db, actor, personId);
 	if (!pessoa) throw new AcessoRecusado('nao_encontrado', 'Essa pessoa não existe.');

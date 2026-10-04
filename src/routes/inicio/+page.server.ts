@@ -3,6 +3,7 @@ import { db } from '$server/db';
 import { canAnywhere } from '$server/policy/policy';
 import { PERMISSIONS } from '$server/policy/permissions';
 import { featureFlag } from '$server/db/schema';
+import { listarGrupos, meusGrupos } from '$server/modules/grupos/grupos';
 import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
@@ -34,7 +35,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			papeis: [],
 			permissoes: [],
 			catalogoPermissoes: {},
-			funcionalidades: {}
+			funcionalidades: {},
+			grupos: []
 		};
 	}
 
@@ -44,6 +46,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.select({ key: featureFlag.key, enabled: featureFlag.enabled })
 		.from(featureFlag)
 		.where(eq(featureFlag.teamId, locals.actor.teamId));
+
+	// "Seu grupo": o PG de quem é membro e os PGs de quem é responsável. O
+	// conselheiro abre o app e chega ao próprio grupo em um toque (F3).
+	const grupos = canAnywhere(locals.actor, 'group.view')
+		? await (async () => {
+				const meus = new Set(await meusGrupos(banco, locals.actor!));
+				if (meus.size === 0) return [];
+				return (await listarGrupos(banco, locals.actor!)).filter((g) => meus.has(g.id));
+			})()
+		: [];
 
 	// Quais permissões esta pessoa realmente tem — o menu se monta a partir
 	// disto, e não de "se papel === conselheiro".
@@ -57,6 +69,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		papeis: [...new Set(locals.actor.assignments.map((a) => a.roleKey))],
 		permissoes: minhasPermissoes,
 		catalogoPermissoes: PERMISSIONS as Record<string, string>,
-		funcionalidades: Object.fromEntries(flags.map((f) => [f.key, f.enabled]))
+		funcionalidades: Object.fromEntries(flags.map((f) => [f.key, f.enabled])),
+		grupos: grupos.map((g) => ({ id: g.id, nome: g.nome, cor: g.cor, membros: g.membros }))
 	};
 };

@@ -96,4 +96,42 @@ test.describe('sem JavaScript', () => {
 		await page.goto('/inicio');
 		await expect(page).toHaveURL(/\/entrar/);
 	});
+
+	/**
+	 * Reorganização dos grupos (M04): planejar, conferir e aplicar são três
+	 * idas ao servidor, sem uma linha de JavaScript.
+	 *
+	 * Também prova algo menos óbvio: cada seletor já chega do servidor com o
+	 * grupo ATUAL marcado. Se o HTML viesse sem a opção selecionada, o
+	 * navegador sem JavaScript marcaria a primeira — e "Ver o que muda"
+	 * mandaria todo mundo para o primeiro grupo da lista.
+	 */
+	test('reorganização dos grupos funciona de ponta a ponta', async ({ page }) => {
+		await page.goto('/entrar');
+		await page.getByLabel('E-mail ou telefone').fill(CONTAS.lider);
+		await page.getByLabel('Senha').fill(SENHA);
+		await page.getByRole('button', { name: 'Entrar' }).click();
+		await page.waitForURL('**/inicio');
+
+		const reorganizar = async (destino: string) => {
+			await page.goto('/grupos/reorganizar');
+			await expect(page.getByLabel('Letícia Ferreira dos Santos', { exact: true })).toHaveValue(
+				/.+/
+			);
+			await page.getByLabel('Gustavo Lima', { exact: true }).selectOption({ label: destino });
+			await page.getByRole('button', { name: 'Ver o que muda' }).click();
+
+			const conferencia = page.getByRole('region', { name: 'Conferir antes de aplicar' });
+			// Só UMA mudança: quem não foi tocado continua onde está.
+			await expect(conferencia.getByRole('checkbox')).toHaveCount(1);
+			await expect(conferencia.getByRole('checkbox', { name: /Gustavo Lima/ })).toBeChecked();
+
+			await page.getByRole('button', { name: 'Aplicar as mudanças marcadas' }).click();
+			await expect(page.getByText('1 mudança registrada')).toBeVisible();
+		};
+
+		await reorganizar('PG Azul');
+		// E de volta, para deixar a semente como estava.
+		await reorganizar('PG Verde');
+	});
 });

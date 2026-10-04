@@ -1,5 +1,6 @@
 /**
- * Schema do Eagles App — Módulos 01 (Fundação) e 02 (Pessoas).
+ * Schema do Eagles App — Módulos 01 (Fundação), 02 (Pessoas), 03 (RBAC) e
+ * 04 (Grupos).
  *
  * Só entram aqui as tabelas que os módulos entregues usam de fato. Grupos,
  * eventos, presença, responsabilidades e financeiro chegam nos seus próprios
@@ -22,7 +23,9 @@ import {
 	jsonb,
 	pgTable,
 	pgView,
+	smallint,
 	text,
+	time,
 	timestamp,
 	uniqueIndex,
 	uuid
@@ -319,6 +322,101 @@ export const consent = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Grupos / PGs (M04)
+// ---------------------------------------------------------------------------
+
+/**
+ * O PG. Chama-se `small_group` porque `group` é palavra reservada do SQL e
+ * exigiria aspas em toda consulta escrita à mão.
+ *
+ * Não existe coluna de conselheiro (D-M04-1): quem cuida do grupo é quem tem
+ * um papel de escopo `group` apontando para ele em `person_role`. Uma coluna
+ * a mais seria uma segunda resposta para a mesma pergunta.
+ *
+ * Grupo não se apaga: arquiva-se, e só vazio (gatilho na migração 0006).
+ * Presença e histórico de quem esteve nele continuam apontando para a linha.
+ */
+export const smallGroup = pgTable(
+	'small_group',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id),
+
+		name: text('name').notNull(),
+		/** Cor da etiqueta na interface, em hexadecimal (#RRGGBB). */
+		color: text('color'),
+		description: text('description'),
+
+		/**
+		 * O combinado do grupo: dia da semana (0 = domingo … 6 = sábado), horário
+		 * e local. É o ponto de partida do evento recorrente do M05, não uma
+		 * segunda fonte para ele.
+		 */
+		meetingWeekday: smallint('meeting_weekday'),
+		meetingTime: time('meeting_time'),
+		location: text('location'),
+
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		index('small_group_team_idx').on(t.teamId),
+		// Dois "PG Azul" ativos seriam ambíguos em toda tela que lista grupos.
+		// Arquivado não conta: o nome volta a ficar livre.
+		uniqueIndex('small_group_nome_ativo_idx')
+			.on(t.teamId, sql`lower(${t.name})`)
+			.where(sql`${t.archivedAt} is null`)
+	]
+);
+
+/**
+ * Vínculo TEMPORAL de uma pessoa com um grupo (RN-06, RN-07).
+ *
+ * Uma linha por passagem pelo grupo. Transferir é encerrar a linha aberta e
+ * abrir outra, no mesmo instante e na mesma transação — nada é sobrescrito,
+ * e o gatilho da migração 0006 recusa qualquer alteração que não seja
+ * encerrar um vínculo aberto.
+ *
+ * "No máximo um grupo por vez" é o índice único parcial abaixo: garantia do
+ * banco, não da aplicação.
+ */
+export const groupMembership = pgTable(
+	'group_membership',
+	{
+		id: pk(),
+		groupId: uuid('group_id')
+			.notNull()
+			.references(() => smallGroup.id),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+
+		joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+		/** Nulo enquanto a pessoa está no grupo. */
+		leftAt: timestamp('left_at', { withTimezone: true }),
+		leftReason: text('left_reason'),
+
+		addedByPersonId: uuid('added_by_person_id').references(() => person.id),
+		endedByPersonId: uuid('ended_by_person_id').references(() => person.id),
+
+		/** Reorganização em lote que criou ou encerrou este vínculo (D-M04-5). */
+		batchId: uuid('batch_id'),
+
+		createdAt: createdAt()
+	},
+	(t) => [
+		uniqueIndex('group_membership_um_grupo_ativo_idx')
+			.on(t.personId)
+			.where(sql`${t.leftAt} is null`),
+		index('group_membership_grupo_idx').on(t.groupId, t.leftAt),
+		index('group_membership_pessoa_idx').on(t.personId, t.joinedAt)
+	]
+);
+
+// ---------------------------------------------------------------------------
 // Acesso — conta, sessão e convite (ADR 0004)
 // ---------------------------------------------------------------------------
 
@@ -472,8 +570,13 @@ export const personRole = pgTable(
 
 		/** 'global' | 'group' | 'self' — o eixo de pertencimento (seção 5.2). */
 		scopeType: text('scope_type').notNull(),
-		/** Id do grupo quando scopeType = 'group'. Nulo nos demais. */
-		scopeId: uuid('scope_id'),
+		/**
+		 * Id do grupo quando scopeType = 'group'. Nulo nos demais.
+		 *
+		 * Chave estrangeira desde o M04: antes, "conselheiro do PG Azul" podia
+		 * apontar para um grupo que não existia em tabela nenhuma.
+		 */
+		scopeId: uuid('scope_id').references(() => smallGroup.id),
 
 		grantedByPersonId: uuid('granted_by_person_id').references(() => person.id),
 		expiresAt: timestamp('expires_at', { withTimezone: true }),
@@ -611,7 +714,8 @@ export const personRelations = relations(person, ({ one, many }) => ({
 		references: [membershipStatus.id]
 	}),
 	historicoDeStatus: many(personStatusHistory),
-	consentimentos: many(consent)
+	consentimentos: many(consent),
+	vinculosDeGrupo: many(groupMembership)
 }));
 
 export const userAccountRelations = relations(userAccount, ({ one, many }) => ({
@@ -638,5 +742,16 @@ export const rolePermissionRelations = relations(rolePermission, ({ one }) => ({
 
 export const personRoleRelations = relations(personRole, ({ one }) => ({
 	person: one(person, { fields: [personRole.personId], references: [person.id] }),
-	role: one(role, { fields: [personRole.roleId], references: [role.id] })
+	role: one(role, { fields: [personRole.roleId], references: [role.id] }),
+	grupo: one(smallGroup, { fields: [personRole.scopeId], references: [smallGroup.id] })
+}));
+
+export const smallGroupRelations = relations(smallGroup, ({ many }) => ({
+	vinculos: many(groupMembership),
+	responsaveis: many(personRole)
+}));
+
+export const groupMembershipRelations = relations(groupMembership, ({ one }) => ({
+	grupo: one(smallGroup, { fields: [groupMembership.groupId], references: [smallGroup.id] }),
+	pessoa: one(person, { fields: [groupMembership.personId], references: [person.id] })
 }));

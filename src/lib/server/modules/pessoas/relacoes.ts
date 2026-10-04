@@ -3,6 +3,7 @@ import type { Database } from '$server/db';
 import { person, personRelation } from '$server/db/schema';
 import { audit } from '$server/audit/log';
 import { authorize, type Actor } from '$server/policy/policy';
+import { contextoDaPessoa } from '$server/modules/grupos/contexto';
 import { ehVinculoSimetrico, type TipoDeVinculo } from '$shared/pessoa';
 
 /**
@@ -94,7 +95,7 @@ export async function criarVinculo(
 	actor: Actor,
 	entrada: { pessoaId: string; outraPessoaId: string; tipo: TipoDeVinculo }
 ): Promise<void> {
-	authorize(actor, 'person.update', { personId: entrada.pessoaId });
+	authorize(actor, 'person.update', await contextoDaPessoa(db, entrada.pessoaId));
 
 	if (entrada.pessoaId === entrada.outraPessoaId) {
 		throw new VinculoInvalido('Não dá para vincular uma pessoa a ela mesma.');
@@ -134,7 +135,7 @@ export async function removerVinculo(
 	vinculoId: string,
 	pessoaId: string
 ): Promise<void> {
-	authorize(actor, 'person.update', { personId: pessoaId });
+	authorize(actor, 'person.update', await contextoDaPessoa(db, pessoaId));
 
 	const [antes] = await db
 		.select()
@@ -143,6 +144,11 @@ export async function removerVinculo(
 		.limit(1);
 
 	if (!antes) return;
+
+	// A permissão foi conferida sobre `pessoaId`. Sem esta linha, quem pode
+	// editar alguém do próprio grupo apagaria o vínculo entre duas pessoas de
+	// outro grupo — bastava mandar o id do vínculo alheio (lacuna G6 do M04).
+	if (antes.personA !== pessoaId && antes.personB !== pessoaId) return;
 
 	await db.delete(personRelation).where(eq(personRelation.id, vinculoId));
 

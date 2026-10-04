@@ -8,7 +8,7 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const filtrando = $derived(data.busca !== '' || data.statusId !== '');
+	const filtrando = $derived(data.busca !== '' || data.statusId !== '' || data.grupoId !== '');
 </script>
 
 <svelte:head>
@@ -51,6 +51,16 @@
 			</select>
 		</label>
 
+		<label class="status">
+			<span class="sr">Filtrar por grupo</span>
+			<select name="grupo" value={data.grupoId}>
+				<option value="">Todos os grupos</option>
+				{#each data.grupos as g (g.valor)}
+					<option value={g.valor}>{g.rotulo}</option>
+				{/each}
+			</select>
+		</label>
+
 		<Botao tipo="submit" variante="secundario">Filtrar</Botao>
 	</form>
 
@@ -85,6 +95,9 @@
 						<span class="meta">
 							{#if pessoa.statusNome}
 								<Etiqueta cor={pessoa.statusCor}>{pessoa.statusNome}</Etiqueta>
+							{/if}
+							{#if pessoa.grupo}
+								<span class="grupo">{pessoa.grupo.nome}</span>
 							{/if}
 							{#if pessoa.phone}
 								<span class="telefone">{formatarTelefone(pessoa.phone)}</span>
@@ -131,6 +144,11 @@
 		border: 1px solid var(--cor-linha-forte);
 		border-radius: var(--raio);
 		font-size: 16px;
+	}
+
+	.grupo {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
 	}
 
 	.filtros input:focus-visible,

@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$server/db';
 import { can } from '$server/policy/policy';
 import { atualizarPessoa, RegimeRestrito, verPessoa } from '$server/modules/pessoas/pessoas';
+import { contextoDaPessoa } from '$server/modules/grupos/contexto';
 import { atualizarPessoaSchema } from '$server/modules/pessoas/validacao';
 import type { FalhaDeFormulario } from '$shared/formulario';
 import type { Actions, PageServerLoad } from './$types';
@@ -14,15 +15,14 @@ type Falha = FalhaDeFormulario<{ camposBloqueados: string[] }>;
  *
  * PERMISSÃO: `person.update` NO ESCOPO desta pessoa.
  *
- * Diferente da lista e do cadastro, aqui existe um alvo concreto, então a
- * verificação é com contexto. Enquanto os grupos não existirem (M04), o
- * contexto de grupo é sempre nulo e só quem tem escopo global passa — é o lado
- * seguro do erro: escrita é onde o estrago é irreversível.
+ * Diferente da lista, aqui existe um alvo concreto, então a verificação é com
+ * contexto: a pessoa e o grupo em que ela está (D-M04-4). O conselheiro edita
+ * quem está no próprio PG; quem está sem grupo só é editado por escopo global.
  */
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.actor) redirect(303, '/entrar');
 
-	if (!can(locals.actor, 'person.update', { personId: params.id })) {
+	if (!can(locals.actor, 'person.update', await contextoDaPessoa(db(), params.id))) {
 		redirect(303, `/pessoas/${params.id}`);
 	}
 
@@ -36,7 +36,7 @@ export const actions: Actions = {
 	default: async ({ request, locals, params, getClientAddress }) => {
 		if (!locals.actor) redirect(303, '/entrar');
 
-		if (!can(locals.actor, 'person.update', { personId: params.id })) {
+		if (!can(locals.actor, 'person.update', await contextoDaPessoa(db(), params.id))) {
 			const falha: Falha = { erro: 'Você não tem permissão para editar esta pessoa.' };
 			return fail(403, falha);
 		}

@@ -1,6 +1,6 @@
 # Eagles App — Documento de Descoberta e Arquitetura Inicial
 
-**Versão:** 0.4
+**Versão:** 0.5
 **Data:** 18/08/2026 — revisado em 04/10/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
@@ -177,7 +177,7 @@ Um conselheiro tem autoridade **escopada** a um ou mais grupos. Um líder tem au
 
 - Um membro pertence a **no máximo um grupo por vez**.
 - Grupos podem ser reorganizados ao longo do ano — o histórico de quem esteve onde é preservado.
-- Apenas líderes e conselheiros criam, editam, excluem grupos e transferem membros.
+- Apenas líderes e conselheiros criam, editam, excluem grupos e transferem membros. _(Como isso vira permissão e escopo: D-M04-3, em [`04-modulo-04-grupos.md`](04-modulo-04-grupos.md).)_
 - O contexto maior tem outras equipes (Bears, Tigers, Sheeps), **fora do escopo do app** — mas cuja existência deve caber no modelo como histórico de saída/transferência.
 
 ### 5.4 Decisão sobre multi-equipe `[DEC]`
@@ -206,7 +206,7 @@ Numeradas para rastreabilidade — `RN-xx` será referenciado em testes e crité
 
 - **RN-06** — Uma pessoa pertence a no máximo um grupo por vez — restrição garantida no banco, não só na aplicação. `[REQ]`
 - **RN-07** — Transferência entre grupos encerra o vínculo anterior com data de saída e cria um novo; nada é sobrescrito. `[DEC]`
-- **RN-08** — Só altera composição quem tem `group.manage` global, ou `group.manage` no escopo daquele grupo. `[REQ]`
+- **RN-08** — Só altera composição quem tem `group.assign_member` global, ou no escopo do grupo — **de origem e de destino**: ninguém empurra uma pessoa para o grupo de outro. `[REQ]` _(Revisado no M04: o texto original citava `group.manage`, que o catálogo reserva para criar, editar e arquivar o grupo.)_
 - **RN-09** — Sugestões de reorganização **nunca** alteram grupos: produzem uma proposta que exige confirmação humana e pode ser aceita parcialmente. `[REQ]`
 
 ### Eventos e presença
@@ -613,20 +613,20 @@ erDiagram
     PERSON ||--o{ ASSIGNMENT : assume
 ```
 
-| Tabela                | Papel                                 | Observações                                                                                                                                       |
-| --------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `group`               | O PG                                  | `name`, `color`, `advisor_person_id`, `meeting_weekday`, `location`, `active`                                                                     |
-| `group_membership`    | Vínculo **temporal** (RN-06, RN-07)   | `joined_at`, `left_at`, `left_reason`. Índice único parcial garante **um grupo ativo por pessoa**                                                 |
-| `event_type`          | Configurável (RN-10)                  | `name`, `icon`, `default_rsvp_set`, `allows_checkin`, `counts_for_attendance`                                                                     |
-| `event`               | Compromisso                           | `title`, `description`, `starts_at`, `ends_at`, `location`, `owner_person_id`, `group_id`, `status`, `recurrence_rule` (RRULE), `parent_event_id` |
-| `event_audience`      | Quem é convidado                      | `scope` = todos \| grupo \| pessoas \| status                                                                                                     |
-| `rsvp_option`         | Opções configuráveis (RN-11)          | `label`, `semantic` (`yes`/`no`/`maybe`/`late`/`guest`), `allows_guest_count`                                                                     |
-| `rsvp`                | Resposta atual                        | único por (`event`,`person`)                                                                                                                      |
-| `rsvp_history`        | Todas as respostas anteriores (RN-12) | append-only                                                                                                                                       |
-| `attendance`          | Presença **efetiva** (RN-13)          | `source` = manual \| checkin \| importado; `recorded_by`                                                                                          |
-| `checkin_token`       | Só se a chave estiver ligada (RN-14)  | token rotativo com validade curta                                                                                                                 |
-| `responsibility_type` | Configurável (RN-16)                  | `name`, `min_interval_days`, `requires_skill`                                                                                                     |
-| `assignment`          | Escala                                | `event_id`, `responsibility_type_id`, `person_id`, `status` (proposta/confirmada/trocada/cumprida), `source` (manual/gerada), `proposal_id`       |
+| Tabela                | Papel                                 | Observações                                                                                                                                                           |
+| --------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `small_group`         | O PG (`group` é palavra reservada)    | `name`, `color`, `meeting_weekday`, `meeting_time`, `location`, `archived_at`. **Sem coluna de conselheiro:** quem cuida do grupo é o papel com escopo nele (D-M04-1) |
+| `group_membership`    | Vínculo **temporal** (RN-06, RN-07)   | `joined_at`, `left_at`, `left_reason`, `batch_id`. Índice único parcial garante **um grupo ativo por pessoa**; gatilho só permite **encerrar**                        |
+| `event_type`          | Configurável (RN-10)                  | `name`, `icon`, `default_rsvp_set`, `allows_checkin`, `counts_for_attendance`                                                                                         |
+| `event`               | Compromisso                           | `title`, `description`, `starts_at`, `ends_at`, `location`, `owner_person_id`, `group_id`, `status`, `recurrence_rule` (RRULE), `parent_event_id`                     |
+| `event_audience`      | Quem é convidado                      | `scope` = todos \| grupo \| pessoas \| status                                                                                                                         |
+| `rsvp_option`         | Opções configuráveis (RN-11)          | `label`, `semantic` (`yes`/`no`/`maybe`/`late`/`guest`), `allows_guest_count`                                                                                         |
+| `rsvp`                | Resposta atual                        | único por (`event`,`person`)                                                                                                                                          |
+| `rsvp_history`        | Todas as respostas anteriores (RN-12) | append-only                                                                                                                                                           |
+| `attendance`          | Presença **efetiva** (RN-13)          | `source` = manual \| checkin \| importado; `recorded_by`                                                                                                              |
+| `checkin_token`       | Só se a chave estiver ligada (RN-14)  | token rotativo com validade curta                                                                                                                                     |
+| `responsibility_type` | Configurável (RN-16)                  | `name`, `min_interval_days`, `requires_skill`                                                                                                                         |
+| `assignment`          | Escala                                | `event_id`, `responsibility_type_id`, `person_id`, `status` (proposta/confirmada/trocada/cumprida), `source` (manual/gerada), `proposal_id`                           |
 
 **Ponto sensível de modelagem — recorrência.** PGs semanais geram muitos eventos. Adoto **materialização parcial**: a série guarda a RRULE e o sistema materializa apenas as próximas 12 semanas em linhas reais, mais qualquer ocorrência que tenha RSVP, presença ou escala. Alternativas seriam materializar tudo (banco inchado, difícil editar a série) ou nada (impossível anexar presença a uma ocorrência). `[DEC]`
 
@@ -1352,20 +1352,20 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 ### Estado da execução — 04/10/2026
 
-**Módulos 01 (Fundação), 02 (Pessoas) e 03 (RBAC e gestão de acesso) implementados.**
+**Módulos 01 (Fundação), 02 (Pessoas), 03 (RBAC e gestão de acesso) e 04 (Grupos/PGs) implementados.**
 
-Verificação de 04/10/2026: **225 testes** de unidade e integração, **53 de ponta a ponta** em dois projetos de navegador, tipos limpos em 733 arquivos, build funcionando.
+Verificação de 04/10/2026: **274 testes** de unidade e integração, **63 de ponta a ponta** em dois projetos de navegador (com e sem JavaScript), tipos limpos, build funcionando.
 
-O M03 entregou o que o roteiro pedia — **a matriz de permissões inteira testada**, cada papel × cada permissão × cada tipo de contexto, conferida contra uma especificação escrita à mão — e a administração de acesso dentro do app: papéis personalizados, permissões editáveis, atribuição e retirada de papel, convite com envio pelo WhatsApp e a barra de navegação que faltava. Toda alteração de acesso passa por quatro travas: só quem administra globalmente altera; ninguém concede o que não tem; ninguém altera o próprio acesso; e sempre resta ao menos um administrador capaz de entrar. Detalhe em [`03-modulo-03-rbac.md`](03-modulo-03-rbac.md).
+O M04 entregou o que o roteiro pedia — **PGs criados, membros distribuídos, transferência com histórico e a visão do conselheiro** — e a reorganização em lote com pré-visualização (RF-04.4), que é também a ferramenta da primeira distribuição da comunidade nos PGs. "Um grupo por vez" e "nada se sobrescreve" (RN-06, RN-07) são garantias do **banco**, testadas sem passar pelo código da aplicação. Detalhe em [`04-modulo-04-grupos.md`](04-modulo-04-grupos.md).
 
-#### Ninguém que entrasse por convite tinha caminho de volta
+#### O conselheiro via o contato de todo mundo
 
-O defeito mais grave encontrado até aqui. O aceite do convite criava a conta **sem e-mail e sem telefone**, e o login procura a conta por um dos dois: quem entrava por convite ficava trancado para fora ao sair. E a recuperação — que o ADR 0004 manda fazer por um novo convite — era recusada para quem já tinha conta, justamente quem esqueceu a senha. Nenhuma tela emitia convite, então ninguém tinha percebido.
+O defeito que este módulo fechou. Sem grupos, o M02 decidiu "pode ver contato" pela permissão em **qualquer** escopo — e o conselheiro de um PG via o telefone das pessoas de todos os outros. O outro lado da mesma falha: como nenhuma verificação levava o grupo da pessoa no contexto, o conselheiro também **não conseguia editar nem convidar ninguém**, nem do próprio PG.
 
-Os três estão corrigidos, com o ADR 0004 revisado e um teste de ponta a ponta que faz a pessoa aceitar o convite, **sair e entrar de novo**.
+A correção é uma só: toda verificação sobre uma pessoa leva agora o grupo em que ela está. O conselheiro do PG Azul vê, edita e convida quem está no PG Azul — e mais ninguém. A revisão encontrou mais duas portas da mesma família (vínculos visíveis a qualquer um com `person.view`; remoção de vínculo alheio usando uma pessoa do próprio grupo como pretexto), também fechadas e testadas.
 
-#### O que continua bloqueado
+#### Deploy é a última etapa
 
-Deploy, PWA instalado no celular e cópia do backup efetivamente enviada seguem parados em **D-06** (domínio) e **D-07.2** (specs da VPS).
+Por decisão de 04/10/2026, a implantação na VPS — domínio (D-06), specs da VPS (D-07.2), PWA instalado no celular e cópia externa do backup — fica para **depois dos módulos**. Até lá, cada módulo é entregue e verificado localmente e no CI.
 
-**Próximo passo:** Módulo 04 — Grupos/PGs, que destrava o conselheiro: com grupos existindo, o escopo de grupo passa a ter o que apontar, e o conselheiro edita, convida e acompanha as pessoas do próprio PG.
+**Próximo passo:** Módulo 05 — Eventos: o PG semanal como evento recorrente do grupo, partindo do dia, horário e local que o M04 já guarda.

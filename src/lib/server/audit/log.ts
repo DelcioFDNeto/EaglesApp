@@ -38,6 +38,15 @@ export type AuditAction =
 	// Consentimento (ADR 0003)
 	| 'consent.concedido'
 	| 'consent.revogado'
+	// Grupos (M04) — `membro_*` são sobre o VÍNCULO; os demais, sobre o grupo.
+	| 'group.criado'
+	| 'group.editado'
+	| 'group.arquivado'
+	| 'group.reativado'
+	| 'group.membro_adicionado'
+	| 'group.membro_retirado'
+	| 'group.membro_transferido'
+	| 'group.reorganizado'
 	// RBAC — `papel_atribuido`/`papel_removido` são sobre a PESSOA; os demais,
 	// sobre o papel em si.
 	| 'rbac.papel_atribuido'

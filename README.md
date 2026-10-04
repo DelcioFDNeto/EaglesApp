@@ -41,12 +41,12 @@ npm run dev                 # http://localhost:5173
 
 Contas criadas pela semeadura (senha `eagles-desenvolvimento`):
 
-| Conta                 | Papel                 |
-| --------------------- | --------------------- |
-| `ana@eagles.local`    | Líder — acesso global |
-| `pedro@eagles.local`  | Conselheiro do PG A   |
-| `marina@eagles.local` | Conselheira do PG B   |
-| `joao@eagles.local`   | Membro                |
+| Conta                 | Papel                   |
+| --------------------- | ----------------------- |
+| `ana@eagles.local`    | Líder — acesso global   |
+| `pedro@eagles.local`  | Conselheiro do PG Azul  |
+| `marina@eagles.local` | Conselheira do PG Verde |
+| `joao@eagles.local`   | Membro do PG Azul       |
 
 A semeadura também imprime um **link de convite** para testar o fluxo real de
 entrada, que é como toda pessoa vai receber acesso (ADR 0004).

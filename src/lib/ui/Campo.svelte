@@ -13,7 +13,7 @@
 	}: {
 		id: string;
 		rotulo: string;
-		tipo?: 'text' | 'email' | 'password' | 'tel' | 'date';
+		tipo?: 'text' | 'email' | 'password' | 'tel' | 'date' | 'time';
 		valor?: string;
 		erro?: string;
 		ajuda?: string;

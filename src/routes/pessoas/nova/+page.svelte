@@ -79,6 +79,21 @@
 			ajuda="É o único campo obrigatório. O resto você completa depois."
 		/>
 
+		{#if data.grupos.length > 0}
+			<Seletor
+				id="grupoId"
+				rotulo="Grupo"
+				opcoes={data.grupos}
+				valor={valor('grupoId') || data.grupoSugerido}
+				erro={erroDe('grupoId')}
+				vazio={data.exigeGrupo ? 'Escolha o grupo' : 'Sem grupo por enquanto'}
+				obrigatorio={data.exigeGrupo}
+				ajuda={data.exigeGrupo
+					? 'A pessoa entra no seu grupo — e só assim você continua vendo o cadastro.'
+					: undefined}
+			/>
+		{/if}
+
 		<!--
 			`details` nativo: abre e fecha sem JavaScript, mantendo o cadastro
 			completo acessível mesmo quando o script não carrega.

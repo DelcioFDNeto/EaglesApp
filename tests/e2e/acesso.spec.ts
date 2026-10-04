@@ -20,10 +20,16 @@ test.describe('navegação por papel (lacuna G4)', () => {
 	test.describe('líder', () => {
 		test.use({ storageState: ESTADO_DE_SESSAO.lider });
 
-		test('vê Início, Pessoas, Acessos e Conta', async ({ page }) => {
+		test('vê Início, Pessoas, Grupos, Acessos e Conta', async ({ page }) => {
 			await page.goto('/inicio');
 			const nav = page.getByRole('navigation', { name: 'Navegação principal' });
-			await expect(nav.getByRole('link')).toHaveText(['Início', 'Pessoas', 'Acessos', 'Conta']);
+			await expect(nav.getByRole('link')).toHaveText([
+				'Início',
+				'Pessoas',
+				'Grupos',
+				'Acessos',
+				'Conta'
+			]);
 		});
 
 		test('chega às pessoas pelo menu, sem digitar endereço', async ({ page }) => {
@@ -47,7 +53,7 @@ test.describe('navegação por papel (lacuna G4)', () => {
 		test('não vê o item de acessos — e a rota recusa com 403', async ({ page }) => {
 			await page.goto('/inicio');
 			const nav = page.getByRole('navigation', { name: 'Navegação principal' });
-			await expect(nav.getByRole('link')).toHaveText(['Início', 'Pessoas', 'Conta']);
+			await expect(nav.getByRole('link')).toHaveText(['Início', 'Pessoas', 'Grupos', 'Conta']);
 
 			const resposta = await page.goto('/admin/papeis');
 			expect(resposta?.status()).toBe(403);

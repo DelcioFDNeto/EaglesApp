@@ -69,7 +69,7 @@ describe('negação por padrão', () => {
 	it('nega permissão que o papel não possui, mesmo no escopo certo', () => {
 		expect(can(conselheiroAzul, 'rbac.manage', { groupId: PG_AZUL })).toBe(false);
 		expect(can(conselheiroAzul, 'finance.view_all', { groupId: PG_AZUL })).toBe(false);
-		expect(can(conselheiroAzul, 'group.manage', { groupId: PG_AZUL })).toBe(false);
+		expect(can(conselheiroAzul, 'person.delete', { groupId: PG_AZUL })).toBe(false);
 	});
 });
 

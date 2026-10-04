@@ -28,6 +28,7 @@
 	);
 
 	let trocandoEstagio = $state(false);
+	let trocandoGrupo = $state(false);
 </script>
 
 <svelte:head>
@@ -116,6 +117,51 @@
 		</section>
 	{/if}
 
+	<section class="cartao" aria-label="Grupo">
+		<h3>Grupo</h3>
+		{#if data.grupo}
+			<p class="grupo-atual">
+				<a href="/grupos/{data.grupo.id}"
+					><Etiqueta cor={data.grupo.cor}>{data.grupo.nome}</Etiqueta></a
+				>
+				<span class="legenda">desde {formatarData(data.grupo.desde)}</span>
+			</p>
+		{:else}
+			<p class="legenda">Ainda não está em nenhum grupo.</p>
+		{/if}
+
+		{#if data.destinosDeGrupo.length > 0}
+			<form
+				method="POST"
+				action="?/mudarGrupo"
+				use:enhance={() => {
+					trocandoGrupo = true;
+					return async ({ update }) => {
+						await update();
+						trocandoGrupo = false;
+					};
+				}}
+			>
+				<Seletor
+					id="grupoId"
+					rotulo={data.grupo ? 'Mudar para' : 'Colocar no grupo'}
+					opcoes={data.destinosDeGrupo}
+					vazio="Escolha o grupo"
+				/>
+				{#if data.grupo}
+					<Campo
+						id="motivoGrupo"
+						rotulo="Motivo da mudança de grupo (opcional)"
+						ajuda="Fica na linha do tempo da pessoa."
+					/>
+				{/if}
+				<Botao tipo="submit" variante="secundario" carregando={trocandoGrupo}>
+					{data.grupo ? 'Mudar de grupo' : 'Colocar no grupo'}
+				</Botao>
+			</form>
+		{/if}
+	</section>
+
 	<section class="cartao" aria-label="Acesso ao app">
 		<h3>Acesso ao app</h3>
 		{#if data.papeis.length > 0}
@@ -184,7 +230,7 @@
 		</section>
 	{/if}
 
-	<section class="cartao">
+	<section class="cartao" aria-label="Linha do tempo">
 		<h3>Linha do tempo</h3>
 		{#if data.linhaDoTempo.length === 0}
 			<p class="legenda">Nada registrado ainda.</p>
@@ -195,7 +241,10 @@
 						<time datetime={item.quando}>{dataCurta.format(new Date(item.quando))}</time>
 						<div>
 							<strong>
-								{#if item.de}{item.de} → {item.para}{:else}Entrou como {item.para}{/if}
+								{#if item.tipo === 'grupo'}
+									{#if item.de && item.para}{item.de} → {item.para}{:else if item.para}Entrou no
+										{item.para}{:else}Saiu do {item.de}{/if}
+								{:else if item.de}{item.de} → {item.para}{:else}Entrou como {item.para}{/if}
 							</strong>
 							{#if item.motivo}<span class="motivo">{item.motivo}</span>{/if}
 						</div>
@@ -309,6 +358,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--esp-3);
+	}
+
+	.grupo-atual {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--esp-2);
+		margin: 0 0 var(--esp-3);
+	}
+
+	.grupo-atual a {
+		text-decoration: none;
 	}
 
 	.vinculos,

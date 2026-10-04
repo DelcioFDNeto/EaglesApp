@@ -38,6 +38,9 @@ const CONSELHEIRO_PERMISSIONS: Permission[] = [
 	'person.update',
 	'person.view_sensitive',
 	'person.invite',
+	// Com escopo do grupo, `group.manage` é editar o combinado do PRÓPRIO PG —
+	// dia, horário, local. Criar e arquivar exigem escopo global (D-M04-3).
+	'group.manage',
 	'group.assign_member',
 	'event.manage',
 	'event.publish',
@@ -64,7 +67,6 @@ export const ROLE_SEEDS: RoleSeed[] = [
 			...CONSELHEIRO_PERMISSIONS,
 			'person.delete',
 			'person.export',
-			'group.manage',
 			'finance.view_all',
 			'finance.approve',
 			'finance.reverse',

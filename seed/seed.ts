@@ -1,8 +1,9 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import postgres from 'postgres';
 import {
 	featureFlag,
+	groupMembership,
 	membershipStatus,
 	personStatusHistory,
 	permission,
@@ -10,6 +11,7 @@ import {
 	personRole,
 	role,
 	rolePermission,
+	smallGroup,
 	team,
 	userAccount
 } from '../src/lib/server/db/schema';
@@ -33,6 +35,9 @@ import { issueInvite } from '../src/lib/server/auth/invite';
  */
 
 const SENHA_DEV = 'eagles-desenvolvimento';
+
+const PG_AZUL = '018f0000-0000-7000-8000-00000000a001';
+const PG_VERDE = '018f0000-0000-7000-8000-00000000a002';
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -121,12 +126,55 @@ try {
 	const estagioPorChave = new Map(estagios.map((e) => [e.key, e.id]));
 	console.log(`${estagios.length} estágios da jornada semeados.`);
 
+	// --- Grupos (M04) ---------------------------------------------------------
+	// Ids fixos: a semente é idempotente, e as atribuições de conselheiro
+	// apontam para eles desde antes de a tabela existir (a migração 0005 os
+	// criou como "a nomear" num banco já semeado — aqui ganham nome).
+	const GRUPOS = [
+		{
+			id: PG_AZUL,
+			name: 'PG Azul',
+			color: '#2563EB',
+			meetingWeekday: 4,
+			meetingTime: '20:00',
+			location: 'Casa do Pedro — Rua das Acácias, 120'
+		},
+		{
+			id: PG_VERDE,
+			name: 'PG Verde',
+			color: '#16A34A',
+			meetingWeekday: 2,
+			meetingTime: '19:30',
+			location: 'Salão da igreja, sala 3'
+		}
+	];
+
+	for (const g of GRUPOS) {
+		await db
+			.insert(smallGroup)
+			.values({ ...g, teamId: equipe.id })
+			.onConflictDoUpdate({
+				target: smallGroup.id,
+				set: {
+					name: g.name,
+					color: g.color,
+					meetingWeekday: g.meetingWeekday,
+					meetingTime: g.meetingTime,
+					location: g.location
+				}
+			});
+	}
+	console.log(`${GRUPOS.length} grupos semeados.`);
+
 	// --- Pessoas -------------------------------------------------------------
 	const PESSOAS: Array<{
 		nome: string;
 		papel: string;
 		email?: string;
+		/** Grupo do ESCOPO do papel (conselheiro). */
 		grupo?: string;
+		/** Grupo de que a pessoa FAZ PARTE. Independente do papel (seção 5.2). */
+		pg?: string;
 		estagio?: string;
 		telefone?: string;
 		nascimento?: string;
@@ -143,19 +191,21 @@ try {
 			nome: 'Pedro Henrique Vasconcelos',
 			papel: 'conselheiro',
 			email: 'pedro@eagles.local',
-			grupo: '018f0000-0000-7000-8000-00000000a001',
+			grupo: PG_AZUL,
 			estagio: 'membro',
 			telefone: '11987650002',
-			nascimento: '1996-05-18'
+			nascimento: '1996-05-18',
+			pg: PG_AZUL
 		},
 		{
 			nome: 'Marina Souza Albuquerque',
 			papel: 'conselheiro',
 			email: 'marina@eagles.local',
-			grupo: '018f0000-0000-7000-8000-00000000a002',
+			grupo: PG_VERDE,
 			estagio: 'membro',
 			telefone: '11987650003',
-			nascimento: '1997-09-02'
+			nascimento: '1997-09-02',
+			pg: PG_VERDE
 		},
 		{
 			nome: 'João Vitor Cavalcanti',
@@ -163,7 +213,8 @@ try {
 			email: 'joao@eagles.local',
 			estagio: 'membro',
 			telefone: '11987650004',
-			nascimento: '2001-07-30'
+			nascimento: '2001-07-30',
+			pg: PG_AZUL
 		},
 		{
 			nome: 'Letícia Ferreira dos Santos',
@@ -171,13 +222,25 @@ try {
 			email: 'leticia@eagles.local',
 			estagio: 'membro',
 			telefone: '11987650005',
-			nascimento: '2000-11-05'
+			nascimento: '2000-11-05',
+			pg: PG_VERDE
 		},
-		{ nome: 'Rafael Monteiro', papel: 'membro', estagio: 'membro', nascimento: '1999-01-22' },
-		{ nome: 'Camila Rodrigues Nascimento', papel: 'membro', estagio: 'participante_recorrente' },
-		{ nome: 'Gustavo Lima', papel: 'membro', estagio: 'participante_recorrente' },
-		{ nome: 'Isabela Martins Carvalho', papel: 'visitante', estagio: 'visitante' },
-		{ nome: 'Thiago Barbosa', papel: 'visitante', estagio: 'visitante' }
+		{
+			nome: 'Rafael Monteiro',
+			papel: 'membro',
+			estagio: 'membro',
+			nascimento: '1999-01-22',
+			pg: PG_AZUL
+		},
+		{
+			nome: 'Camila Rodrigues Nascimento',
+			papel: 'membro',
+			estagio: 'participante_recorrente',
+			pg: PG_AZUL
+		},
+		{ nome: 'Gustavo Lima', papel: 'membro', estagio: 'participante_recorrente', pg: PG_VERDE },
+		{ nome: 'Isabela Martins Carvalho', papel: 'visitante', estagio: 'visitante', pg: PG_AZUL },
+		{ nome: 'Thiago Barbosa', papel: 'visitante', estagio: 'visitante', pg: PG_VERDE }
 	];
 
 	const senhaHash = await hashPassword(SENHA_DEV);
@@ -244,6 +307,34 @@ try {
 
 	console.log(`${criadas} pessoas criadas (${PESSOAS.length} no total).`);
 
+	// --- Composição dos grupos ----------------------------------------------
+	// Separada da criação para valer também num banco semeado antes do M04:
+	// quem ainda não está em grupo nenhum entra no seu.
+	let distribuidas = 0;
+	for (const p of PESSOAS) {
+		if (!p.pg) continue;
+
+		const [pessoa] = await db
+			.select({ id: person.id })
+			.from(person)
+			.where(eq(person.fullName, p.nome))
+			.limit(1);
+		if (!pessoa) continue;
+
+		const [aberto] = await db
+			.select({ id: groupMembership.id })
+			.from(groupMembership)
+			.where(and(eq(groupMembership.personId, pessoa.id), isNull(groupMembership.leftAt)))
+			.limit(1);
+		if (aberto) continue;
+
+		await db
+			.insert(groupMembership)
+			.values({ groupId: p.pg, personId: pessoa.id, addedByPersonId: liderId });
+		distribuidas++;
+	}
+	console.log(`${distribuidas} pessoas colocadas nos grupos.`);
+
 	// --- Um convite aberto, para testar o fluxo de entrada -------------------
 	if (liderId) {
 		const [semConta] = await db
@@ -264,10 +355,10 @@ try {
 
 	console.log(`\nContas prontas — senha: ${SENHA_DEV}`);
 	console.log('  ana@eagles.local      líder (acesso total)');
-	console.log('  pedro@eagles.local    conselheiro do PG A');
-	console.log('  marina@eagles.local   conselheira do PG B');
-	console.log('  joao@eagles.local     membro');
-	console.log('  leticia@eagles.local  membro');
+	console.log('  pedro@eagles.local    conselheiro do PG Azul');
+	console.log('  marina@eagles.local   conselheira do PG Verde');
+	console.log('  joao@eagles.local     membro do PG Azul');
+	console.log('  leticia@eagles.local  membro do PG Verde');
 
 	await cliente.end();
 	process.exit(0);

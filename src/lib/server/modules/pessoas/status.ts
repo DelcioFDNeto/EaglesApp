@@ -1,6 +1,12 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
 import type { Database } from '$server/db';
-import { membershipStatus, person, personStatusHistory } from '$server/db/schema';
+import {
+	groupMembership,
+	membershipStatus,
+	person,
+	personStatusHistory,
+	smallGroup
+} from '$server/db/schema';
 import { audit } from '$server/audit/log';
 
 /**
@@ -119,25 +125,28 @@ export async function mudarEstagio(
 
 export type ItemDaLinhaDoTempo = {
 	id: string;
+	/** Estágio da jornada ou passagem por grupo. */
+	tipo: 'estagio' | 'grupo';
 	occurredAt: Date;
 	de: string | null;
-	para: string;
+	/** Nulo só em grupo: a pessoa saiu e não entrou em outro. */
+	para: string | null;
 	motivo: string | null;
 	porPersonId: string | null;
 };
 
 /**
- * Linha do tempo da pessoa (RF-02.5).
+ * Linha do tempo da pessoa (RF-02.5): estágios e grupos, do mais recente ao
+ * mais antigo. Eventos entram no M05.
  *
- * Hoje só traz mudanças de estágio. Grupos entram no M04 e eventos no M05 —
- * a assinatura já devolve uma lista genérica para que os dois se juntem aqui
- * sem quebrar quem consome.
+ * Uma transferência são duas linhas no banco — o vínculo que fecha e o que
+ * abre, no mesmo instante —, mas UM fato para quem lê: "PG Azul → PG Verde".
  */
 export async function linhaDoTempo(db: Database, personId: string): Promise<ItemDaLinhaDoTempo[]> {
 	// Duas consultas em vez de um self-join com alias: a tabela de estágios tem
 	// meia dúzia de linhas, e o join duplo deixaria a consulta bem menos legível
 	// para economizar um round-trip que não pesa nesta escala.
-	const [linhas, estagios] = await Promise.all([
+	const [linhas, estagios, passagens] = await Promise.all([
 		db
 			.select({
 				id: personStatusHistory.id,
@@ -151,17 +160,67 @@ export async function linhaDoTempo(db: Database, personId: string): Promise<Item
 			.where(eq(personStatusHistory.personId, personId))
 			.orderBy(desc(personStatusHistory.occurredAt)),
 
-		db.select({ id: membershipStatus.id, name: membershipStatus.name }).from(membershipStatus)
+		db.select({ id: membershipStatus.id, name: membershipStatus.name }).from(membershipStatus),
+
+		db
+			.select({
+				id: groupMembership.id,
+				grupo: smallGroup.name,
+				entrada: groupMembership.joinedAt,
+				saida: groupMembership.leftAt,
+				motivoDaSaida: groupMembership.leftReason,
+				porQuemEntrou: groupMembership.addedByPersonId,
+				porQuemSaiu: groupMembership.endedByPersonId
+			})
+			.from(groupMembership)
+			.innerJoin(smallGroup, eq(smallGroup.id, groupMembership.groupId))
+			.where(eq(groupMembership.personId, personId))
+			.orderBy(asc(groupMembership.joinedAt))
 	]);
 
 	const nome = new Map(estagios.map((e) => [e.id, e.name]));
 
-	return linhas.map((l) => ({
+	const itens: ItemDaLinhaDoTempo[] = linhas.map((l) => ({
 		id: l.id,
+		tipo: 'estagio' as const,
 		occurredAt: l.occurredAt,
 		de: l.fromStatusId ? (nome.get(l.fromStatusId) ?? null) : null,
 		para: nome.get(l.toStatusId) ?? 'estágio removido',
 		motivo: l.motivo,
 		porPersonId: l.porPersonId
 	}));
+
+	for (const p of passagens) {
+		const anterior = passagens.find(
+			(outra) => outra.saida !== null && outra.saida.getTime() === p.entrada.getTime()
+		);
+		const seguinte = passagens.find(
+			(outra) => p.saida !== null && outra.entrada.getTime() === p.saida.getTime()
+		);
+
+		itens.push({
+			id: `${p.id}:entrada`,
+			tipo: 'grupo',
+			occurredAt: p.entrada,
+			de: anterior?.grupo ?? null,
+			para: p.grupo,
+			motivo: anterior?.motivoDaSaida ?? null,
+			porPersonId: p.porQuemEntrou
+		});
+
+		// A saída que é metade de uma transferência já está no item acima.
+		if (p.saida && !seguinte) {
+			itens.push({
+				id: `${p.id}:saida`,
+				tipo: 'grupo',
+				occurredAt: p.saida,
+				de: p.grupo,
+				para: null,
+				motivo: p.motivoDaSaida,
+				porPersonId: p.porQuemSaiu
+			});
+		}
+	}
+
+	return itens.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
 }

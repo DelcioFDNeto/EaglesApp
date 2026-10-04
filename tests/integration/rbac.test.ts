@@ -8,7 +8,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { criarBancoDeTeste, type BancoDeTeste } from './helpers/banco';
+import { criarBancoDeTeste, criarGrupo, type BancoDeTeste } from './helpers/banco';
 import {
 	auditLog,
 	person,
@@ -139,7 +139,7 @@ describe('quem administra', () => {
 
 	it('rbac.manage de GRUPO não administra: o escopo precisa ser global', async () => {
 		const conselheiro = await ator(
-			await pessoa('conselheiro', { escopoGrupo: '018f0000-0000-7000-8000-0000000000aa' })
+			await pessoa('conselheiro', { escopoGrupo: await criarGrupo(ctx, 'PG do teste') })
 		);
 		// Mesmo que alguém desse rbac.manage ao papel de conselheiro, a
 		// verificação sem contexto só aceita escopo global.

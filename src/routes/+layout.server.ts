@@ -21,6 +21,10 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		itens.push({ href: '/pessoas', rotulo: 'Pessoas', icone: 'pessoas' });
 	}
 
+	if (canAnywhere(locals.actor, 'group.view')) {
+		itens.push({ href: '/grupos', rotulo: 'Grupos', icone: 'grupos' });
+	}
+
 	// Sem contexto: só o escopo global administra acesso.
 	if (can(locals.actor, 'rbac.manage')) {
 		itens.push({ href: '/admin/papeis', rotulo: 'Acessos', icone: 'acessos' });

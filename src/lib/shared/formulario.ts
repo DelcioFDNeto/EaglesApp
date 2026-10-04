@@ -10,7 +10,7 @@
  * É também o "formato de erro padronizado" que o M01 definiu: campo, código e
  * mensagem em português, dizendo o que aconteceu e como resolver.
  */
-export type FalhaDeFormulario<Extra = Record<string, never>> = {
+export type FalhaDeFormulario<Extra extends object = object> = {
 	/** Mensagem geral, quando o problema não é de um campo específico. */
 	erro?: string;
 	/** O que a pessoa digitou, para não perder o preenchimento. */

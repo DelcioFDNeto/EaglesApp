@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 import type { Database } from '$server/db';
-import { person, personRole, role, rolePermission } from '$server/db/schema';
+import { person, personRole, role, rolePermission, smallGroup } from '$server/db/schema';
 import { audit } from '$server/audit/log';
 import { authorize, type Actor } from '$server/policy/policy';
 import { isPermission, type ScopeType } from '$server/policy/permissions';
@@ -84,11 +84,16 @@ export async function atribuicoesDe(db: Database, personId: string): Promise<Atr
  * As quatro travas se aplicam: rbac.manage global, reautenticação, ninguém
  * mexe no próprio acesso, e ninguém concede o que não tem — o papel inteiro
  * precisa caber nas permissões de quem atribui.
+ *
+ * Papel de escopo `group` exige `grupoId` — é o que a tela do grupo manda
+ * (M04). Papel global ou próprio recusa `grupoId`: aceitar e ignorar faria
+ * quem atribuiu achar que deu um acesso restrito a um grupo, quando deu um
+ * acesso à equipe inteira.
  */
 export async function atribuirPapel(
 	db: Database,
 	actor: Actor,
-	entrada: { personId: string; roleId: string },
+	entrada: { personId: string; roleId: string; grupoId?: string | null },
 	contexto: ContextoSensivel
 ): Promise<void> {
 	authorize(actor, 'rbac.manage');
@@ -115,11 +120,32 @@ export async function atribuirPapel(
 		.limit(1);
 	if (!papel) throw new AcessoRecusado('nao_encontrado', 'Esse papel não existe.');
 
-	if (papel.defaultScope === 'group') {
+	const grupoId = entrada.grupoId ?? null;
+
+	if (papel.defaultScope === 'group' && !grupoId) {
 		throw new AcessoRecusado(
 			'escopo_de_grupo',
 			`"${papel.name}" vale para um grupo específico e é atribuído pela tela do grupo.`
 		);
+	}
+
+	if (papel.defaultScope !== 'group' && grupoId) {
+		throw new AcessoRecusado(
+			'escopo_de_grupo',
+			`"${papel.name}" vale para a equipe inteira e é atribuído pela tela da pessoa.`
+		);
+	}
+
+	if (grupoId) {
+		const [grupo] = await db
+			.select({ id: smallGroup.id, arquivadoEm: smallGroup.archivedAt })
+			.from(smallGroup)
+			.where(and(eq(smallGroup.id, grupoId), eq(smallGroup.teamId, actor.teamId)))
+			.limit(1);
+		if (!grupo) throw new AcessoRecusado('nao_encontrado', 'Esse grupo não existe.');
+		if (grupo.arquivadoEm) {
+			throw new AcessoRecusado('escopo_de_grupo', 'Grupo arquivado não recebe responsáveis.');
+		}
 	}
 
 	const permissoesDoPapel = (
@@ -138,7 +164,7 @@ export async function atribuirPapel(
 			personId: entrada.personId,
 			roleId: papel.id,
 			scopeType: papel.defaultScope,
-			scopeId: null,
+			scopeId: grupoId,
 			grantedByPersonId: actor.personId
 		})
 		// Já tem o papel: o pedido está satisfeito. Repetir não é erro.
@@ -157,7 +183,8 @@ export async function atribuirPapel(
 			personId: entrada.personId,
 			roleId: papel.id,
 			papel: papel.name,
-			scopeType: papel.defaultScope
+			scopeType: papel.defaultScope,
+			scopeId: grupoId
 		},
 		ip: contexto.ip,
 		userAgent: contexto.userAgent
