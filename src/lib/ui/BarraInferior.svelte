@@ -12,7 +12,7 @@
 	export type ItemDeNavegacao = {
 		href: string;
 		rotulo: string;
-		icone: 'inicio' | 'pessoas' | 'grupos' | 'acessos' | 'conta';
+		icone: 'inicio' | 'agenda' | 'pessoas' | 'grupos' | 'mais';
 	};
 
 	let { itens }: { itens: ItemDeNavegacao[] } = $props();
@@ -22,12 +22,13 @@
 
 	const caminhos: Record<ItemDeNavegacao['icone'], string> = {
 		inicio: 'M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z',
+		agenda:
+			'M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm-1 5h16M8 3v4m8-4v4',
 		pessoas:
 			'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-6 9c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.4c1.8.9 3 2.9 3 5.6',
 		grupos:
 			'M7.5 10.5a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5Zm9 0a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM12 19.5a2.75 2.75 0 1 0 0-5.5 2.75 2.75 0 0 0 0 5.5ZM3 16.5c.4-2.3 2.2-3.8 4.5-3.8M21 16.5c-.4-2.3-2.2-3.8-4.5-3.8',
-		acessos: 'M12 3 5 6v5c0 4.4 3 8.4 7 9.5 4-1.1 7-5.1 7-9.5V6zm-2.5 9 2 2 3.5-4',
-		conta: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 9c0-3.9 3.1-7 7-7s7 3.1 7 7'
+		mais: 'M4 7h16M4 12h16M4 17h16'
 	};
 </script>
 

@@ -4,6 +4,7 @@
 	import Aviso from '$ui/Aviso.svelte';
 	import Botao from '$ui/Botao.svelte';
 	import InstalarPwa from '$ui/InstalarPwa.svelte';
+	import CartaoDeEvento from '$ui/CartaoDeEvento.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -75,19 +76,30 @@
 				</section>
 			{/if}
 
-			<!--
-			Estado vazio verdadeiro: no M01 não existe evento porque o módulo de
-			eventos é o M05. A mensagem diz isso com voz humana, sem fingir que
-			há um erro nem escrever "Nenhum registro encontrado".
-		-->
-			<section class="cartao vazio">
-				<Marca tamanho={44} />
-				<h2>Ainda não há encontros por aqui</h2>
-				<p>
-					Quando a agenda dos Eagles estiver no ar, seus próximos encontros aparecem nesta tela — e
-					você confirma presença em um toque.
-				</p>
-			</section>
+			{#if data.proximos.length > 0}
+				<section class="cartao" aria-label="Seus próximos encontros">
+					<h2>Seus próximos encontros</h2>
+					<ul class="eventos">
+						{#each data.proximos as evento (evento.id)}
+							<li><CartaoDeEvento {evento} mostrarData /></li>
+						{/each}
+					</ul>
+					<a class="ver-agenda" href="/agenda">Ver a agenda completa</a>
+				</section>
+			{:else}
+				<!--
+					Estado vazio verdadeiro: nada foi publicado para esta pessoa. A
+					mensagem diz isso com voz humana, sem fingir que há um erro.
+				-->
+				<section class="cartao vazio">
+					<Marca tamanho={44} />
+					<h2>Nenhum encontro marcado para você</h2>
+					<p>
+						Quando houver um encontro do seu grupo ou da equipe, ele aparece aqui — e, em breve,
+						você confirma presença em um toque.
+					</p>
+				</section>
+			{/if}
 
 			<section class="cartao">
 				<h2>Seu acesso</h2>
@@ -143,6 +155,20 @@
 </main>
 
 <style>
+	.eventos {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.ver-agenda {
+		font-size: var(--texto-sm);
+		align-self: flex-start;
+	}
+
 	.grupos {
 		list-style: none;
 		padding: 0;

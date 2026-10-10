@@ -7,6 +7,8 @@ import { candidatosParaGrupo, mudarDeGrupo } from '$server/modules/grupos/compos
 import { GrupoRecusado, statusDaRecusaDeGrupo } from '$server/modules/grupos/regras';
 import { atribuirPapel, removerAtribuicao } from '$server/modules/rbac/atribuicoes';
 import { listarPapeis } from '$server/modules/rbac/papeis';
+import { proximosEventos, serieAtivaDoGrupo } from '$server/modules/eventos/eventos';
+import { tipoDoEncontroDoGrupo } from '$server/modules/eventos/tipos';
 import { pessoasParaEscolha } from '$server/modules/pessoas/pessoas';
 import { AcessoRecusado, statusDaRecusa } from '$server/modules/rbac/regras';
 import type { Actions, PageServerLoad } from './$types';
@@ -43,6 +45,17 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		podeGerirResponsaveis ? pessoasParaEscolha(banco, actor) : Promise.resolve([])
 	]);
 
+	// Agenda do grupo (M05): os próximos encontros e, para quem cuida dos
+	// eventos do grupo, o atalho do encontro semanal.
+	const podeGerenciarEventos = ativo && can(actor, 'event.manage', { groupId: grupo.id });
+	const [proximos, serie, tipoDoGrupo] = await Promise.all([
+		canAnywhere(actor, 'event.view')
+			? proximosEventos(banco, actor, { limite: 3, grupoId: grupo.id })
+			: Promise.resolve([]),
+		podeGerenciarEventos ? serieAtivaDoGrupo(banco, actor.teamId, grupo.id) : Promise.resolve(null),
+		podeGerenciarEventos ? tipoDoEncontroDoGrupo(banco, actor.teamId) : Promise.resolve(null)
+	]);
+
 	// Só papéis de escopo de grupo: os demais valem para a equipe inteira e
 	// são atribuídos pela tela da pessoa (D-M03-1).
 	const papeisDeGrupo = papeis.filter((p) => p.defaultScope === 'group');
@@ -63,6 +76,13 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		})),
 		papeisDeGrupo: papeisDeGrupo.map((p) => ({ valor: p.id, rotulo: p.name })),
 		pessoasDaEquipe: pessoasDaEquipe.map((p) => ({ valor: p.id, rotulo: p.nome })),
+		proximos: proximos.map((e) => ({
+			...e,
+			inicio: e.inicio.toISOString(),
+			fim: e.fim?.toISOString() ?? null
+		})),
+		serieAtiva: serie,
+		podeCriarEncontroSemanal: podeGerenciarEventos && !serie && !!tipoDoGrupo,
 		podeEditar: ativo && can(actor, 'group.manage', { groupId: grupo.id }),
 		podeArquivar: can(actor, 'group.manage'),
 		podeColocar,

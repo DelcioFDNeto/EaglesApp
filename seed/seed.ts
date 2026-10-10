@@ -2,6 +2,9 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { and, eq, isNull } from 'drizzle-orm';
 import postgres from 'postgres';
 import {
+	event,
+	eventSeries,
+	eventType,
 	featureFlag,
 	groupMembership,
 	membershipStatus,
@@ -21,6 +24,13 @@ import { ESTAGIOS_SEMENTE } from '../src/lib/server/modules/pessoas/estagios-sem
 import { ROLE_SEEDS } from '../src/lib/server/policy/roles';
 import { hashPassword } from '../src/lib/server/auth/password';
 import { issueInvite } from '../src/lib/server/auth/invite';
+import { TIPOS_SEMENTE } from '../src/lib/server/modules/eventos/tipos-semente';
+import { criarEvento } from '../src/lib/server/modules/eventos/eventos';
+import { eventoSchema } from '../src/lib/server/modules/eventos/validacao';
+import type { Alvo } from '../src/lib/server/modules/eventos/regras';
+import { loadActor } from '../src/lib/server/policy/actor';
+import { diaDaSemana, hojeNoFuso, somarDias } from '../src/lib/shared/fuso';
+import type { Database } from '../src/lib/server/db';
 
 /**
  * Semeadura do ambiente de desenvolvimento.
@@ -334,6 +344,148 @@ try {
 		distribuidas++;
 	}
 	console.log(`${distribuidas} pessoas colocadas nos grupos.`);
+
+	// --- Agenda (M05) --------------------------------------------------------
+	// Tipos de evento como dados (RN-10); o resto entra pelo serviço, com a
+	// líder como autora — é o caminho de verdade, com materialização,
+	// público-alvo e auditoria.
+	await db
+		.insert(eventType)
+		.values(TIPOS_SEMENTE.map((t) => ({ ...t, teamId: equipe!.id })))
+		.onConflictDoNothing();
+	const tipos = await db
+		.select({ id: eventType.id, key: eventType.key })
+		.from(eventType)
+		.where(eq(eventType.teamId, equipe.id));
+	const tipoPorChave = new Map(tipos.map((t) => [t.key, t.id]));
+	console.log(`${tipos.length} tipos de evento.`);
+
+	const lider = liderId ? await loadActor(db as unknown as Database, liderId) : null;
+	if (lider) {
+		const hoje = hojeNoFuso(equipe.timezone);
+		/** Próxima data (a partir de amanhã) com o dia da semana pedido. */
+		const proximo = (dia: number, depoisDe = 1) => {
+			let d = somarDias(hoje, depoisDe);
+			while (diaDaSemana(d) !== dia) d = somarDias(d, 1);
+			return d;
+		};
+		const pessoaPorEmail = async (email: string) => {
+			const [c] = await db
+				.select({ id: userAccount.personId })
+				.from(userAccount)
+				.where(eq(userAccount.email, email))
+				.limit(1);
+			return c?.id ?? null;
+		};
+
+		const AGENDA: Array<{
+			titulo: string;
+			tipo: string;
+			grupoId?: string;
+			semanal?: boolean;
+			data: string;
+			horaInicio: string;
+			horaFim?: string;
+			local?: string;
+			publicar: boolean;
+			publico: Alvo[];
+		}> = [
+			{
+				titulo: 'PG Azul',
+				tipo: 'encontro_pg',
+				grupoId: PG_AZUL,
+				semanal: true,
+				data: proximo(4),
+				horaInicio: '20:00',
+				horaFim: '22:30',
+				local: 'Casa do Pedro — Rua das Acácias, 120',
+				publicar: true,
+				publico: [{ tipo: 'grupo', groupId: PG_AZUL }]
+			},
+			{
+				titulo: 'PG Verde',
+				tipo: 'encontro_pg',
+				grupoId: PG_VERDE,
+				semanal: true,
+				data: proximo(2),
+				horaInicio: '19:30',
+				horaFim: '21:30',
+				local: 'Salão da igreja, sala 3',
+				publicar: true,
+				publico: [{ tipo: 'grupo', groupId: PG_VERDE }]
+			},
+			{
+				titulo: 'Encontro geral dos Eagles',
+				tipo: 'encontro_geral',
+				data: proximo(6, 7),
+				horaInicio: '19:00',
+				horaFim: '21:00',
+				local: 'Salão principal',
+				publicar: true,
+				publico: [{ tipo: 'equipe' }]
+			},
+			{
+				titulo: 'Reunião de liderança',
+				tipo: 'reuniao_lideranca',
+				data: proximo(1),
+				horaInicio: '20:00',
+				local: 'Online',
+				publicar: true,
+				publico: (
+					await Promise.all(
+						['ana@eagles.local', 'pedro@eagles.local', 'marina@eagles.local'].map(pessoaPorEmail)
+					)
+				)
+					.filter((id): id is string => !!id)
+					.map((personId) => ({ tipo: 'pessoa' as const, personId }))
+			},
+			{
+				// Rascunho de propósito: mostra que o rascunho só aparece para
+				// quem pode gerenciá-lo (D-M05-6).
+				titulo: 'Outside — inscrições',
+				tipo: 'evento_especial',
+				data: proximo(6, 35),
+				horaInicio: '09:00',
+				local: 'A definir',
+				publicar: false,
+				publico: [{ tipo: 'equipe' }]
+			}
+		];
+
+		let novos = 0;
+		for (const item of AGENDA) {
+			const [jaTemEvento] = await db
+				.select({ id: event.id })
+				.from(event)
+				.where(and(eq(event.teamId, equipe.id), eq(event.title, item.titulo)))
+				.limit(1);
+			const [jaTemSerie] = await db
+				.select({ id: eventSeries.id })
+				.from(eventSeries)
+				.where(and(eq(eventSeries.teamId, equipe.id), eq(eventSeries.title, item.titulo)))
+				.limit(1);
+			if (jaTemEvento || jaTemSerie) continue;
+
+			await criarEvento(
+				db as unknown as Database,
+				lider,
+				eventoSchema.parse({
+					tipoId: tipoPorChave.get(item.tipo),
+					titulo: item.titulo,
+					local: item.local,
+					grupoId: item.grupoId,
+					data: item.data,
+					horaInicio: item.horaInicio,
+					horaFim: item.horaFim,
+					recorrencia: item.semanal ? 'semanal' : 'unica',
+					publicar: item.publicar
+				}),
+				item.publico
+			);
+			novos++;
+		}
+		console.log(`${novos} eventos e encontros semanais criados.`);
+	}
 
 	// --- Um convite aberto, para testar o fluxo de entrada -------------------
 	if (liderId) {

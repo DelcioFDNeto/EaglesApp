@@ -35,7 +35,9 @@ const ROTAS_PUBLICAS: Record<string, string> = {
 	'sair/+page.server.ts': 'Encerra a própria sessão; sem sessão, nada acontece.',
 	'api/health/+server.ts': 'Monitor externo e CI consultam sem credencial; não devolve dado.',
 	'sou-novo/+page.server.ts':
-		'Autocadastro de visitante: público por decisão, atrás de chave desligada por padrão e com limite por IP.'
+		'Autocadastro de visitante: público por decisão, atrás de chave desligada por padrão e com limite por IP.',
+	'e/[codigo]/+page.server.ts':
+		'Link público do evento (D-M05-8): código de 10 caracteres aleatórios, só evento publicado, sem dado de pessoa.'
 };
 
 /**
@@ -50,7 +52,9 @@ const ROTAS_PUBLICAS: Record<string, string> = {
  */
 const ROTAS_DA_PROPRIA_CONTA: Record<string, string> = {
 	'conta/sessoes/+page.server.ts': 'Ver e encerrar os próprios aparelhos conectados.',
-	'conta/confirmar/+page.server.ts': 'Confirmar a própria senha antes de uma ação sensível.'
+	'conta/confirmar/+page.server.ts': 'Confirmar a própria senha antes de uma ação sensível.',
+	'mais/+page.server.ts':
+		'Lista de destinos de uso eventual; cada destino verifica a própria permissão.'
 };
 
 /**

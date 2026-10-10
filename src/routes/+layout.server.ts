@@ -1,4 +1,4 @@
-import { can, canAnywhere } from '$server/policy/policy';
+import { canAnywhere } from '$server/policy/policy';
 import type { ItemDeNavegacao } from '$ui/BarraInferior.svelte';
 import type { LayoutServerLoad } from './$types';
 
@@ -15,7 +15,13 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ locals }) => {
 	if (!locals.actor) return { navegacao: null };
 
+	// No máximo 5 itens (Anexo A.3). O que é de uso eventual — a própria
+	// conta, papéis e acessos, tipos de evento — mora em "Mais" (D-M05-9).
 	const itens: ItemDeNavegacao[] = [{ href: '/inicio', rotulo: 'Início', icone: 'inicio' }];
+
+	if (canAnywhere(locals.actor, 'event.view')) {
+		itens.push({ href: '/agenda', rotulo: 'Agenda', icone: 'agenda' });
+	}
 
 	if (canAnywhere(locals.actor, 'person.view')) {
 		itens.push({ href: '/pessoas', rotulo: 'Pessoas', icone: 'pessoas' });
@@ -25,12 +31,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 		itens.push({ href: '/grupos', rotulo: 'Grupos', icone: 'grupos' });
 	}
 
-	// Sem contexto: só o escopo global administra acesso.
-	if (can(locals.actor, 'rbac.manage')) {
-		itens.push({ href: '/admin/papeis', rotulo: 'Acessos', icone: 'acessos' });
-	}
-
-	itens.push({ href: '/conta/sessoes', rotulo: 'Conta', icone: 'conta' });
+	itens.push({ href: '/mais', rotulo: 'Mais', icone: 'mais' });
 
 	return { navegacao: itens };
 };

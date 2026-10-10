@@ -7,6 +7,7 @@
 	import Seletor from '$ui/Seletor.svelte';
 	import EstadoVazio from '$ui/EstadoVazio.svelte';
 	import PedidoDeReautenticacao from '$ui/PedidoDeReautenticacao.svelte';
+	import CartaoDeEvento from '$ui/CartaoDeEvento.svelte';
 	import { formatarTelefone } from '$shared/pessoa';
 	import { formatarCombinado } from '$shared/grupo';
 	import type { ActionData, PageData } from './$types';
@@ -71,6 +72,28 @@
 		{/if}
 		{#if combinado}<p class="combinado">{combinado}</p>{/if}
 		{#if g.descricao}<p class="descricao">{g.descricao}</p>{/if}
+	</section>
+
+	<section class="cartao" aria-label="Próximos encontros">
+		<h3>Próximos encontros</h3>
+		{#if data.proximos.length === 0}
+			<p class="legenda">Nada marcado para este grupo.</p>
+		{:else}
+			<ul class="eventos">
+				{#each data.proximos as evento (evento.id)}
+					<li><CartaoDeEvento {evento} mostrarData /></li>
+				{/each}
+			</ul>
+		{/if}
+		{#if data.serieAtiva}
+			<Botao href="/agenda/series/{data.serieAtiva.id}" variante="secundario">
+				Encontro semanal
+			</Botao>
+		{:else if data.podeCriarEncontroSemanal}
+			<Botao href="/agenda/novo?grupo={g.id}&semanal=1" variante="secundario">
+				Criar o encontro semanal
+			</Botao>
+		{/if}
 	</section>
 
 	<section class="cartao" aria-label="Responsáveis">
@@ -257,6 +280,15 @@
 </main>
 
 <style>
+	.eventos {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
 	.conteudo {
 		max-width: 560px;
 		margin-inline: auto;

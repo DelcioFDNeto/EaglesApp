@@ -1,6 +1,6 @@
 /**
- * Schema do Eagles App — Módulos 01 (Fundação), 02 (Pessoas), 03 (RBAC) e
- * 04 (Grupos).
+ * Schema do Eagles App — Módulos 01 (Fundação), 02 (Pessoas), 03 (RBAC),
+ * 04 (Grupos) e 05 (Eventos).
  *
  * Só entram aqui as tabelas que os módulos entregues usam de fato. Grupos,
  * eventos, presença, responsabilidades e financeiro chegam nos seus próprios
@@ -48,6 +48,11 @@ export const team = pgTable('team', {
 	id: pk(),
 	slug: text('slug').notNull().unique(),
 	name: text('name').notNull(),
+	/**
+	 * Fuso da equipe (D-M05-3). "Quinta às 20h" só vira um instante quando se
+	 * sabe de onde — sem isto, valeria o fuso da máquina, que na VPS é UTC.
+	 */
+	timezone: text('timezone').notNull().default('America/Sao_Paulo'),
 	createdAt: createdAt(),
 	updatedAt: updatedAt()
 });
@@ -417,6 +422,181 @@ export const groupMembership = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Eventos (M05)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tipos de evento são DADOS (RN-10): a semente cria quatro, a liderança cria
+ * outros pela tela.
+ *
+ * `isGroupMeeting` marca o tipo do encontro semanal do grupo — é por essa
+ * PROPRIEDADE, e não pela chave, que o atalho "criar o encontro semanal" do
+ * grupo o encontra (mesma regra dos estágios no M02). Um por equipe.
+ */
+export const eventType = pgTable(
+	'event_type',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id),
+		key: text('key').notNull(),
+		name: text('name').notNull(),
+		/** Cor da etiqueta na interface, em hexadecimal (#RRGGBB). */
+		color: text('color'),
+		isGroupMeeting: boolean('is_group_meeting').notNull().default(false),
+		position: integer('position').notNull().default(0),
+		/** Tipo com eventos não se apaga: arquiva-se. */
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		uniqueIndex('event_type_team_key_idx').on(t.teamId, t.key),
+		uniqueIndex('event_type_um_encontro_de_grupo_idx')
+			.on(t.teamId)
+			.where(sql`${t.isGroupMeeting} and ${t.archivedAt} is null`)
+	]
+);
+
+/**
+ * Série semanal (D-M05-1): dia, hora LOCAL, duração e intervalo em colunas
+ * que o banco valida — não uma RRULE em texto que ele não sabe ler.
+ *
+ * As ocorrências viram linhas em `event`, 12 semanas à frente, sob demanda
+ * (D-M05-2). `materializedUntil` diz até onde isso já foi feito.
+ */
+export const eventSeries = pgTable(
+	'event_series',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id),
+		typeId: uuid('type_id')
+			.notNull()
+			.references(() => eventType.id),
+		groupId: uuid('group_id').references(() => smallGroup.id),
+
+		title: text('title').notNull(),
+		description: text('description'),
+		location: text('location'),
+		ownerPersonId: uuid('owner_person_id').references(() => person.id),
+
+		/** 0 = domingo … 6 = sábado. */
+		weekday: smallint('weekday').notNull(),
+		/** Hora local no fuso da equipe — "20:00", não um instante. */
+		localTime: time('local_time').notNull(),
+		durationMinutes: integer('duration_minutes'),
+		/** 1 = toda semana, 2 = quinzenal… até 4. */
+		intervalWeeks: smallint('interval_weeks').notNull().default(1),
+
+		startsOn: date('starts_on').notNull(),
+		/** Última data possível. Nulo = sem fim definido. */
+		endsOn: date('ends_on'),
+		/** Até que data local as ocorrências já existem em `event`. */
+		materializedUntil: date('materialized_until').notNull(),
+
+		/** Nulo = rascunho (D-M05-6). */
+		publishedAt: timestamp('published_at', { withTimezone: true }),
+		createdByPersonId: uuid('created_by_person_id').references(() => person.id),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		index('event_series_team_idx').on(t.teamId),
+		index('event_series_group_idx').on(t.groupId)
+	]
+);
+
+/**
+ * Um compromisso na agenda: evento avulso ou ocorrência de uma série.
+ *
+ * `startsAt` é um INSTANTE (D-M05-3). `occurrenceDate` é a data local da
+ * ocorrência dentro da série — a chave que impede materializar duas vezes.
+ *
+ * `isException`: a ocorrência foi editada ou cancelada sozinha e se
+ * desprendeu da série (D-M05-4). Edições da série não a tocam mais.
+ *
+ * Nunca se apaga um evento que aconteceu: cancela-se. As únicas linhas que
+ * saem do banco são ocorrências FUTURAS de uma série encerrada.
+ */
+export const event = pgTable(
+	'event',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id),
+		typeId: uuid('type_id')
+			.notNull()
+			.references(() => eventType.id),
+		seriesId: uuid('series_id').references(() => eventSeries.id),
+		occurrenceDate: date('occurrence_date'),
+
+		title: text('title').notNull(),
+		description: text('description'),
+		location: text('location'),
+		startsAt: timestamp('starts_at', { withTimezone: true }).notNull(),
+		endsAt: timestamp('ends_at', { withTimezone: true }),
+
+		/** Grupo que realiza o evento — o contexto de permissão dele. */
+		groupId: uuid('group_id').references(() => smallGroup.id),
+		ownerPersonId: uuid('owner_person_id').references(() => person.id),
+
+		/** 'agendado' | 'cancelado' */
+		status: text('status').notNull().default('agendado'),
+		cancelReason: text('cancel_reason'),
+		isException: boolean('is_exception').notNull().default(false),
+
+		/** Nulo = rascunho (D-M05-6). */
+		publishedAt: timestamp('published_at', { withTimezone: true }),
+		/** Código do link público /e/<código> (D-M05-8). */
+		publicCode: text('public_code').notNull(),
+
+		createdByPersonId: uuid('created_by_person_id').references(() => person.id),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		uniqueIndex('event_public_code_idx').on(t.publicCode),
+		uniqueIndex('event_ocorrencia_unica_idx')
+			.on(t.seriesId, t.occurrenceDate)
+			.where(sql`${t.seriesId} is not null`),
+		index('event_team_inicio_idx').on(t.teamId, t.startsAt),
+		index('event_grupo_inicio_idx').on(t.groupId, t.startsAt)
+	]
+);
+
+/**
+ * Quem é convidado (RF-05.5): a equipe inteira, um grupo ou uma pessoa — de
+ * um evento OU de uma série (o molde copiado para cada ocorrência).
+ *
+ * Os dois "exatamente um" (dono e alvo) são CHECK na migração 0008.
+ */
+export const eventAudience = pgTable(
+	'event_audience',
+	{
+		id: pk(),
+		eventId: uuid('event_id').references(() => event.id, { onDelete: 'cascade' }),
+		seriesId: uuid('series_id').references(() => eventSeries.id, { onDelete: 'cascade' }),
+
+		/** 'equipe' | 'grupo' | 'pessoa' */
+		kind: text('kind').notNull(),
+		groupId: uuid('group_id').references(() => smallGroup.id),
+		personId: uuid('person_id').references(() => person.id, { onDelete: 'cascade' }),
+
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('event_audience_evento_idx').on(t.eventId),
+		index('event_audience_serie_idx').on(t.seriesId),
+		index('event_audience_grupo_idx').on(t.groupId),
+		index('event_audience_pessoa_idx').on(t.personId)
+	]
+);
+
+// ---------------------------------------------------------------------------
 // Acesso — conta, sessão e convite (ADR 0004)
 // ---------------------------------------------------------------------------
 
@@ -749,6 +929,30 @@ export const personRoleRelations = relations(personRole, ({ one }) => ({
 export const smallGroupRelations = relations(smallGroup, ({ many }) => ({
 	vinculos: many(groupMembership),
 	responsaveis: many(personRole)
+}));
+
+export const eventTypeRelations = relations(eventType, ({ many }) => ({
+	eventos: many(event),
+	series: many(eventSeries)
+}));
+
+export const eventSeriesRelations = relations(eventSeries, ({ one, many }) => ({
+	tipo: one(eventType, { fields: [eventSeries.typeId], references: [eventType.id] }),
+	grupo: one(smallGroup, { fields: [eventSeries.groupId], references: [smallGroup.id] }),
+	ocorrencias: many(event),
+	publico: many(eventAudience)
+}));
+
+export const eventRelations = relations(event, ({ one, many }) => ({
+	tipo: one(eventType, { fields: [event.typeId], references: [eventType.id] }),
+	serie: one(eventSeries, { fields: [event.seriesId], references: [eventSeries.id] }),
+	grupo: one(smallGroup, { fields: [event.groupId], references: [smallGroup.id] }),
+	publico: many(eventAudience)
+}));
+
+export const eventAudienceRelations = relations(eventAudience, ({ one }) => ({
+	evento: one(event, { fields: [eventAudience.eventId], references: [event.id] }),
+	serie: one(eventSeries, { fields: [eventAudience.seriesId], references: [eventSeries.id] })
 }));
 
 export const groupMembershipRelations = relations(groupMembership, ({ one }) => ({

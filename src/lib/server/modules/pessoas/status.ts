@@ -180,23 +180,42 @@ export async function linhaDoTempo(db: Database, personId: string): Promise<Item
 
 	const nome = new Map(estagios.map((e) => [e.id, e.name]));
 
-	const itens: ItemDaLinhaDoTempo[] = linhas.map((l) => ({
+	// Cada item leva a ordem em que aconteceu, para desempatar instantes
+	// iguais: uma transferência fecha e abre no MESMO instante, e um relógio de
+	// resolução grossa pode dar o mesmo instante até a ações separadas.
+	type ItemOrdenado = ItemDaLinhaDoTempo & { ordem: number };
+
+	const itens: ItemOrdenado[] = [...linhas].reverse().map((l, ordem) => ({
 		id: l.id,
 		tipo: 'estagio' as const,
 		occurredAt: l.occurredAt,
 		de: l.fromStatusId ? (nome.get(l.fromStatusId) ?? null) : null,
 		para: nome.get(l.toStatusId) ?? 'estágio removido',
 		motivo: l.motivo,
-		porPersonId: l.porPersonId
+		porPersonId: l.porPersonId,
+		ordem
 	}));
 
-	for (const p of passagens) {
-		const anterior = passagens.find(
-			(outra) => outra.saida !== null && outra.saida.getTime() === p.entrada.getTime()
-		);
-		const seguinte = passagens.find(
-			(outra) => p.saida !== null && outra.entrada.getTime() === p.saida.getTime()
-		);
+	const mesmoInstante = (a: Date | null, b: Date | null) =>
+		a !== null && b !== null && a.getTime() === b.getTime();
+
+	// Ordem cronológica das passagens. Com a mesma entrada, vem antes a que
+	// fechou no instante em que a outra abriu — é a metade "de" de uma
+	// transferência.
+	const cronologicas = [...passagens].sort((a, b) => {
+		const diferenca = a.entrada.getTime() - b.entrada.getTime();
+		if (diferenca !== 0) return diferenca;
+		if (mesmoInstante(a.saida, b.entrada)) return -1;
+		if (mesmoInstante(b.saida, a.entrada)) return 1;
+		return 0;
+	});
+
+	let ordem = 0;
+	for (const p of cronologicas) {
+		// Nunca a própria passagem: quem entrou e saiu no mesmo instante teria
+		// a saída igual à entrada, e viraria "PG Azul → PG Azul".
+		const anterior = cronologicas.find((o) => o.id !== p.id && mesmoInstante(o.saida, p.entrada));
+		const seguinte = cronologicas.find((o) => o.id !== p.id && mesmoInstante(p.saida, o.entrada));
 
 		itens.push({
 			id: `${p.id}:entrada`,
@@ -205,7 +224,8 @@ export async function linhaDoTempo(db: Database, personId: string): Promise<Item
 			de: anterior?.grupo ?? null,
 			para: p.grupo,
 			motivo: anterior?.motivoDaSaida ?? null,
-			porPersonId: p.porQuemEntrou
+			porPersonId: p.porQuemEntrou,
+			ordem: ordem++
 		});
 
 		// A saída que é metade de uma transferência já está no item acima.
@@ -217,10 +237,13 @@ export async function linhaDoTempo(db: Database, personId: string): Promise<Item
 				de: p.grupo,
 				para: null,
 				motivo: p.motivoDaSaida,
-				porPersonId: p.porQuemSaiu
+				porPersonId: p.porQuemSaiu,
+				ordem: ordem++
 			});
 		}
 	}
 
-	return itens.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
+	return itens
+		.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime() || b.ordem - a.ordem)
+		.map(({ ordem: _ordem, ...item }) => item);
 }

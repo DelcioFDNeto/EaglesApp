@@ -4,6 +4,7 @@ import { canAnywhere } from '$server/policy/policy';
 import { PERMISSIONS } from '$server/policy/permissions';
 import { featureFlag } from '$server/db/schema';
 import { listarGrupos, meusGrupos } from '$server/modules/grupos/grupos';
+import { proximosEventos } from '$server/modules/eventos/eventos';
 import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
@@ -36,7 +37,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			permissoes: [],
 			catalogoPermissoes: {},
 			funcionalidades: {},
-			grupos: []
+			grupos: [],
+			proximos: []
 		};
 	}
 
@@ -57,6 +59,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 			})()
 		: [];
 
+	// "Minha agenda" (D-M05-7): o que foi publicado PARA a pessoa — a
+	// equipe, o grupo dela, ela mesma —, não a agenda da equipe inteira.
+	const proximos = await proximosEventos(banco, locals.actor, { limite: 3 });
+
 	// Quais permissões esta pessoa realmente tem — o menu se monta a partir
 	// disto, e não de "se papel === conselheiro".
 	const minhasPermissoes = [
@@ -70,6 +76,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		permissoes: minhasPermissoes,
 		catalogoPermissoes: PERMISSIONS as Record<string, string>,
 		funcionalidades: Object.fromEntries(flags.map((f) => [f.key, f.enabled])),
-		grupos: grupos.map((g) => ({ id: g.id, nome: g.nome, cor: g.cor, membros: g.membros }))
+		grupos: grupos.map((g) => ({ id: g.id, nome: g.nome, cor: g.cor, membros: g.membros })),
+		proximos: proximos.map((e) => ({
+			...e,
+			inicio: e.inicio.toISOString(),
+			fim: e.fim?.toISOString() ?? null
+		}))
 	};
 };

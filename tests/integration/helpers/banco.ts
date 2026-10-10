@@ -7,6 +7,7 @@ import type { Database } from '../../../src/lib/server/db';
 import { ALL_PERMISSIONS, PERMISSIONS } from '../../../src/lib/server/policy/permissions';
 import { ROLE_SEEDS } from '../../../src/lib/server/policy/roles';
 import {
+	eventType,
 	membershipStatus,
 	permission,
 	role,
@@ -15,6 +16,7 @@ import {
 	team
 } from '../../../src/lib/server/db/schema';
 import { ESTAGIOS_SEMENTE } from '../../../src/lib/server/modules/pessoas/estagios-semente';
+import { TIPOS_SEMENTE } from '../../../src/lib/server/modules/eventos/tipos-semente';
 
 /**
  * Banco de teste: PostgreSQL de verdade, sem Docker.
@@ -38,6 +40,8 @@ export type BancoDeTeste = {
 	papeis: Record<string, string>;
 	/** Estágios da jornada, por chave. */
 	estagios: Record<string, string>;
+	/** Tipos de evento (M05), por chave. */
+	tiposDeEvento: Record<string, string>;
 	fechar: () => Promise<void>;
 };
 
@@ -97,12 +101,24 @@ export async function criarBancoDeTeste(): Promise<BancoDeTeste> {
 		estagios[semente.key] = criado.id;
 	}
 
+	// --- Tipos de evento (M05) -----------------------------------------------
+
+	const tiposDeEvento: Record<string, string> = {};
+	for (const semente of TIPOS_SEMENTE) {
+		const [criado] = await db
+			.insert(eventType)
+			.values({ ...semente, teamId: equipe.id })
+			.returning({ id: eventType.id });
+		tiposDeEvento[semente.key] = criado!.id;
+	}
+
 	return {
 		db,
 		cliente,
 		teamId: equipe.id,
 		papeis,
 		estagios,
+		tiposDeEvento,
 		fechar: () => cliente.close()
 	};
 }

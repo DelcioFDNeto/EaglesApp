@@ -20,16 +20,20 @@ test.describe('navegação por papel (lacuna G4)', () => {
 	test.describe('líder', () => {
 		test.use({ storageState: ESTADO_DE_SESSAO.lider });
 
-		test('vê Início, Pessoas, Grupos, Acessos e Conta', async ({ page }) => {
+		test('vê no máximo 5 itens — acessos e conta moram em "Mais" (D-M05-9)', async ({ page }) => {
 			await page.goto('/inicio');
 			const nav = page.getByRole('navigation', { name: 'Navegação principal' });
 			await expect(nav.getByRole('link')).toHaveText([
 				'Início',
+				'Agenda',
 				'Pessoas',
 				'Grupos',
-				'Acessos',
-				'Conta'
+				'Mais'
 			]);
+
+			await nav.getByRole('link', { name: 'Mais' }).click();
+			await page.getByRole('link', { name: /Papéis e acessos/ }).click();
+			await expect(page).toHaveURL(/\/admin\/papeis$/);
 		});
 
 		test('chega às pessoas pelo menu, sem digitar endereço', async ({ page }) => {
@@ -53,7 +57,18 @@ test.describe('navegação por papel (lacuna G4)', () => {
 		test('não vê o item de acessos — e a rota recusa com 403', async ({ page }) => {
 			await page.goto('/inicio');
 			const nav = page.getByRole('navigation', { name: 'Navegação principal' });
-			await expect(nav.getByRole('link')).toHaveText(['Início', 'Pessoas', 'Grupos', 'Conta']);
+			await expect(nav.getByRole('link')).toHaveText([
+				'Início',
+				'Agenda',
+				'Pessoas',
+				'Grupos',
+				'Mais'
+			]);
+
+			// Em "Mais", o membro não vê o que não pode abrir.
+			await nav.getByRole('link', { name: 'Mais' }).click();
+			await expect(page.getByRole('link', { name: /Minha conta/ })).toBeVisible();
+			await expect(page.getByRole('link', { name: /Papéis e acessos/ })).toBeHidden();
 
 			const resposta = await page.goto('/admin/papeis');
 			expect(resposta?.status()).toBe(403);

@@ -48,6 +48,10 @@ Contas criadas pela semeadura (senha `eagles-desenvolvimento`):
 | `marina@eagles.local` | Conselheira do PG Verde |
 | `joao@eagles.local`   | Membro do PG Azul       |
 
+A semeadura também cria a **agenda**: o encontro semanal do PG Azul (quinta, 20h)
+e do PG Verde (terça, 19h30), um encontro geral, uma reunião de liderança e um
+rascunho — datas relativas ao dia em que roda.
+
 A semeadura também imprime um **link de convite** para testar o fluxo real de
 entrada, que é como toda pessoa vai receber acesso (ADR 0004).
 

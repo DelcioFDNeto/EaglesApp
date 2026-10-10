@@ -12,6 +12,7 @@ export type MotivoDeRecusaDeGrupo =
 	| 'arquivado'
 	| 'tem_membros'
 	| 'tem_responsaveis'
+	| 'tem_encontros'
 	| 'sem_mudanca'
 	| 'desatualizado';
 
@@ -31,6 +32,7 @@ export function statusDaRecusaDeGrupo(motivo: MotivoDeRecusaDeGrupo): 400 | 404 
 		case 'nome_em_uso':
 		case 'tem_membros':
 		case 'tem_responsaveis':
+		case 'tem_encontros':
 		case 'desatualizado':
 			return 409;
 		default:

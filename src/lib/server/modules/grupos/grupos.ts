@@ -28,6 +28,7 @@ import { authorize, authorizeAnywhere, can, type Actor } from '$server/policy/po
 import { consentimentosDeVarias } from '$server/modules/pessoas/consentimento';
 import { sinaisDeIdade } from '$server/modules/pessoas/pessoas';
 import { regimeDe } from '$server/modules/pessoas/regime';
+import { grupoTemEncontrosMarcados } from '$server/modules/eventos/eventos';
 import { GrupoRecusado } from './regras';
 import type { DadosDoGrupo } from './validacao';
 
@@ -520,9 +521,10 @@ export async function atualizarGrupo(
 }
 
 /**
- * Arquiva um grupo vazio — sem pessoas e sem responsáveis.
+ * Arquiva um grupo vazio — sem pessoas, sem responsáveis e, desde o M05,
+ * sem encontros marcados.
  *
- * O gatilho da migração 0006 recusa o mesmo no banco; a verificação aqui
+ * Os gatilhos das migrações 0006 e 0008 recusam o mesmo no banco; a verificação aqui
  * existe para devolver a explicação certa em vez de um erro de banco.
  */
 export async function arquivarGrupo(
@@ -555,6 +557,13 @@ export async function arquivarGrupo(
 		throw new GrupoRecusado(
 			'tem_responsaveis',
 			'O grupo ainda tem responsáveis. Retire o papel de cada um antes de arquivar.'
+		);
+	}
+
+	if (await grupoTemEncontrosMarcados(db, groupId)) {
+		throw new GrupoRecusado(
+			'tem_encontros',
+			'O grupo ainda tem encontros marcados. Encerre o encontro semanal e cancele os eventos futuros antes de arquivar.'
 		);
 	}
 

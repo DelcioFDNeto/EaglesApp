@@ -93,6 +93,10 @@
 	}
 
 	input {
+		/* Data e hora têm largura intrínseca grande no Chrome; sem isto, dois
+		   lado a lado num celular estouram a tela e criam rolagem horizontal. */
+		width: 100%;
+		min-width: 0;
 		min-height: var(--toque-min);
 		padding: 0 var(--esp-3);
 

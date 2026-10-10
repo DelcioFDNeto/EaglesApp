@@ -134,4 +134,36 @@ test.describe('sem JavaScript', () => {
 		// E de volta, para deixar a semente como estava.
 		await reorganizar('PG Verde');
 	});
+
+	/**
+	 * Criar um evento (M05): o formulário mais comprido do app, com rádios,
+	 * caixas e `select multiple` — tudo nativo, e por isso funciona sem script.
+	 */
+	test('criar e cancelar um evento funciona de ponta a ponta', async ({ page }) => {
+		await page.goto('/entrar');
+		await page.getByLabel('E-mail ou telefone').fill(CONTAS.lider);
+		await page.getByLabel('Senha').fill(SENHA);
+		await page.getByRole('button', { name: 'Entrar' }).click();
+		await page.waitForURL('**/inicio');
+
+		const titulo = `Reunião sem JS ${Date.now().toString().slice(-6)}`;
+		const data = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+
+		await page.goto('/agenda/novo');
+		await page.getByLabel(/^Tipo/).selectOption({ label: 'Reunião de liderança' });
+		await page.getByLabel(/^Título/).fill(titulo);
+		await page.getByLabel(/^Data/).fill(data);
+		await page.getByLabel(/^Começa/).fill('20:00');
+		await page.getByLabel('Toda a equipe').check();
+		await page.getByRole('button', { name: 'Criar' }).click();
+
+		await page.waitForURL(/\/agenda\/[0-9a-f-]+\?criado=1/);
+		await expect(page.getByRole('heading', { level: 1, name: titulo })).toBeVisible();
+		await expect(
+			page.getByRole('region', { name: 'Convidados' }).getByText('Toda a equipe')
+		).toBeVisible();
+
+		await page.getByRole('button', { name: 'Cancelar este evento' }).click();
+		await expect(page.getByText('Evento cancelado', { exact: true })).toBeVisible();
+	});
 });

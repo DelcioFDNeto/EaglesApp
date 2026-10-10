@@ -47,6 +47,20 @@ export type AuditAction =
 	| 'group.membro_retirado'
 	| 'group.membro_transferido'
 	| 'group.reorganizado'
+	// Eventos (M05)
+	| 'event.criado'
+	| 'event.editado'
+	| 'event.publicado'
+	| 'event.cancelado'
+	| 'event.reativado'
+	| 'event.serie_criada'
+	| 'event.serie_editada'
+	| 'event.serie_publicada'
+	| 'event.serie_encerrada'
+	| 'event.tipo_criado'
+	| 'event.tipo_editado'
+	| 'event.tipo_arquivado'
+	| 'event.tipo_reativado'
 	// RBAC — `papel_atribuido`/`papel_removido` são sobre a PESSOA; os demais,
 	// sobre o papel em si.
 	| 'rbac.papel_atribuido'
