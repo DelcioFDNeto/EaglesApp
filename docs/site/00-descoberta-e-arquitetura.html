@@ -317,15 +317,15 @@ html{scroll-behavior:smooth}
 
   <header class="hero">
     <div class="col">
-      <p class="eyebrow">Documento de descoberta · versão 0.5 · arquitetura aprovada</p>
+      <p class="eyebrow">Documento de descoberta · versão 0.6 · arquitetura aprovada</p>
       <h1>Organizar pessoas <em>sem</em> burocratizar a comunidade.</h1>
       <p class="lede">Descoberta, requisitos, modelo de dados, arquitetura e plano de entrega do Eagles App — a plataforma de gestão interna dos Eagles para o ano inteiro.</p>
       <div class="meta">
-        <div><b>Data</b><span>18 ago 2026 · rev. 4 out</span></div>
+        <div><b>Data</b><span>18 ago 2026 · rev. 10 out</span></div>
         <div><b>Escopo</b><span>24 seções + anexo</span></div>
         <div><b>Stack recomendada</b><span>SvelteKit + PostgreSQL</span></div>
         <div><b>MVP</b><span>6 módulos · ~10 semanas</span></div>
-        <div><b>Estado</b><span>Módulos 01 a 04 entregues</span></div>
+        <div><b>Estado</b><span>Módulos 01 a 05 entregues</span></div>
       </div>
       <div class="legend">
         <p>Todo o documento marca a <strong>origem de cada informação</strong>. É o que separa o que você pediu daquilo que eu sugeri ou supus:</p>
@@ -952,6 +952,8 @@ settings.manage      rbac.manage          audit.view</pre>
     GROUP ||--o{ GROUP_MEMBERSHIP : tem
     PERSON ||--o{ GROUP_MEMBERSHIP : participa
     EVENT_TYPE ||--o{ EVENT : classifica
+    EVENT_SERIES ||--o{ EVENT : materializa
+    EVENT_SERIES ||--o{ EVENT_AUDIENCE : molda
     EVENT ||--o{ EVENT_AUDIENCE : direciona
     GROUP ||--o{ EVENT : "sedia (PG)"
     EVENT ||--o{ RSVP : recebe
@@ -969,9 +971,10 @@ settings.manage      rbac.manage          audit.view</pre>
         <tbody>
           <tr><td><code>small_group</code></td><td>O PG (<code>group</code> é palavra reservada do SQL)</td><td><code>name</code>, <code>color</code>, <code>meeting_weekday</code>, <code>meeting_time</code>, <code>location</code>, <code>archived_at</code>. <strong>Sem coluna de conselheiro:</strong> quem cuida do grupo é o papel com escopo nele — uma resposta só para a mesma pergunta</td></tr>
           <tr><td><code>group_membership</code></td><td>Vínculo <strong>temporal</strong> (RN-06, RN-07)</td><td><code>joined_at</code>, <code>left_at</code>, <code>left_reason</code>, <code>batch_id</code>. Índice único parcial garante <strong>um grupo ativo por pessoa</strong>; um gatilho só permite <strong>encerrar</strong> um vínculo</td></tr>
-          <tr><td><code>event_type</code></td><td>Configurável (RN-10)</td><td><code>name</code>, <code>icon</code>, <code>default_rsvp_set</code>, <code>allows_checkin</code>, <code>counts_for_attendance</code></td></tr>
-          <tr><td><code>event</code></td><td>Compromisso</td><td><code>title</code>, <code>starts_at</code>, <code>location</code>, <code>owner_person_id</code>, <code>group_id</code>, <code>status</code>, <code>recurrence_rule</code> (RRULE), <code>parent_event_id</code></td></tr>
-          <tr><td><code>event_audience</code></td><td>Quem é convidado</td><td><code>scope</code> = todos · grupo · pessoas · status</td></tr>
+          <tr><td><code>event_type</code></td><td>Configurável (RN-10)</td><td><code>name</code>, <code>color</code>, <code>is_group_meeting</code> (o tipo do encontro do grupo, um por equipe), <code>archived_at</code>. Opções de RSVP entram no M06, com o uso</td></tr>
+          <tr><td><code>event_series</code></td><td>Encontro semanal</td><td><code>weekday</code>, <code>local_time</code>, <code>duration_minutes</code>, <code>interval_weeks</code> (1–4), <code>starts_on</code>, <code>ends_on</code> — colunas que o banco valida, não RRULE em texto</td></tr>
+          <tr><td><code>event</code></td><td>Compromisso</td><td><code>title</code>, <code>starts_at</code> (instante), <code>location</code>, <code>group_id</code>, <code>status</code>, <code>published_at</code>, <code>public_code</code>; de série: <code>series_id</code>, <code>occurrence_date</code>, <code>is_exception</code></td></tr>
+          <tr><td><code>event_audience</code></td><td>Quem é convidado</td><td>De um evento ou de uma série: equipe · grupo · pessoa</td></tr>
           <tr><td><code>rsvp_option</code></td><td>Opções configuráveis (RN-11)</td><td><code>label</code>, <code>semantic</code> (<code>yes</code>/<code>no</code>/<code>maybe</code>/<code>late</code>/<code>guest</code>), <code>allows_guest_count</code></td></tr>
           <tr><td><code>rsvp</code></td><td>Resposta atual</td><td>único por (evento, pessoa)</td></tr>
           <tr><td><code>rsvp_history</code></td><td>Respostas anteriores (RN-12)</td><td>append-only</td></tr>
@@ -984,7 +987,8 @@ settings.manage      rbac.manage          audit.view</pre>
       <div class="col">
         <div class="call">
           <h4>Ponto sensível — recorrência</h4>
-          <p>PGs semanais geram muitos eventos. Adoto <strong>materialização parcial</strong>: a série guarda a RRULE e o sistema materializa apenas as próximas 12 semanas em linhas reais, mais qualquer ocorrência que já tenha RSVP, presença ou escala. Materializar tudo incharia o banco e dificultaria editar a série; não materializar nada tornaria impossível anexar presença a uma ocorrência. <span class="tag t-dec">DEC</span></p>
+          <p>PGs semanais geram muitos eventos. Adoto <strong>materialização parcial</strong>: a série guarda a recorrência e o sistema materializa apenas as próximas 12 semanas em linhas reais, mais qualquer ocorrência que já tenha RSVP, presença ou escala. Materializar tudo incharia o banco e dificultaria editar a série; não materializar nada tornaria impossível anexar presença a uma ocorrência. <span class="tag t-dec">DEC</span></p>
+          <p><em>Revisado no Módulo 05:</em> a recorrência semanal fica em colunas (dia, hora local, intervalo), não em RRULE, e as 12 semanas são completadas quando alguém abre a agenda — de forma idempotente e travada por série, sem precisar de agendador.</p>
         </div>
       </div>
 
@@ -1540,7 +1544,7 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
           <tr><td><code>A-01</code></td><td>Multi-equipe (Bears/Tigers/Sheeps)?</td><td><code>team_id</code> no modelo, sem interface</td><td>Barato agora, caro depois</td></tr>
           <tr><td><code>A-02</code></td><td>JWT ou sessão em banco?</td><td>Sessão em banco</td><td>Revogação real importa com dados financeiros</td></tr>
           <tr><td><code>A-03</code></td><td>Editar ou estornar lançamento?</td><td>Estornar</td><td>Rastreabilidade financeira inegociável</td></tr>
-          <tr><td><code>A-04</code></td><td>Como tratar PG recorrente?</td><td>RRULE + materialização de 12 semanas</td><td>Equilíbrio entre tamanho do banco e flexibilidade</td></tr>
+          <tr><td><code>A-04</code></td><td>Como tratar PG recorrente?</td><td>Série semanal em colunas + 12 semanas materializadas sob demanda</td><td>Equilíbrio entre tamanho do banco e flexibilidade</td></tr>
           <tr><td><code>A-05</code></td><td>RLS do Postgres?</td><td>Não agora</td><td>Duplicar regra em dois lugares gera divergência silenciosa</td></tr>
           <tr><td><code>A-06</code></td><td>Redis?</td><td>Não — pg-boss no Postgres</td><td>Um serviço a menos para operar e fazer backup</td></tr>
           <tr><td><code>A-07</code></td><td>Sincronização offline completa?</td><td>Não — só leitura em cache e fila para RSVP/presença</td><td>Resolução de conflitos triplicaria a complexidade</td></tr>
@@ -1760,23 +1764,25 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
 
       <div class="col" style="margin-top:2.4rem">
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin-bottom:.6rem">Onde a construção está</h3>
-        <p><strong>Módulos 01 a 04 implementados</strong> — fundação, pessoas, papéis com gestão de acesso, e grupos. Verificação de 4 de outubro: <strong>274 testes</strong> de unidade e integração, <strong>63 de ponta a ponta</strong> em dois projetos de navegador — com e sem JavaScript —, tipos limpos e build funcionando.</p>
-        <p>O M04 entregou o que o roteiro pedia: <strong>PGs criados, pessoas distribuídas, transferência com histórico e a visão do conselheiro</strong> — quem está no grupo, desde quando, o contato e o que está pendente. E a reorganização em lote: a liderança escolhe o destino de cada pessoa, vê o antes e o depois de cada grupo, desmarca o que não quer e só então aplica. Se alguém mudou de grupo no meio do caminho, nada é aplicado.</p>
-        <p>"Uma pessoa, um grupo por vez" e "transferir nunca apaga o passado" são garantias <strong>do banco de dados</strong>, testadas sem passar pelo código da aplicação.</p>
+        <p><strong>Módulos 01 a 05 implementados</strong> — fundação, pessoas, papéis com gestão de acesso, grupos e eventos. Verificação de 10 de outubro: <strong>344 testes</strong> de unidade e integração, <strong>73 de ponta a ponta</strong> em dois projetos de navegador — com e sem JavaScript —, tipos limpos e build funcionando.</p>
+        <p>O M05 entregou o que o roteiro pedia: <strong>o PG semanal na agenda, a agenda no celular, quem está convidado e o link público do evento</strong> — mais o botão de compartilhar no WhatsApp com o texto pronto. O encontro semanal nasce do dia, horário e local que o grupo já tem, e ocupa as próximas 12 semanas. Mudar uma data não estraga a série, e mudar a série não desfaz o que foi ajustado à mão.</p>
+        <p>O link <code>/e/…</code> abre sem login para quem o recebeu no WhatsApp, só com as informações do evento — nunca com quem vai. Se o encontro for cancelado, quem abrir o link fica sabendo.</p>
 
-        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">O conselheiro via o contato de todo mundo</h3>
-        <p>O defeito que este módulo fechou. Sem grupos, o módulo de pessoas decidia "pode ver o contato" pela permissão em qualquer grupo — e o conselheiro de um PG via o telefone das pessoas de todos os outros. O outro lado da mesma falha: o conselheiro também <strong>não conseguia editar nem convidar ninguém</strong>, nem do próprio PG.</p>
-        <p>Agora toda decisão sobre uma pessoa leva em conta o grupo em que ela está: o conselheiro do PG Azul vê, edita e convida quem está no PG Azul, e mais ninguém. A revisão achou mais duas portas da mesma família, também fechadas — e cada correção tem um teste que reprova se ela for desfeita.</p>
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Fuso horário desde o começo</h3>
+        <p>A equipe ganhou um fuso. Sem ele, "quinta às 20h" seria calculado no relógio do servidor — que na VPS fica em UTC — e o PG apareceria às 17h. Toda conversão é testada inclusive contra um fuso com horário de verão, caso o Brasil volte a ter.</p>
 
-        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Deploy fica para o fim</h3>
-        <p>Por decisão de 4 de outubro, a implantação na VPS — domínio, app instalado no celular e cópia do backup enviada para fora — vem <strong>depois dos módulos</strong>. Até lá, cada módulo é entregue e verificado localmente e na integração contínua.</p>
-        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 05 — Eventos, com o PG semanal como evento recorrente do grupo.</p></div>
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Quem vê o quê, provado dos dois lados</h3>
+        <p>A regra de visibilidade foi escrita uma vez e repetida na consulta da agenda; um teste confere as duas, para cada papel e cada evento. O membro vê o que foi publicado para ele, o conselheiro vê o próprio PG, e rascunho só aparece para quem pode mexer nele. A barra de navegação voltou a ter no máximo cinco itens: o que é de uso eventual mora em "Mais".</p>
+
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Deploy continua no fim</h3>
+        <p>A implantação na VPS — domínio, app instalado no celular e cópia do backup enviada para fora — vem <strong>depois dos módulos</strong>, como decidido em 4 de outubro.</p>
+        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: Módulo 06 — Presença, que fecha o MVP: confirmar em um toque, lista do conselheiro e frequência.</p></div>
       </div>
     </div>
   </section>
 
   <footer>
-    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.5 · 18 de agosto de 2026, revisado em 4 de outubro<br>
+    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.6 · 18 de agosto de 2026, revisado em 10 de outubro<br>
     Fonte no repositório: <code>docs/00-descoberta-e-arquitetura.md</code>
   </footer>
 </div>
