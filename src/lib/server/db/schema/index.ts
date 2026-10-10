@@ -1,6 +1,6 @@
 /**
  * Schema do Eagles App — Módulos 01 (Fundação), 02 (Pessoas), 03 (RBAC),
- * 04 (Grupos) e 05 (Eventos).
+ * 04 (Grupos), 05 (Eventos) e 06 (Presença).
  *
  * Só entram aqui as tabelas que os módulos entregues usam de fato. Grupos,
  * eventos, presença, responsabilidades e financeiro chegam nos seus próprios
@@ -445,6 +445,11 @@ export const eventType = pgTable(
 		/** Cor da etiqueta na interface, em hexadecimal (#RRGGBB). */
 		color: text('color'),
 		isGroupMeeting: boolean('is_group_meeting').notNull().default(false),
+		/**
+		 * Entra na frequência (M06)? Uma reunião de liderança não deveria
+		 * pesar no PG de quem foi a ela.
+		 */
+		countsForAttendance: boolean('counts_for_attendance').notNull().default(true),
 		position: integer('position').notNull().default(0),
 		/** Tipo com eventos não se apaga: arquiva-se. */
 		archivedAt: timestamp('archived_at', { withTimezone: true }),
@@ -549,6 +554,13 @@ export const event = pgTable(
 		cancelReason: text('cancel_reason'),
 		isException: boolean('is_exception').notNull().default(false),
 
+		/**
+		 * A lista de presença foi feita (D-M06-4). Só evento com lista feita
+		 * entra na frequência — e só nele a ausência de marcação é falta.
+		 */
+		attendanceTakenAt: timestamp('attendance_taken_at', { withTimezone: true }),
+		attendanceTakenByPersonId: uuid('attendance_taken_by_person_id').references(() => person.id),
+
 		/** Nulo = rascunho (D-M05-6). */
 		publishedAt: timestamp('published_at', { withTimezone: true }),
 		/** Código do link público /e/<código> (D-M05-8). */
@@ -593,6 +605,129 @@ export const eventAudience = pgTable(
 		index('event_audience_serie_idx').on(t.seriesId),
 		index('event_audience_grupo_idx').on(t.groupId),
 		index('event_audience_pessoa_idx').on(t.personId)
+	]
+);
+
+// ---------------------------------------------------------------------------
+// Presença (M06)
+// ---------------------------------------------------------------------------
+
+/**
+ * Respostas de presença da equipe (RN-11): texto livre, significado fixo.
+ *
+ * Os indicadores leem `semantic`, nunca `label`: "Vou chegar atrasado" é um
+ * `sim` com outro texto, e renomear "Vou" não quebra relatório nenhum.
+ */
+export const rsvpOption = pgTable(
+	'rsvp_option',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id),
+		label: text('label').notNull(),
+		/** 'sim' | 'talvez' | 'nao' */
+		semantic: text('semantic').notNull(),
+		/** "Levo mais 2" — só faz sentido numa resposta `sim`. */
+		allowsGuests: boolean('allows_guests').notNull().default(false),
+		position: integer('position').notNull().default(0),
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [index('rsvp_option_team_idx').on(t.teamId, t.position)]
+);
+
+/** Quais respostas cada tipo de evento oferece (RN-11). */
+export const eventTypeRsvpOption = pgTable(
+	'event_type_rsvp_option',
+	{
+		typeId: uuid('type_id')
+			.notNull()
+			.references(() => eventType.id, { onDelete: 'cascade' }),
+		optionId: uuid('option_id')
+			.notNull()
+			.references(() => rsvpOption.id, { onDelete: 'cascade' })
+	},
+	(t) => [uniqueIndex('event_type_rsvp_option_idx').on(t.typeId, t.optionId)]
+);
+
+/**
+ * Resposta ATUAL de uma pessoa a um evento — uma só (RN-12).
+ *
+ * Todas as anteriores vão para `rsvp_history`, por gatilho do banco
+ * (migração 0010): o código não consegue esquecer de versionar.
+ */
+export const rsvp = pgTable(
+	'rsvp',
+	{
+		id: pk(),
+		eventId: uuid('event_id')
+			.notNull()
+			.references(() => event.id),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		optionId: uuid('option_id')
+			.notNull()
+			.references(() => rsvpOption.id),
+		guests: smallint('guests').notNull().default(0),
+		respondedByPersonId: uuid('responded_by_person_id').references(() => person.id),
+		respondedAt: timestamp('responded_at', { withTimezone: true }).notNull().defaultNow(),
+		createdAt: createdAt()
+	},
+	(t) => [
+		uniqueIndex('rsvp_evento_pessoa_idx').on(t.eventId, t.personId),
+		index('rsvp_pessoa_idx').on(t.personId)
+	]
+);
+
+/** Todas as respostas, inclusive as que mudaram (RN-12). Append-only. */
+export const rsvpHistory = pgTable(
+	'rsvp_history',
+	{
+		id: pk(),
+		eventId: uuid('event_id')
+			.notNull()
+			.references(() => event.id),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		optionId: uuid('option_id')
+			.notNull()
+			.references(() => rsvpOption.id),
+		guests: smallint('guests').notNull().default(0),
+		respondedByPersonId: uuid('responded_by_person_id').references(() => person.id),
+		respondedAt: timestamp('responded_at', { withTimezone: true }).notNull()
+	},
+	(t) => [index('rsvp_history_evento_pessoa_idx').on(t.eventId, t.personId, t.respondedAt)]
+);
+
+/**
+ * Presença EFETIVA (RN-13) — distinta do RSVP.
+ *
+ * Uma linha por pessoa que esteve. Quem era esperado e não tem linha, num
+ * evento com lista feita, faltou; num evento sem lista, nada se sabe
+ * (D-M06-4, RN-15).
+ */
+export const attendance = pgTable(
+	'attendance',
+	{
+		id: pk(),
+		eventId: uuid('event_id')
+			.notNull()
+			.references(() => event.id),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		/** 'manual' | 'checkin' — check-in só com a chave ligada (RN-14). */
+		source: text('source').notNull().default('manual'),
+		recordedByPersonId: uuid('recorded_by_person_id').references(() => person.id),
+		recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [
+		uniqueIndex('attendance_evento_pessoa_idx').on(t.eventId, t.personId),
+		index('attendance_pessoa_idx').on(t.personId)
 	]
 );
 
@@ -953,6 +1088,17 @@ export const eventRelations = relations(event, ({ one, many }) => ({
 export const eventAudienceRelations = relations(eventAudience, ({ one }) => ({
 	evento: one(event, { fields: [eventAudience.eventId], references: [event.id] }),
 	serie: one(eventSeries, { fields: [eventAudience.seriesId], references: [eventSeries.id] })
+}));
+
+export const rsvpRelations = relations(rsvp, ({ one }) => ({
+	evento: one(event, { fields: [rsvp.eventId], references: [event.id] }),
+	pessoa: one(person, { fields: [rsvp.personId], references: [person.id] }),
+	resposta: one(rsvpOption, { fields: [rsvp.optionId], references: [rsvpOption.id] })
+}));
+
+export const attendanceRelations = relations(attendance, ({ one }) => ({
+	evento: one(event, { fields: [attendance.eventId], references: [event.id] }),
+	pessoa: one(person, { fields: [attendance.personId], references: [person.id] })
 }));
 
 export const groupMembershipRelations = relations(groupMembership, ({ one }) => ({

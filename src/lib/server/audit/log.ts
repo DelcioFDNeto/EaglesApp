@@ -61,6 +61,13 @@ export type AuditAction =
 	| 'event.tipo_editado'
 	| 'event.tipo_arquivado'
 	| 'event.tipo_reativado'
+	// Presença (M06)
+	| 'attendance.lista_registrada'
+	| 'attendance.visitante_na_porta'
+	| 'attendance.resposta_criada'
+	| 'attendance.resposta_arquivada'
+	| 'attendance.resposta_reativada'
+	| 'attendance.respostas_do_tipo'
 	// RBAC — `papel_atribuido`/`papel_removido` são sobre a PESSOA; os demais,
 	// sobre o papel em si.
 	| 'rbac.papel_atribuido'

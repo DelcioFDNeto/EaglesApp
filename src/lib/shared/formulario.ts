@@ -18,3 +18,12 @@ export type FalhaDeFormulario<Extra extends object = object> = {
 	/** Mensagem por campo, na chave do campo. */
 	erros?: Record<string, string | undefined>;
 } & Partial<Extra>;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * O valor tem formato de id? Ids chegam do formulário e da URL — do
+ * navegador, portanto de quem o controla. Um id malformado que chegasse ao
+ * banco viraria erro de sintaxe do Postgres (500), e não "não encontrado".
+ */
+export const ehId = (v: string): boolean => UUID.test(v);

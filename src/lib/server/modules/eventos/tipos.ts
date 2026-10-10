@@ -20,6 +20,7 @@ export type TipoDeEvento = {
 	nome: string;
 	cor: string | null;
 	ehEncontroDoGrupo: boolean;
+	contaParaFrequencia: boolean;
 	arquivado: boolean;
 	eventos: number;
 };
@@ -53,6 +54,7 @@ export async function listarTipos(
 		nome: t.name,
 		cor: t.color,
 		ehEncontroDoGrupo: t.isGroupMeeting,
+		contaParaFrequencia: t.countsForAttendance,
 		arquivado: t.archivedAt !== null,
 		eventos: porTipo.get(t.id) ?? 0
 	}));
@@ -141,6 +143,7 @@ export async function criarTipo(
 				name: dados.nome,
 				color: dados.cor,
 				isGroupMeeting: dados.ehEncontroDoGrupo,
+				countsForAttendance: dados.contaParaFrequencia,
 				position: 100
 			})
 			.returning({ id: eventType.id });
@@ -186,6 +189,7 @@ export async function atualizarTipo(
 				name: dados.nome,
 				color: dados.cor,
 				isGroupMeeting: dados.ehEncontroDoGrupo,
+				countsForAttendance: dados.contaParaFrequencia,
 				updatedAt: new Date()
 			})
 			.where(eq(eventType.id, tipoId));
@@ -197,7 +201,12 @@ export async function atualizarTipo(
 		action: 'event.tipo_editado',
 		entity: 'event_type',
 		entityId: tipoId,
-		before: { nome: antes.name, cor: antes.color, ehEncontroDoGrupo: antes.isGroupMeeting },
+		before: {
+			nome: antes.name,
+			cor: antes.color,
+			ehEncontroDoGrupo: antes.isGroupMeeting,
+			contaParaFrequencia: antes.countsForAttendance
+		},
 		after: dados,
 		...contexto
 	});

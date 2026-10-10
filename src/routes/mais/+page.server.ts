@@ -1,5 +1,5 @@
 import { redirect } from '@sveltejs/kit';
-import { can } from '$server/policy/policy';
+import { can, canAnywhere } from '$server/policy/policy';
 import type { PageServerLoad } from './$types';
 
 /**
@@ -16,6 +16,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		nome: locals.displayName ?? null,
 		// Sem contexto: só o escopo global administra acesso e configuração.
 		podeAdministrarAcessos: can(locals.actor, 'rbac.manage'),
-		podeConfigurar: can(locals.actor, 'settings.manage')
+		podeConfigurar: can(locals.actor, 'settings.manage'),
+		// O relatório tem escopo: o conselheiro vê os grupos dele (D-M06-8).
+		podeVerFrequencia: canAnywhere(locals.actor, 'attendance.report')
 	};
 };

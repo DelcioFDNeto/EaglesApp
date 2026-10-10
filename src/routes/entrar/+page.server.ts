@@ -9,6 +9,7 @@ import { createSession, setSessionCookie } from '$server/auth/session';
 import { checkRateLimit, clearRateLimit, regraLoginPorIp, RULES } from '$server/auth/ratelimit';
 import { audit } from '$server/audit/log';
 import { env } from '$server/env';
+import { destinoInterno } from '$shared/redirecionamento';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -33,13 +34,16 @@ const schema = z.object({
 /** Mensagem única para credencial errada: não revela se a conta existe. */
 const CREDENCIAL_INVALIDA = 'E-mail/telefone ou senha incorretos.';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	if (locals.actor) redirect(303, '/inicio');
+// `?voltar=` traz de volta quem chegou pelo link de um evento ("entrar para
+// confirmar", D-M06-3). Só caminho interno: `destinoInterno` barra o
+// redirecionamento aberto logo depois da senha.
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (locals.actor) redirect(303, destinoInterno(url.searchParams.get('voltar')));
 	return {};
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, getClientAddress }) => {
+	default: async ({ request, cookies, getClientAddress, url }) => {
 		const ip = getClientAddress();
 		const userAgent = request.headers.get('user-agent');
 
@@ -183,6 +187,6 @@ export const actions: Actions = {
 			userAgent
 		});
 
-		redirect(303, '/inicio');
+		redirect(303, destinoInterno(url.searchParams.get('voltar')));
 	}
 };

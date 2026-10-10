@@ -14,6 +14,12 @@
 				mostrar: true
 			},
 			{
+				href: '/frequencia',
+				titulo: 'Frequência',
+				descricao: 'Quem tem vindo aos encontros, por grupo e período',
+				mostrar: data.podeVerFrequencia
+			},
+			{
 				href: '/admin/papeis',
 				titulo: 'Papéis e acessos',
 				descricao: 'Quem pode fazer o quê no app',

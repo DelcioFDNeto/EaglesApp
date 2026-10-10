@@ -12,6 +12,8 @@ import { linhaDoTempo, listarEstagios, mudarEstagio } from '$server/modules/pess
 import { vinculosDe } from '$server/modules/pessoas/relacoes';
 import { historicoDeConsentimento } from '$server/modules/pessoas/consentimento';
 import { atribuicoesDe } from '$server/modules/rbac/atribuicoes';
+import { frequenciaDaPessoa } from '$server/modules/presenca/frequencia';
+import { dataCurtaComDia } from '$shared/fuso';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -20,7 +22,8 @@ import type { Actions, PageServerLoad } from './$types';
  * PERMISSÃO: `person.view` em qualquer escopo para o perfil;
  * `person.view_sensitive` para contato e vínculos; `person.update` para
  * editar; `group.assign_member` para mudar de grupo. Todas as três últimas
- * NO GRUPO DA PESSOA (D-M04-4).
+ * NO GRUPO DA PESSOA (D-M04-4). Frequência: `attendance.view` no grupo da
+ * pessoa, ou ela mesma (D-M06-8) — o serviço devolve nulo para os demais.
  *
  * A tela recebe apenas o que o serviço decidiu entregar. `detalhe.sensiveis`
  * chega nulo para quem não pode ver contato — não é escondido no template.
@@ -42,14 +45,16 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	// um com `person.view` (lacuna G5 do M04).
 	const veSensiveis = detalhe.sensiveis !== null;
 
-	const [tempo, vinculos, estagios, consentimentos, atribuicoes, grupos] = await Promise.all([
-		linhaDoTempo(banco, params.id),
-		veSensiveis ? vinculosDe(banco, params.id) : Promise.resolve([]),
-		listarEstagios(banco, actor.teamId),
-		veSensiveis ? historicoDeConsentimento(banco, params.id) : Promise.resolve([]),
-		atribuicoesDe(banco, params.id),
-		gruposAtivos(banco, actor.teamId)
-	]);
+	const [tempo, vinculos, estagios, consentimentos, atribuicoes, grupos, frequencia] =
+		await Promise.all([
+			linhaDoTempo(banco, params.id),
+			veSensiveis ? vinculosDe(banco, params.id) : Promise.resolve([]),
+			listarEstagios(banco, actor.teamId),
+			veSensiveis ? historicoDeConsentimento(banco, params.id) : Promise.resolve([]),
+			atribuicoesDe(banco, params.id),
+			gruposAtivos(banco, actor.teamId),
+			frequenciaDaPessoa(banco, actor, params.id)
+		]);
 
 	// Mudar de grupo exige a permissão nas duas pontas (D-M04-3): a tela só
 	// oferece os destinos que o servidor aceitaria.
@@ -85,6 +90,17 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		})),
 		grupo: detalhe.grupo ? { ...detalhe.grupo, desde: detalhe.grupo.desde.toISOString() } : null,
 		destinosDeGrupo: destinos,
+		frequencia: frequencia && {
+			percentual: frequencia.frequencia.percentual,
+			esperados: frequencia.frequencia.esperados,
+			presentes: frequencia.frequencia.presentes,
+			encontros: frequencia.eventos.slice(0, 8).map((e) => ({
+				id: e.id,
+				titulo: e.titulo,
+				data: dataCurtaComDia(e.data),
+				situacao: e.presente ? (e.esperado ? 'veio' : 'visitou') : 'nao_veio'
+			}))
+		},
 		podeEditar: can(actor, 'person.update', ctx),
 		// Quem tem qual papel não é dado sensível: na comunidade todo mundo sabe
 		// quem é da liderança. Só os NOMES dos papéis — escopo e histórico ficam

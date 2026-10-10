@@ -5,12 +5,13 @@
  * a ausência de declaração é erro de teste, não porta aberta."
  *
  * Este arquivo é a execução dessa regra. Ele varre todos os `+page.server.ts`
- * e `+server.ts` do projeto e exige que cada um faça uma de quatro coisas:
+ * e `+server.ts` do projeto e exige que cada um faça uma de cinco coisas:
  *
  *   a) chamar `authorize(...)` ou `can(...)`   → rota protegida
  *   b) estar em `ROTAS_DA_PROPRIA_CONTA`       → exige sessão, não papel
  *   c) estar na lista `ROTAS_PUBLICAS`         → pública por decisão consciente
- *   d) falhar o teste                          → alguém esqueceu
+ *   d) estar em `ROTAS_PUBLICAS_COM_ACAO_PROTEGIDA` → lê sem login, escreve com
+ *   e) falhar o teste                          → alguém esqueceu
  *
  * Adicionar uma rota à lista de públicas é deliberado e fica visível no diff,
  * que é exatamente o ponto: a decisão de expor algo tem que ser vista por
@@ -35,9 +36,19 @@ const ROTAS_PUBLICAS: Record<string, string> = {
 	'sair/+page.server.ts': 'Encerra a própria sessão; sem sessão, nada acontece.',
 	'api/health/+server.ts': 'Monitor externo e CI consultam sem credencial; não devolve dado.',
 	'sou-novo/+page.server.ts':
-		'Autocadastro de visitante: público por decisão, atrás de chave desligada por padrão e com limite por IP.',
+		'Autocadastro de visitante: público por decisão, atrás de chave desligada por padrão e com limite por IP.'
+};
+
+/**
+ * Página pública com AÇÃO protegida — categoria criada no M06.
+ *
+ * O link do evento (D-M05-8) continua abrindo sem login; responder "você
+ * vai?" por ele exige sessão e permissão (D-M06-3). A rota precisa estar aqui
+ * E verificar permissão: a leitura é pública por decisão, a escrita não.
+ */
+const ROTAS_PUBLICAS_COM_ACAO_PROTEGIDA: Record<string, string> = {
 	'e/[codigo]/+page.server.ts':
-		'Link público do evento (D-M05-8): código de 10 caracteres aleatórios, só evento publicado, sem dado de pessoa.'
+		'Link público do evento: leitura sem dado de pessoa (código de 10 caracteres, só publicado); responder exige sessão.'
 };
 
 /**
@@ -115,6 +126,14 @@ describe('toda rota de servidor declara sua permissão', () => {
 
 			const publicaPorDecisao = rota in ROTAS_PUBLICAS;
 
+			if (rota in ROTAS_PUBLICAS_COM_ACAO_PROTEGIDA) {
+				expect(
+					/export const actions\b/.test(fonte) && verificaPermissao,
+					`"${rota}" é pública com ação protegida, mas não tem ações que verificam permissão.`
+				).toBe(true);
+				return;
+			}
+
 			if (rota in ROTAS_DA_PROPRIA_CONTA) {
 				// Sem permissão a declarar, mas com sessão obrigatória: a rota precisa
 				// mandar quem não está autenticado para a entrada.
@@ -149,6 +168,7 @@ describe('toda rota de servidor declara sua permissão', () => {
 		const existentes = new Set(arquivos.map(chave));
 		const fantasmas = [
 			...Object.keys(ROTAS_PUBLICAS),
+			...Object.keys(ROTAS_PUBLICAS_COM_ACAO_PROTEGIDA),
 			...Object.keys(ROTAS_DA_PROPRIA_CONTA)
 		].filter((r) => !existentes.has(r));
 		expect(

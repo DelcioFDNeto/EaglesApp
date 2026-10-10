@@ -13,6 +13,8 @@ export type TipoSemente = {
 	name: string;
 	color: string;
 	isGroupMeeting: boolean;
+	/** Entra na frequência (M06). */
+	countsForAttendance: boolean;
 	position: number;
 };
 
@@ -22,6 +24,7 @@ export const TIPOS_SEMENTE: TipoSemente[] = [
 		name: 'Encontro de PG',
 		color: '#2563EB',
 		isGroupMeeting: true,
+		countsForAttendance: true,
 		position: 10
 	},
 	{
@@ -29,6 +32,7 @@ export const TIPOS_SEMENTE: TipoSemente[] = [
 		name: 'Encontro geral',
 		color: '#DC2626',
 		isGroupMeeting: false,
+		countsForAttendance: true,
 		position: 20
 	},
 	{
@@ -36,6 +40,8 @@ export const TIPOS_SEMENTE: TipoSemente[] = [
 		name: 'Reunião de liderança',
 		color: '#475569',
 		isGroupMeeting: false,
+		// Reunião de liderança não pesa na frequência do PG de quem foi.
+		countsForAttendance: false,
 		position: 30
 	},
 	{
@@ -43,6 +49,7 @@ export const TIPOS_SEMENTE: TipoSemente[] = [
 		name: 'Evento especial',
 		color: '#7C3AED',
 		isGroupMeeting: false,
+		countsForAttendance: true,
 		position: 40
 	}
 ];

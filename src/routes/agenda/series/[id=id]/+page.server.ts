@@ -159,19 +159,26 @@ export const actions: Actions = {
 		}
 
 		try {
-			const removidas = await encerrarSerie(
+			const { removidas, canceladas } = await encerrarSerie(
 				db(),
 				locals.actor,
 				params.id,
 				aPartirDe,
 				requisicao(request, getClientAddress())
 			);
-			return {
-				sucesso:
-					removidas === 1
-						? 'Encerrado. 1 data futura saiu da agenda.'
-						: `Encerrado. ${removidas} datas futuras saíram da agenda.`
-			} satisfies Falha;
+			// Data com resposta fica na agenda, cancelada (D-M06-9): quem disse
+			// "vou" fica sabendo, em vez de ver o encontro sumir.
+			const saiu =
+				removidas === 1
+					? '1 data futura saiu da agenda.'
+					: `${removidas} datas futuras saíram da agenda.`;
+			const cancelou =
+				canceladas === 0
+					? ''
+					: canceladas === 1
+						? ' 1 data que já tinha respostas ficou como cancelada.'
+						: ` ${canceladas} datas que já tinham respostas ficaram como canceladas.`;
+			return { sucesso: `Encerrado. ${saiu}${cancelou}` } satisfies Falha;
 		} catch (erro) {
 			if (erro instanceof EventoRecusado) {
 				return fail(statusDaRecusaDeEvento(erro.motivo), {

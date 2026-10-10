@@ -1,10 +1,13 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import postgres from 'postgres';
 import {
 	event,
 	eventSeries,
 	eventType,
+	eventTypeRsvpOption,
+	rsvp,
+	rsvpOption,
 	featureFlag,
 	groupMembership,
 	membershipStatus,
@@ -31,6 +34,11 @@ import type { Alvo } from '../src/lib/server/modules/eventos/regras';
 import { loadActor } from '../src/lib/server/policy/actor';
 import { diaDaSemana, hojeNoFuso, somarDias } from '../src/lib/shared/fuso';
 import type { Database } from '../src/lib/server/db';
+import {
+	RESPOSTAS_POR_TIPO,
+	RESPOSTAS_SEMENTE
+} from '../src/lib/server/modules/presenca/respostas-semente';
+import { registrarLista } from '../src/lib/server/modules/presenca/lista';
 
 /**
  * Semeadura do ambiente de desenvolvimento.
@@ -340,7 +348,14 @@ try {
 
 		await db
 			.insert(groupMembership)
-			.values({ groupId: p.pg, personId: pessoa.id, addedByPersonId: liderId });
+			// Desde quatro meses atrás: o histórico de presença da semente (M06)
+			// precisa encontrar as pessoas no grupo nas semanas passadas.
+			.values({
+				groupId: p.pg,
+				personId: pessoa.id,
+				addedByPersonId: liderId,
+				joinedAt: new Date(Date.now() - 120 * 86_400_000)
+			});
 		distribuidas++;
 	}
 	console.log(`${distribuidas} pessoas colocadas nos grupos.`);
@@ -485,6 +500,163 @@ try {
 			novos++;
 		}
 		console.log(`${novos} eventos e encontros semanais criados.`);
+
+		// --- Respostas de presença (M06) ---------------------------------------
+		const respostas: Record<string, string> = {};
+		for (const r of RESPOSTAS_SEMENTE) {
+			const [existente] = await db
+				.select({ id: rsvpOption.id })
+				.from(rsvpOption)
+				.where(and(eq(rsvpOption.teamId, equipe.id), eq(rsvpOption.label, r.label)))
+				.limit(1);
+			const id =
+				existente?.id ??
+				(
+					await db
+						.insert(rsvpOption)
+						.values({
+							teamId: equipe.id,
+							label: r.label,
+							semantic: r.semantic,
+							allowsGuests: r.allowsGuests,
+							position: r.position
+						})
+						.returning({ id: rsvpOption.id })
+				)[0]!.id;
+			respostas[r.key] = id;
+		}
+		for (const [tipo, chaves] of Object.entries(RESPOSTAS_POR_TIPO)) {
+			const tipoId = tipoPorChave.get(tipo);
+			if (!tipoId) continue;
+			await db
+				.insert(eventTypeRsvpOption)
+				.values(chaves.map((k) => ({ typeId: tipoId, optionId: respostas[k]! })))
+				.onConflictDoNothing();
+		}
+		console.log(`${RESPOSTAS_SEMENTE.length} respostas de presença.`);
+
+		// --- Histórico de presença: 6 semanas de PG ----------------------------
+		// Para a frequência e os sinais (D-M06-7) terem o que mostrar. Rafael
+		// vinha e parou; Isabela, visitante, já veio três vezes.
+		const [jaTemLista] = await db
+			.select({ id: event.id })
+			.from(event)
+			.where(and(eq(event.teamId, equipe.id), isNotNull(event.attendanceTakenAt)))
+			.limit(1);
+
+		if (!jaTemLista) {
+			// O cadastro precisa ser anterior aos encontros: quem não estava no
+			// sistema não podia ser esperado (D-M06-5).
+			await db
+				.update(person)
+				.set({ createdAt: new Date(Date.now() - 120 * 86_400_000) })
+				.where(eq(person.teamId, equipe.id));
+
+			const idPorNome = new Map(
+				(
+					await db
+						.select({ id: person.id, nome: person.fullName })
+						.from(person)
+						.where(eq(person.teamId, equipe.id))
+				).map((p) => [p.nome, p.id])
+			);
+			const quem = (nomes: string[]) =>
+				nomes.map((n) => idPorNome.get(n)).filter((id): id is string => !!id);
+
+			const HISTORICO: Array<{
+				grupoId: string;
+				titulo: string;
+				dia: number;
+				hora: string;
+				semanas: Record<string, number[]>;
+			}> = [
+				{
+					grupoId: PG_AZUL,
+					titulo: 'PG Azul',
+					dia: 4,
+					hora: '20:00',
+					// semana (1 = a mais recente) → presentes
+					semanas: {
+						'Pedro Henrique Vasconcelos': [1, 2, 3, 4, 5, 6],
+						'João Vitor Cavalcanti': [1, 2, 4, 5, 6],
+						'Camila Rodrigues Nascimento': [1, 2, 3, 4, 5, 6],
+						'Rafael Monteiro': [4, 5, 6],
+						'Isabela Martins Carvalho': [1, 3, 5]
+					}
+				},
+				{
+					grupoId: PG_VERDE,
+					titulo: 'PG Verde',
+					dia: 2,
+					hora: '19:30',
+					semanas: {
+						'Marina Souza Albuquerque': [1, 2, 3, 4, 5, 6],
+						'Letícia Ferreira dos Santos': [1, 2, 3, 5, 6],
+						'Gustavo Lima': [1, 3, 4, 6],
+						'Thiago Barbosa': [2]
+					}
+				}
+			];
+
+			let listas = 0;
+			for (const h of HISTORICO) {
+				// A data da semana n: n semanas antes do próximo encontro.
+				const proximoEncontro = proximo(h.dia, 0);
+				for (let semana = 1; semana <= 6; semana++) {
+					const data = somarDias(proximoEncontro, -7 * semana);
+					const { id } = await criarEvento(
+						db as unknown as Database,
+						lider,
+						eventoSchema.parse({
+							tipoId: tipoPorChave.get('encontro_pg'),
+							titulo: h.titulo,
+							grupoId: h.grupoId,
+							data,
+							horaInicio: h.hora,
+							publicar: true
+						}),
+						[{ tipo: 'grupo', groupId: h.grupoId }]
+					);
+					const presentes = Object.entries(h.semanas)
+						.filter(([, semanas]) => semanas.includes(semana))
+						.map(([nome]) => nome);
+					await registrarLista(db as unknown as Database, lider, id, quem(presentes));
+					listas++;
+				}
+			}
+			console.log(`${listas} listas de presença do histórico.`);
+
+			// Respostas ao próximo PG Azul — para a lista do conselheiro mostrar
+			// quem disse que vem.
+			const [proximoPg] = await db
+				.select({ id: event.id })
+				.from(event)
+				.where(
+					and(eq(event.groupId, PG_AZUL), isNotNull(event.seriesId), sql`${event.startsAt} > now()`)
+				)
+				.orderBy(event.startsAt)
+				.limit(1);
+			if (proximoPg) {
+				const respostasDoPg: Array<[string, string]> = [
+					['João Vitor Cavalcanti', 'vou'],
+					['Camila Rodrigues Nascimento', 'atrasado'],
+					['Rafael Monteiro', 'nao_vou']
+				];
+				for (const [nome, chave] of respostasDoPg) {
+					const personId = idPorNome.get(nome);
+					if (!personId) continue;
+					await db
+						.insert(rsvp)
+						.values({
+							eventId: proximoPg.id,
+							personId,
+							optionId: respostas[chave]!,
+							respondedByPersonId: personId
+						})
+						.onConflictDoNothing();
+				}
+			}
+		}
 	}
 
 	// --- Um convite aberto, para testar o fluxo de entrada -------------------

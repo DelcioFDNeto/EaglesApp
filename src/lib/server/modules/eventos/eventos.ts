@@ -13,13 +13,16 @@ import {
 	sql,
 	type SQL
 } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
 import type { Database } from '$server/db';
 import {
+	attendance,
 	event,
 	eventAudience,
 	eventSeries,
 	eventType,
 	person,
+	rsvp,
 	smallGroup,
 	team
 } from '$server/db/schema';
@@ -335,6 +338,8 @@ export type EventoDetalhe = EventoResumo & {
 	publico: AlvoComNome[];
 	codigoPublico: string;
 	jaAconteceu: boolean;
+	/** Lista de presença feita (M06) — nulo enquanto ninguém a fez. */
+	listaFeitaEm: Date | null;
 };
 
 const colunasDoResumo = {
@@ -566,12 +571,14 @@ export async function verEvento(
 	actor: Actor,
 	eventId: string
 ): Promise<EventoDetalhe | null> {
+	if (!ehId(eventId)) return null;
 	const [linha] = await db
 		.select({
 			...colunasDoResumo,
 			descricao: event.description,
 			motivo: event.cancelReason,
 			codigo: event.publicCode,
+			listaFeitaEm: event.attendanceTakenAt,
 			responsavelId: person.id,
 			responsavelNome: person.fullName
 		})
@@ -606,7 +613,8 @@ export async function verEvento(
 			: null,
 		publico,
 		codigoPublico: linha.codigo,
-		jaAconteceu: linha.inicio <= new Date()
+		jaAconteceu: linha.inicio <= new Date(),
+		listaFeitaEm: linha.listaFeitaEm
 	};
 }
 
@@ -623,6 +631,8 @@ export type EventoPublico = {
 	equipe: string;
 	/** Para a rota decidir sobre o autocadastro; não vai para a página. */
 	teamId: string;
+	/** Para quem já entrou responder (D-M06-3); também não vai para a página. */
+	id: string;
 };
 
 /**
@@ -634,6 +644,7 @@ export async function eventoPorCodigo(db: Database, codigo: string): Promise<Eve
 
 	const [linha] = await db
 		.select({
+			id: event.id,
 			titulo: event.title,
 			tipo: eventType.name,
 			inicio: event.startsAt,
@@ -665,7 +676,8 @@ export async function eventoPorCodigo(db: Database, codigo: string): Promise<Eve
 		grupo: linha.grupo,
 		cancelado: linha.status === 'cancelado',
 		equipe: linha.equipe,
-		teamId: linha.teamId
+		teamId: linha.teamId,
+		id: linha.id
 	};
 }
 
@@ -1153,8 +1165,8 @@ export async function publicarSerie(
  * As ocorrências futuras não desprendidas deixam de existir; as exceções
  * ficam, porque alguém as ajustou à mão (D-M05-4). O passado não muda.
  *
- * No M06, ocorrência com RSVP ou presença deverá ser CANCELADA aqui, nunca
- * apagada — o gatilho do banco já recusa apagar o que aconteceu.
+ * Desde o M06, ocorrência futura com RSVP ou presença é CANCELADA em vez de
+ * apagada (D-M06-9) — e a chave estrangeira recusaria o contrário.
  */
 export async function encerrarSerie(
 	db: Database,
@@ -1162,7 +1174,7 @@ export async function encerrarSerie(
 	serieId: string,
 	aPartirDe: string,
 	contexto: ContextoDeRequisicao = {}
-): Promise<number> {
+): Promise<{ removidas: number; canceladas: number }> {
 	const s = await serieDaEquipe(db, actor, serieId);
 	authorize(actor, 'event.manage', { groupId: s.groupId });
 
@@ -1184,7 +1196,7 @@ export async function encerrarSerie(
 	const vespera = somarDias(s.startsOn, -1);
 	const fim = ultimo < vespera ? vespera : ultimo;
 
-	const removidas = await db.transaction(async (tx) => {
+	const { removidas, canceladas } = await db.transaction(async (tx) => {
 		await tx
 			.update(eventSeries)
 			.set({
@@ -1196,25 +1208,39 @@ export async function encerrarSerie(
 			})
 			.where(eq(eventSeries.id, serieId));
 
+		const futuras = and(
+			eq(event.seriesId, serieId),
+			eq(event.isException, false),
+			gte(event.occurrenceDate, aPartirDe),
+			gt(event.startsAt, new Date())
+		);
+		// Ocorrência com resposta ou presença presa a ela é CANCELADA, nunca
+		// apagada (D-M06-9): apagar levaria junto a resposta de alguém.
+		const comDados = sql`(exists (select 1 from ${rsvp} where ${rsvp.eventId} = ${event.id})
+			or exists (select 1 from ${attendance} where ${attendance.eventId} = ${event.id}))`;
+
+		const canceladas = await tx
+			.update(event)
+			.set({
+				status: 'cancelado',
+				cancelReason: 'Encontro semanal encerrado',
+				updatedAt: new Date()
+			})
+			.where(and(futuras, eq(event.status, 'agendado'), comDados))
+			.returning({ id: event.id });
+
 		const apagadas = await tx
 			.delete(event)
-			.where(
-				and(
-					eq(event.seriesId, serieId),
-					eq(event.isException, false),
-					gte(event.occurrenceDate, aPartirDe),
-					gt(event.startsAt, new Date())
-				)
-			)
+			.where(and(futuras, sql`not ${comDados}`))
 			.returning({ id: event.id });
-		return apagadas.length;
+		return { removidas: apagadas.length, canceladas: canceladas.length };
 	});
 
 	await auditar(db, actor, 'event.serie_encerrada', 'event_series', serieId, {
-		after: { aPartirDe, ocorrenciasRemovidas: removidas },
+		after: { aPartirDe, ocorrenciasRemovidas: removidas, ocorrenciasCanceladas: canceladas },
 		...contexto
 	});
-	return removidas;
+	return { removidas, canceladas };
 }
 
 /** Série em andamento de um grupo — para o atalho da tela do grupo. */

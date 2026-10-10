@@ -1,6 +1,11 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$server/db';
-import { canAnywhere, PolicyDenied } from '$server/policy/policy';
+import { can, canAnywhere, PolicyDenied } from '$server/policy/policy';
+import { paineisDeResposta } from '$server/modules/presenca/painel';
+import { quemRespondeu, responder } from '$server/modules/presenca/rsvp';
+import { confirmacaoXPresenca } from '$server/modules/presenca/frequencia';
+import { fusoDaEquipe } from '$server/modules/eventos/eventos';
+import { dataNoFuso, hojeNoFuso } from '$shared/fuso';
 import {
 	cancelarEvento,
 	publicarEvento,
@@ -26,16 +31,29 @@ import type { Actions, PageServerLoad } from './$types';
  *
  * Gerenciar (editar, cancelar) é `event.manage` no grupo do evento; publicar,
  * `event.publish` ali.
+ *
+ * Responder ("você vai?") é de quem vê o evento, por si (D-M06-3). Ver QUEM
+ * respondeu e quem esteve é `attendance.view` no grupo do evento (D-M06-8).
  */
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.actor) redirect(303, '/entrar');
 	if (!canAnywhere(locals.actor, 'event.view')) redirect(303, '/inicio');
 
-	const evento = await verEvento(db(), locals.actor, params.id);
+	const banco = db();
+	const actor = locals.actor;
+	const evento = await verEvento(banco, actor, params.id);
 	if (!evento) error(404, 'Evento não encontrado.');
 
 	const link = linkPublico(evento.codigoPublico);
-	const gerencia = podeGerenciar(locals.actor, evento.grupo?.id ?? null);
+	const gerencia = podeGerenciar(actor, evento.grupo?.id ?? null);
+	const grupoDoEvento = { groupId: evento.grupo?.id ?? null };
+
+	const [paineis, nomes, confirmacao, fuso] = await Promise.all([
+		paineisDeResposta(banco, actor, [evento], { comTotais: true }),
+		quemRespondeu(banco, actor, evento.id),
+		confirmacaoXPresenca(banco, actor, evento.id),
+		fusoDaEquipe(banco, actor.teamId)
+	]);
 
 	return {
 		evento: {
@@ -47,8 +65,17 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		compartilhar: evento.publicado
 			? { link, whatsapp: linkDoWhatsapp(textoDoEvento(evento, link)) }
 			: null,
+		resposta: paineis.get(evento.id)!,
+		quemRespondeu: nomes?.map((n) => ({ ...n, quando: n.quando.toISOString() })) ?? null,
+		confirmacao,
+		// A lista se faz no dia do encontro ou depois (D-M06-6).
+		podeFazerLista:
+			can(actor, 'attendance.record', grupoDoEvento) &&
+			evento.publicado &&
+			!evento.cancelado &&
+			dataNoFuso(evento.inicio, fuso) <= hojeNoFuso(fuso),
 		podeGerenciar: gerencia,
-		podePublicar: podePublicar(locals.actor, evento.grupo?.id ?? null),
+		podePublicar: podePublicar(actor, evento.grupo?.id ?? null),
 		criado: url.searchParams.get('criado') === '1',
 		salvo: url.searchParams.get('salvo') === '1'
 	};
@@ -77,6 +104,20 @@ function requisicao(request: Request, ip: string) {
 }
 
 export const actions: Actions = {
+	/** "Você vai?" — em um toque (RF-06.1). */
+	responder: async ({ locals, params, request }) => {
+		if (!locals.actor) redirect(303, '/entrar');
+		if (!canAnywhere(locals.actor, 'event.view')) error(403, 'Sem permissão para responder.');
+		const form = await request.formData();
+		const respostaId = String(form.get('respostaId') ?? '');
+		const convidados = Number(form.get('convidados') ?? 0) || 0;
+		const actor = locals.actor;
+		return executar(async () => {
+			await responder(db(), actor, params.id, { respostaId, convidados });
+			return { sucesso: 'Resposta registrada.' };
+		});
+	},
+
 	// Cada ação começa por exigir uma permissão de evento em algum escopo — a
 	// declaração da rota. A verificação de verdade, com o grupo do evento, é
 	// do serviço.

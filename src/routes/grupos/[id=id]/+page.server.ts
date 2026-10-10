@@ -10,6 +10,7 @@ import { listarPapeis } from '$server/modules/rbac/papeis';
 import { proximosEventos, serieAtivaDoGrupo } from '$server/modules/eventos/eventos';
 import { tipoDoEncontroDoGrupo } from '$server/modules/eventos/tipos';
 import { pessoasParaEscolha } from '$server/modules/pessoas/pessoas';
+import { frequenciaDoGrupo } from '$server/modules/presenca/frequencia';
 import { AcessoRecusado, statusDaRecusa } from '$server/modules/rbac/regras';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -23,7 +24,9 @@ import type { Actions, PageServerLoad } from './$types';
  *   - colocar alguém: `group.assign_member` no grupo — e na origem da pessoa;
  *   - editar o combinado: `group.manage` no grupo;
  *   - arquivar e reativar: `group.manage` global;
- *   - responsáveis: `rbac.manage` global + reautenticação (travas do M03).
+ *   - responsáveis: `rbac.manage` global + reautenticação (travas do M03);
+ *   - frequência e sinais de cada pessoa: `attendance.report` no grupo — só
+ *     para quem cuida dele, nunca entre pares (D-M06-7).
  */
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -56,6 +59,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		podeGerenciarEventos ? tipoDoEncontroDoGrupo(banco, actor.teamId) : Promise.resolve(null)
 	]);
 
+	const podeVerFrequencia = can(actor, 'attendance.report', { groupId: grupo.id });
+	const frequencia = podeVerFrequencia
+		? Object.fromEntries(await frequenciaDoGrupo(banco, actor, grupo.id))
+		: null;
+
 	// Só papéis de escopo de grupo: os demais valem para a equipe inteira e
 	// são atribuídos pela tela da pessoa (D-M03-1).
 	const papeisDeGrupo = papeis.filter((p) => p.defaultScope === 'group');
@@ -82,6 +90,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			fim: e.fim?.toISOString() ?? null
 		})),
 		serieAtiva: serie,
+		frequencia,
 		podeCriarEncontroSemanal: podeGerenciarEventos && !serie && !!tipoDoGrupo,
 		podeEditar: ativo && can(actor, 'group.manage', { groupId: grupo.id }),
 		podeArquivar: can(actor, 'group.manage'),

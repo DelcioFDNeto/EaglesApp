@@ -187,6 +187,25 @@
 								{/if}
 								<span class="desde">desde {dataCurta.format(new Date(p.desde))}</span>
 							</span>
+							{#if data.frequencia?.[p.personId]}
+								{@const f = data.frequencia[p.personId]!}
+								<span class="frequencia">
+									{#if f.percentual !== null}
+										<span class="percentual">
+											Frequência {f.percentual}%
+											<small>({f.presentes} de {f.esperados})</small>
+										</span>
+									{/if}
+									{#if f.sinais.includes('sumiu')}
+										<span class="sinal">Não vem há {f.faltasSeguidas} encontros</span>
+									{/if}
+									{#if f.sinais.includes('visitante_frequente')}
+										<span class="sinal visitante">
+											Já veio {f.presencasRecentes} vezes em 60 dias
+										</span>
+									{/if}
+								</span>
+							{/if}
 							{#if p.pendencias.length > 0}
 								<span class="pendencias">
 									{#each p.pendencias as pend (pend)}
@@ -201,13 +220,17 @@
 		{/if}
 
 		<!--
-			Frequência é a terceira coluna que RF-04.3 pede. Ela depende de
-			presença registrada, que chega com o M06 — o texto diz isso em vez de
-			mostrar uma coluna vazia.
+			Frequência é a terceira coluna que RF-04.3 pede (M06). Só para quem
+			cuida do grupo; e sinais em vez de ranking (D-M06-7): a lista continua
+			em ordem de nome.
 		-->
-		<p class="legenda">
-			A frequência de cada pessoa aparece aqui quando a presença começar a ser registrada.
-		</p>
+		{#if data.frequencia}
+			<p class="legenda">
+				Frequência das últimas 8 semanas, só nos encontros com lista feita. Encontro sem lista não
+				conta falta para ninguém.
+				<a href="/frequencia?grupo={g.id}">Relatório de frequência</a>
+			</p>
+		{/if}
 
 		{#if data.podeColocar}
 			{#if data.candidatos.length > 0}
@@ -280,6 +303,36 @@
 </main>
 
 <style>
+	.frequencia {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--esp-1) var(--esp-2);
+		font-size: var(--texto-sm);
+	}
+
+	.percentual {
+		color: var(--cor-texto-2);
+	}
+
+	.percentual small {
+		color: var(--cor-texto-3);
+	}
+
+	.sinal {
+		font-size: var(--texto-xs);
+		font-weight: 700;
+		padding: 2px 8px;
+		border-radius: 999px;
+		background: var(--cor-aviso-suave);
+		color: var(--cor-aviso);
+	}
+
+	.sinal.visitante {
+		background: var(--cor-sucesso-suave);
+		color: var(--cor-sucesso);
+	}
+
 	.eventos {
 		list-style: none;
 		padding: 0;

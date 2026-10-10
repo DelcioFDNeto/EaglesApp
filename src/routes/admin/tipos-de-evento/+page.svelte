@@ -11,7 +11,24 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	const cores = CORES_DE_GRUPO.map((c) => ({ valor: c.valor, rotulo: c.rotulo }));
-	const errosDe = (tipoId: string) => (form?.tipoId === tipoId ? (form?.erros ?? {}) : {});
+	// Os ramos de `form` têm formatos diferentes; a tela os lê como dicionários.
+	const errosDe = (tipoId: string): Record<string, string | undefined> =>
+		form?.tipoId === tipoId ? (form?.erros ?? {}) : {};
+	const valoresDe = (tipoId: string): Record<string, string> =>
+		form?.tipoId === tipoId ? (form?.valores ?? {}) : {};
+
+	const SIGNIFICADOS = [
+		{ valor: 'sim', rotulo: 'Vai — conta como confirmação' },
+		{ valor: 'talvez', rotulo: 'Talvez' },
+		{ valor: 'nao', rotulo: 'Não vai' }
+	];
+	const SIGNIFICADO_CURTO: Record<string, string> = {
+		sim: 'vai',
+		talvez: 'talvez',
+		nao: 'não vai'
+	};
+	const ativas = $derived(data.respostas.filter((r) => !r.arquivada));
+	const valorDaResposta = (campo: string) => valoresDe('resposta')[campo] ?? '';
 </script>
 
 <svelte:head>
@@ -24,7 +41,8 @@
 	<h1>Tipos de evento</h1>
 	<p class="legenda">
 		O tipo diz o que é o evento. Quem marca “encontro do grupo” é o tipo que o atalho de cada grupo
-		usa para criar o encontro semanal — só um pode ter essa marca.
+		usa para criar o encontro semanal — só um pode ter essa marca. Tipo que não conta para a
+		frequência (uma reunião de liderança, por exemplo) não entra na conta de ninguém.
 	</p>
 
 	{#if form?.erro}
@@ -42,6 +60,7 @@
 					<span class="ponto" aria-hidden="true"></span>
 					<span class="nome">{t.nome}</span>
 					{#if t.ehEncontroDoGrupo}<span class="selo">encontro do grupo</span>{/if}
+					{#if !t.contaParaFrequencia}<span class="selo">fora da frequência</span>{/if}
 					{#if t.arquivado}<span class="selo">arquivado</span>{/if}
 					<span class="usos">{t.eventos} {t.eventos === 1 ? 'evento' : 'eventos'}</span>
 				</div>
@@ -69,6 +88,30 @@
 							/>
 							<span>É o encontro do grupo</span>
 						</label>
+						<label class="caixa">
+							<input
+								type="checkbox"
+								name="contaParaFrequencia"
+								value="sim"
+								checked={t.contaParaFrequencia}
+							/>
+							<span>Conta para a frequência</span>
+						</label>
+						<fieldset class="respostas-do-tipo">
+							<legend>Respostas oferecidas no “Você vai?”</legend>
+							{#each ativas as r (r.id)}
+								<label class="caixa">
+									<input
+										type="checkbox"
+										name="respostas"
+										value={r.id}
+										checked={data.escolhas[t.id]?.includes(r.id)}
+									/>
+									<span>{r.texto}</span>
+								</label>
+							{/each}
+							{#if erros.respostas}<p class="erro" role="alert">{erros.respostas}</p>{/if}
+						</fieldset>
 						<Botao tipo="submit" variante="secundario">Salvar</Botao>
 					</form>
 				</details>
@@ -88,7 +131,7 @@
 			<Campo
 				id="nome"
 				rotulo="Nome"
-				valor={form?.tipoId === 'novo' ? (form?.valores?.nome ?? '') : ''}
+				valor={valoresDe('novo').nome ?? ''}
 				erro={errosDe('novo').nome}
 			/>
 			<Seletor id="cor" rotulo="Cor" opcoes={cores} vazio="Sem cor" erro={errosDe('novo').cor} />
@@ -96,7 +139,68 @@
 				<input type="checkbox" name="ehEncontroDoGrupo" value="sim" />
 				<span>É o encontro do grupo</span>
 			</label>
+			<label class="caixa">
+				<input type="checkbox" name="contaParaFrequencia" value="sim" checked />
+				<span>Conta para a frequência</span>
+			</label>
 			<Botao tipo="submit">Criar tipo</Botao>
+		</form>
+	</section>
+
+	<section class="cartao" aria-label="Respostas de presença">
+		<h2>Respostas de presença</h2>
+		<p class="legenda">
+			O que cada pessoa pode responder no “Você vai?”. O texto é livre; o significado é o que os
+			relatórios contam — renomear “Vou” não muda conta nenhuma.
+		</p>
+		<ul class="respostas">
+			{#each data.respostas as r (r.id)}
+				<li class:arquivado={r.arquivada}>
+					<span class="nome">{r.texto}</span>
+					<span class="selo">{SIGNIFICADO_CURTO[r.significado]}</span>
+					{#if r.aceitaConvidados}<span class="selo">aceita convidados</span>{/if}
+					{#if r.arquivada}<span class="selo">arquivada</span>{/if}
+					<form method="POST" action="?/arquivarResposta" use:enhance>
+						<input type="hidden" name="respostaId" value={r.id} />
+						<input type="hidden" name="arquivar" value={r.arquivada ? 'nao' : 'sim'} />
+						<Botao
+							tipo="submit"
+							variante="texto"
+							aria-label="{r.arquivada ? 'Reativar' : 'Arquivar'} {r.texto}"
+						>
+							{r.arquivada ? 'Reativar' : 'Arquivar'}
+						</Botao>
+					</form>
+				</li>
+			{/each}
+		</ul>
+
+		<form method="POST" action="?/criarResposta" class="formulario" use:enhance>
+			<h3>Nova resposta</h3>
+			<Campo
+				id="texto"
+				rotulo="Texto"
+				valor={valorDaResposta('texto')}
+				erro={errosDe('resposta').texto}
+				maxlength="40"
+			/>
+			<Seletor
+				id="significado"
+				rotulo="Significa"
+				opcoes={SIGNIFICADOS}
+				valor={valorDaResposta('significado') || 'sim'}
+				erro={errosDe('resposta').significado}
+			/>
+			<label class="caixa">
+				<input
+					type="checkbox"
+					name="aceitaConvidados"
+					value="sim"
+					checked={valorDaResposta('aceitaConvidados') === 'sim'}
+				/>
+				<span>Aceita convidados (“levo mais 2”) — só para quem vai</span>
+			</label>
+			<Botao tipo="submit" variante="secundario">Criar resposta</Botao>
 		</form>
 	</section>
 </main>
@@ -219,5 +323,53 @@
 		width: 1.15rem;
 		height: 1.15rem;
 		accent-color: var(--cor-marca);
+	}
+
+	h3 {
+		font-size: var(--texto-base);
+	}
+
+	.respostas-do-tipo {
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio);
+		padding: var(--esp-2) var(--esp-3);
+		margin: 0;
+		min-width: 0;
+	}
+
+	.respostas-do-tipo legend {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		padding-inline: var(--esp-1);
+	}
+
+	.respostas {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.respostas li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--esp-1) var(--esp-2);
+		padding-block: var(--esp-1);
+		border-top: 1px solid var(--cor-linha);
+	}
+
+	.respostas li:first-child {
+		border-top: 0;
+	}
+
+	.respostas form {
+		margin-left: auto;
+	}
+
+	.erro {
+		font-size: var(--texto-sm);
+		color: var(--cor-erro);
 	}
 </style>

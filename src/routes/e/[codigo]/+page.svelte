@@ -2,10 +2,14 @@
 	import Marca from '$ui/Marca.svelte';
 	import Botao from '$ui/Botao.svelte';
 	import Aviso from '$ui/Aviso.svelte';
+	import VoceVai from '$ui/VoceVai.svelte';
+	import { page } from '$app/state';
 	import { dataPorExtenso, horaCurta } from '$shared/fuso';
-	import type { PageData } from './$types';
+	import type { ActionData, PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form: ActionData } = $props();
+
+	const voltar = $derived(`/entrar?voltar=${encodeURIComponent(page.url.pathname)}`);
 
 	const e = $derived(data.evento);
 	const quando = $derived(
@@ -36,11 +40,24 @@
 		{#if e.descricao}<p class="descricao">{e.descricao}</p>{/if}
 	</article>
 
+	{#if form?.erro}
+		<Aviso tom="erro">{form.erro}</Aviso>
+	{/if}
+
+	{#if data.resposta?.podeResponder}
+		<section class="cartao resposta" aria-label="Confirmar presença">
+			<VoceVai painel={data.resposta} acao="?/responder" />
+		</section>
+	{/if}
+
 	<div class="acoes">
 		{#if data.autenticado}
 			<Botao href="/agenda" variante="secundario">Abrir minha agenda</Botao>
 		{:else}
-			<Botao href="/entrar" variante="secundario">Entrar no app</Botao>
+			{#if !e.cancelado}
+				<p class="confirmar">Para confirmar presença, entre no app.</p>
+			{/if}
+			<Botao href={voltar} variante="secundario">Entrar no app</Botao>
 			{#if data.autocadastro}
 				<p class="primeira-vez">
 					É sua primeira vez? <a href="/sou-novo">Conte quem você é</a> — leva um minuto.
@@ -122,6 +139,12 @@
 		gap: var(--esp-3);
 	}
 
+	/* O destaque vermelho é do cartão do evento; este é só o formulário. */
+	.resposta {
+		border-top: 1px solid var(--cor-linha);
+	}
+
+	.confirmar,
 	.primeira-vez {
 		font-size: var(--texto-sm);
 		color: var(--cor-texto-2);

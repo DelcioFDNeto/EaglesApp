@@ -139,7 +139,9 @@ export const tipoSchema = z.object({
 		(v) => v === null || CORES_DE_GRUPO.some((c) => c.valor === v),
 		'Escolha uma das cores da lista.'
 	),
-	ehEncontroDoGrupo: z.boolean().default(false)
+	ehEncontroDoGrupo: z.boolean().default(false),
+	/** Entra na frequência (G3 do M06). Reunião de liderança, por exemplo, não. */
+	contaParaFrequencia: z.boolean().default(true)
 });
 
 export type TipoEntrada = z.output<typeof tipoSchema>;

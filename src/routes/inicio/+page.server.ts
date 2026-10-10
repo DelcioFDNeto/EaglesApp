@@ -5,6 +5,7 @@ import { PERMISSIONS } from '$server/policy/permissions';
 import { featureFlag } from '$server/db/schema';
 import { listarGrupos, meusGrupos } from '$server/modules/grupos/grupos';
 import { proximosEventos } from '$server/modules/eventos/eventos';
+import { paineisDeResposta } from '$server/modules/presenca/painel';
 import { eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 
@@ -38,7 +39,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			catalogoPermissoes: {},
 			funcionalidades: {},
 			grupos: [],
-			proximos: []
+			proximos: [],
+			resposta: null
 		};
 	}
 
@@ -63,6 +65,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// equipe, o grupo dela, ela mesma —, não a agenda da equipe inteira.
 	const proximos = await proximosEventos(banco, locals.actor, { limite: 3 });
 
+	// "Você vai?" no próximo encontro que ainda aceita resposta (F2): o
+	// membro abre o app na quinta e confirma sem procurar o evento.
+	const paineis = await paineisDeResposta(banco, locals.actor, proximos);
+	const proximoAberto = proximos.find((e) => paineis.get(e.id)?.podeResponder);
+
 	// Quais permissões esta pessoa realmente tem — o menu se monta a partir
 	// disto, e não de "se papel === conselheiro".
 	const minhasPermissoes = [
@@ -81,6 +88,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			...e,
 			inicio: e.inicio.toISOString(),
 			fim: e.fim?.toISOString() ?? null
-		}))
+		})),
+		resposta: proximoAberto
+			? { eventoId: proximoAberto.id, painel: paineis.get(proximoAberto.id)! }
+			: null
 	};
 };

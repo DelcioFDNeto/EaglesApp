@@ -3,9 +3,9 @@
 Plataforma de gestão interna dos Eagles: pessoas, grupos (PGs), encontros,
 responsabilidades, participação e recursos financeiros — o ano inteiro.
 
-> **Estado:** Módulo 01 (Fundação) implementado. Ainda não há funcionalidade de
-> negócio: o M01 entrega o esqueleto executável — acesso, autorização, banco,
-> design system, PWA e deploy. Pessoas, grupos e eventos vêm nos M02–M06.
+> **Estado:** MVP completo — módulos 01 a 06 implementados: fundação, pessoas,
+> papéis e acessos, grupos, eventos e presença. A implantação na VPS é a
+> próxima etapa (depende do domínio e das specs da máquina).
 
 **Stack:** SvelteKit 2 (Svelte 5) · TypeScript · PostgreSQL 16 · Drizzle · PWA
 
@@ -13,11 +13,12 @@ responsabilidades, participação e recursos financeiros — o ano inteiro.
 
 ## Comece por aqui
 
-| Documento                                                                    | Para quê                                                              |
-| ---------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [`docs/00-descoberta-e-arquitetura.md`](docs/00-descoberta-e-arquitetura.md) | Requisitos, regras de negócio, modelo de dados, RBAC, riscos, roadmap |
-| [`docs/01-modulo-01-fundacao.md`](docs/01-modulo-01-fundacao.md)             | O que o M01 entrega e seus critérios de aceitação                     |
-| [`docs/adr/`](docs/adr/)                                                     | Por que cada decisão importante foi tomada                            |
+| Documento                                                                      | Para quê                                                              |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| [`docs/00-descoberta-e-arquitetura.md`](docs/00-descoberta-e-arquitetura.md)   | Requisitos, regras de negócio, modelo de dados, RBAC, riscos, roadmap |
+| [`docs/01-modulo-01-fundacao.md`](docs/01-modulo-01-fundacao.md)               | O que o M01 entrega e seus critérios de aceitação                     |
+| `docs/02-…` a [`docs/06-modulo-06-presenca.md`](docs/06-modulo-06-presenca.md) | Um documento por módulo: decisões, o que foi construído e a evidência |
+| [`docs/adr/`](docs/adr/)                                                       | Por que cada decisão importante foi tomada                            |
 
 Leia os ADRs antes de mudar algo estrutural. Em oito meses ninguém lembra por
 que o Redis foi descartado ou por que a sessão não é JWT.
@@ -51,6 +52,10 @@ Contas criadas pela semeadura (senha `eagles-desenvolvimento`):
 A semeadura também cria a **agenda**: o encontro semanal do PG Azul (quinta, 20h)
 e do PG Verde (terça, 19h30), um encontro geral, uma reunião de liderança e um
 rascunho — datas relativas ao dia em que roda.
+
+E seis semanas de **lista de presença** dos dois PGs, para a frequência ter o
+que mostrar: Rafael vinha e parou ("não vem há 3 encontros"), Isabela é
+visitante e já veio três vezes, e o João já respondeu "vou" ao próximo PG Azul.
 
 A semeadura também imprime um **link de convite** para testar o fluxo real de
 entrada, que é como toda pessoa vai receber acesso (ADR 0004).

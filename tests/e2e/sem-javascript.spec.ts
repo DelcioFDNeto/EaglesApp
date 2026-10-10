@@ -166,4 +166,42 @@ test.describe('sem JavaScript', () => {
 		await page.getByRole('button', { name: 'Cancelar este evento' }).click();
 		await expect(page.getByText('Evento cancelado', { exact: true })).toBeVisible();
 	});
+
+	/**
+	 * Módulo 06: o "você vai?" é um formulário com um botão por resposta, e a
+	 * lista de presença é um formulário só. Os dois têm de funcionar no
+	 * celular antigo do salão do PG, sem script.
+	 */
+	test('responder e fazer a lista de presença funcionam sem JavaScript', async ({ page }) => {
+		await page.goto('/entrar');
+		await page.getByLabel('E-mail ou telefone').fill(CONTAS.conselheiro);
+		await page.getByLabel('Senha').fill(SENHA);
+		await page.getByRole('button', { name: 'Entrar' }).click();
+		await page.waitForURL('**/inicio');
+
+		// RSVP: o botão envia o formulário e a página do evento confirma. (O
+		// próximo encontro do Pedro é a reunião de liderança, que só oferece
+		// "Vou" e "Não vou" — as respostas são por tipo, RN-11.)
+		const voceVai = page
+			.getByRole('region', { name: 'Seus próximos encontros' })
+			.getByRole('group', { name: 'Você vai?' });
+		await voceVai.getByRole('button', { name: 'Não vou' }).click();
+		await expect(page.getByText('Resposta registrada.')).toBeVisible();
+		await expect(
+			page.getByRole('region', { name: 'Você vai?' }).getByRole('button', { name: 'Não vou' })
+		).toHaveAttribute('aria-pressed', 'true');
+
+		// Lista: do evento passado até "lista salva", sem script.
+		await page.goto('/grupos');
+		await page.getByRole('link', { name: /PG Azul/ }).click();
+		await page.getByRole('link', { name: 'Relatório de frequência' }).click();
+		await page
+			.getByRole('region', { name: 'Encontros' })
+			.getByRole('link', { name: 'PG Azul' })
+			.first()
+			.click();
+		await page.getByRole('link', { name: 'Rever a lista de presença' }).click();
+		await page.getByRole('button', { name: 'Salvar a lista' }).click();
+		await expect(page.getByText(/^Lista salva: \d+ presentes\.$/)).toBeVisible();
+	});
 });

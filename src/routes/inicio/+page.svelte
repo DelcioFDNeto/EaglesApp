@@ -5,6 +5,7 @@
 	import Botao from '$ui/Botao.svelte';
 	import InstalarPwa from '$ui/InstalarPwa.svelte';
 	import CartaoDeEvento from '$ui/CartaoDeEvento.svelte';
+	import VoceVai from '$ui/VoceVai.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -81,7 +82,14 @@
 					<h2>Seus próximos encontros</h2>
 					<ul class="eventos">
 						{#each data.proximos as evento (evento.id)}
-							<li><CartaoDeEvento {evento} mostrarData /></li>
+							<li>
+								<CartaoDeEvento {evento} mostrarData />
+								{#if data.resposta?.eventoId === evento.id}
+									<div class="rsvp">
+										<VoceVai painel={data.resposta.painel} acao="/agenda/{evento.id}?/responder" />
+									</div>
+								{/if}
+							</li>
 						{/each}
 					</ul>
 					<a class="ver-agenda" href="/agenda">Ver a agenda completa</a>
@@ -95,8 +103,8 @@
 					<Marca tamanho={44} />
 					<h2>Nenhum encontro marcado para você</h2>
 					<p>
-						Quando houver um encontro do seu grupo ou da equipe, ele aparece aqui — e, em breve,
-						você confirma presença em um toque.
+						Quando houver um encontro do seu grupo ou da equipe, ele aparece aqui — e você confirma
+						presença em um toque.
 					</p>
 				</section>
 			{/if}
@@ -162,6 +170,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--esp-2);
+	}
+
+	.rsvp {
+		padding: var(--esp-3) var(--esp-1) var(--esp-1);
 	}
 
 	.ver-agenda {

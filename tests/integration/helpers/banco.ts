@@ -8,15 +8,21 @@ import { ALL_PERMISSIONS, PERMISSIONS } from '../../../src/lib/server/policy/per
 import { ROLE_SEEDS } from '../../../src/lib/server/policy/roles';
 import {
 	eventType,
+	eventTypeRsvpOption,
 	membershipStatus,
 	permission,
 	role,
 	rolePermission,
+	rsvpOption,
 	smallGroup,
 	team
 } from '../../../src/lib/server/db/schema';
 import { ESTAGIOS_SEMENTE } from '../../../src/lib/server/modules/pessoas/estagios-semente';
 import { TIPOS_SEMENTE } from '../../../src/lib/server/modules/eventos/tipos-semente';
+import {
+	RESPOSTAS_POR_TIPO,
+	RESPOSTAS_SEMENTE
+} from '../../../src/lib/server/modules/presenca/respostas-semente';
 
 /**
  * Banco de teste: PostgreSQL de verdade, sem Docker.
@@ -42,6 +48,8 @@ export type BancoDeTeste = {
 	estagios: Record<string, string>;
 	/** Tipos de evento (M05), por chave. */
 	tiposDeEvento: Record<string, string>;
+	/** Respostas de presença (M06), por chave da semente. */
+	respostas: Record<string, string>;
 	fechar: () => Promise<void>;
 };
 
@@ -112,6 +120,28 @@ export async function criarBancoDeTeste(): Promise<BancoDeTeste> {
 		tiposDeEvento[semente.key] = criado!.id;
 	}
 
+	// --- Respostas de presença (M06) -----------------------------------------
+
+	const respostas: Record<string, string> = {};
+	for (const r of RESPOSTAS_SEMENTE) {
+		const [criada] = await db
+			.insert(rsvpOption)
+			.values({
+				teamId: equipe.id,
+				label: r.label,
+				semantic: r.semantic,
+				allowsGuests: r.allowsGuests,
+				position: r.position
+			})
+			.returning({ id: rsvpOption.id });
+		respostas[r.key] = criada!.id;
+	}
+	for (const [tipo, chaves] of Object.entries(RESPOSTAS_POR_TIPO)) {
+		await db
+			.insert(eventTypeRsvpOption)
+			.values(chaves.map((k) => ({ typeId: tiposDeEvento[tipo]!, optionId: respostas[k]! })));
+	}
+
 	return {
 		db,
 		cliente,
@@ -119,6 +149,7 @@ export async function criarBancoDeTeste(): Promise<BancoDeTeste> {
 		papeis,
 		estagios,
 		tiposDeEvento,
+		respostas,
 		fechar: () => cliente.close()
 	};
 }

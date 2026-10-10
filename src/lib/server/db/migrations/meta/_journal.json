@@ -64,6 +64,20 @@
       "when": 1791611635603,
       "tag": "0008_regras_de_eventos",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791663183491,
+      "tag": "0009_presenca",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791663184491,
+      "tag": "0010_regras_de_presenca",
+      "breakpoints": true
     }
   ]
 }

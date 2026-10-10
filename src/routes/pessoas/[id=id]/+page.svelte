@@ -162,6 +162,38 @@
 		{/if}
 	</section>
 
+	{#if data.frequencia}
+		<section class="cartao" aria-label="Frequência">
+			<h3>Frequência</h3>
+			{#if data.frequencia.percentual === null}
+				<p class="legenda">
+					Nenhum encontro com lista feita nas últimas 8 semanas em que a pessoa era esperada.
+				</p>
+			{:else}
+				<p class="frequencia">
+					<strong>{data.frequencia.percentual}%</strong>
+					<span class="legenda">
+						esteve em {data.frequencia.presentes} de {data.frequencia.esperados} encontros nas últimas
+						8 semanas
+					</span>
+				</p>
+			{/if}
+			{#if data.frequencia.encontros.length > 0}
+				<ul class="encontros">
+					{#each data.frequencia.encontros as e (e.id)}
+						<li>
+							<span class="situacao {e.situacao}">
+								{e.situacao === 'veio' ? 'Veio' : e.situacao === 'visitou' ? 'Visitou' : 'Não veio'}
+							</span>
+							<a href="/agenda/{e.id}">{e.titulo}</a>
+							<span class="legenda">{e.data}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
+	{/if}
+
 	<section class="cartao" aria-label="Acesso ao app">
 		<h3>Acesso ao app</h3>
 		{#if data.papeis.length > 0}
@@ -443,5 +475,48 @@
 			grid-template-columns: 1fr;
 			gap: var(--esp-1);
 		}
+	}
+
+	.frequencia {
+		display: flex;
+		align-items: baseline;
+		flex-wrap: wrap;
+		gap: var(--esp-2);
+	}
+
+	.frequencia strong {
+		font-size: var(--texto-2xl);
+	}
+
+	.encontros {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.encontros li {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 2px var(--esp-2);
+		font-size: var(--texto-sm);
+	}
+
+	.situacao {
+		font-size: var(--texto-xs);
+		font-weight: 700;
+		padding: 0 var(--esp-2);
+		border-radius: 999px;
+		background: var(--cor-superficie-3);
+		color: var(--cor-texto-3);
+	}
+
+	.situacao.veio,
+	.situacao.visitou {
+		background: var(--cor-sucesso-suave);
+		color: var(--cor-sucesso);
 	}
 </style>

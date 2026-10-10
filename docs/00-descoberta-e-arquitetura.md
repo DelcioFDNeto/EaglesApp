@@ -1,6 +1,6 @@
 # Eagles App — Documento de Descoberta e Arquitetura Inicial
 
-**Versão:** 0.6
+**Versão:** 0.7
 **Data:** 18/08/2026 — revisado em 10/10/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
@@ -615,21 +615,21 @@ erDiagram
     PERSON ||--o{ ASSIGNMENT : assume
 ```
 
-| Tabela                | Papel                                 | Observações                                                                                                                                                                              |
-| --------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `small_group`         | O PG (`group` é palavra reservada)    | `name`, `color`, `meeting_weekday`, `meeting_time`, `location`, `archived_at`. **Sem coluna de conselheiro:** quem cuida do grupo é o papel com escopo nele (D-M04-1)                    |
-| `group_membership`    | Vínculo **temporal** (RN-06, RN-07)   | `joined_at`, `left_at`, `left_reason`, `batch_id`. Índice único parcial garante **um grupo ativo por pessoa**; gatilho só permite **encerrar**                                           |
-| `event_type`          | Configurável (RN-10)                  | `name`, `color`, `is_group_meeting` (o tipo do encontro do grupo, um por equipe), `archived_at`. Opções de RSVP e `counts_for_attendance` entram no M06, com o uso                       |
-| `event`               | Compromisso                           | `title`, `starts_at` (instante), `ends_at`, `location`, `group_id`, `owner_person_id`, `status`, `published_at`, `public_code`; de série: `series_id`, `occurrence_date`, `is_exception` |
-| `event_series`        | Encontro semanal (D-M05-1)            | `weekday`, `local_time`, `duration_minutes`, `interval_weeks` (1–4), `starts_on`, `ends_on`, `materialized_until` — colunas validadas pelo banco, não RRULE em texto                     |
-| `event_audience`      | Quem é convidado                      | De um evento **ou** de uma série; `kind` = equipe \| grupo \| pessoa. Por estágio da jornada fica `[FUT]`                                                                                |
-| `rsvp_option`         | Opções configuráveis (RN-11)          | `label`, `semantic` (`yes`/`no`/`maybe`/`late`/`guest`), `allows_guest_count`                                                                                                            |
-| `rsvp`                | Resposta atual                        | único por (`event`,`person`)                                                                                                                                                             |
-| `rsvp_history`        | Todas as respostas anteriores (RN-12) | append-only                                                                                                                                                                              |
-| `attendance`          | Presença **efetiva** (RN-13)          | `source` = manual \| checkin \| importado; `recorded_by`                                                                                                                                 |
-| `checkin_token`       | Só se a chave estiver ligada (RN-14)  | token rotativo com validade curta                                                                                                                                                        |
-| `responsibility_type` | Configurável (RN-16)                  | `name`, `min_interval_days`, `requires_skill`                                                                                                                                            |
-| `assignment`          | Escala                                | `event_id`, `responsibility_type_id`, `person_id`, `status` (proposta/confirmada/trocada/cumprida), `source` (manual/gerada), `proposal_id`                                              |
+| Tabela                | Papel                                | Observações                                                                                                                                                                                                                                         |
+| --------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `small_group`         | O PG (`group` é palavra reservada)   | `name`, `color`, `meeting_weekday`, `meeting_time`, `location`, `archived_at`. **Sem coluna de conselheiro:** quem cuida do grupo é o papel com escopo nele (D-M04-1)                                                                               |
+| `group_membership`    | Vínculo **temporal** (RN-06, RN-07)  | `joined_at`, `left_at`, `left_reason`, `batch_id`. Índice único parcial garante **um grupo ativo por pessoa**; gatilho só permite **encerrar**                                                                                                      |
+| `event_type`          | Configurável (RN-10)                 | `name`, `color`, `is_group_meeting` (o tipo do encontro do grupo, um por equipe), `counts_for_attendance` (entra na frequência — M06), `archived_at`                                                                                                |
+| `event`               | Compromisso                          | `title`, `starts_at` (instante), `ends_at`, `location`, `group_id`, `owner_person_id`, `status`, `published_at`, `public_code`; de série: `series_id`, `occurrence_date`, `is_exception`; `attendance_taken_at`/`_by` — a lista foi feita (D-M06-4) |
+| `event_series`        | Encontro semanal (D-M05-1)           | `weekday`, `local_time`, `duration_minutes`, `interval_weeks` (1–4), `starts_on`, `ends_on`, `materialized_until` — colunas validadas pelo banco, não RRULE em texto                                                                                |
+| `event_audience`      | Quem é convidado                     | De um evento **ou** de uma série; `kind` = equipe \| grupo \| pessoa. Por estágio da jornada fica `[FUT]`                                                                                                                                           |
+| `rsvp_option`         | Opções configuráveis (RN-11)         | `label`, `semantic` (`sim`/`talvez`/`nao` — "vou chegar atrasado" é um `sim` com outro texto), `allows_guests`, `archived_at`. Cada tipo escolhe as suas em `event_type_rsvp_option` (D-M06-1)                                                      |
+| `rsvp`                | Resposta atual                       | único por (`event`,`person`); `guests`, `responded_by`. Gatilho valida evento publicado, não cancelado, e resposta oferecida pelo tipo                                                                                                              |
+| `rsvp_history`        | Todas as respostas (RN-12)           | append-only, **preenchida por gatilho** a cada inserção ou mudança em `rsvp` (D-M06-2)                                                                                                                                                              |
+| `attendance`          | Presença **efetiva** (RN-13)         | `source` = manual \| checkin; `recorded_by`. Só conta em evento com lista feita (D-M06-4)                                                                                                                                                           |
+| `checkin_token`       | Só se a chave estiver ligada (RN-14) | token rotativo com validade curta                                                                                                                                                                                                                   |
+| `responsibility_type` | Configurável (RN-16)                 | `name`, `min_interval_days`, `requires_skill`                                                                                                                                                                                                       |
+| `assignment`          | Escala                               | `event_id`, `responsibility_type_id`, `person_id`, `status` (proposta/confirmada/trocada/cumprida), `source` (manual/gerada), `proposal_id`                                                                                                         |
 
 **Ponto sensível de modelagem — recorrência.** PGs semanais geram muitos eventos. Adoto **materialização parcial**: a série guarda a RRULE e o sistema materializa apenas as próximas 12 semanas em linhas reais, mais qualquer ocorrência que tenha RSVP, presença ou escala. Alternativas seriam materializar tudo (banco inchado, difícil editar a série) ou nada (impossível anexar presença a uma ocorrência). `[DEC]`
 
@@ -1357,22 +1357,26 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 ### Estado da execução — 10/10/2026
 
-**Módulos 01 a 05 implementados** — fundação, pessoas, RBAC, grupos e eventos.
+**MVP completo: módulos 01 a 06 implementados** — fundação, pessoas, RBAC, grupos, eventos e presença.
 
-Verificação de 10/10/2026: **344 testes** de unidade e integração, **73 de ponta a ponta** em dois projetos de navegador (com e sem JavaScript), tipos limpos em 810 arquivos, build funcionando.
+Verificação de 10/10/2026: **393 testes** de unidade e integração, **83 de ponta a ponta** em dois projetos de navegador (com e sem JavaScript), tipos limpos em 830 arquivos, build funcionando.
 
-O M05 entregou o que o roteiro pedia — **PG semanal recorrente, agenda no celular, público-alvo e o link público do evento** — e o botão de compartilhar no WhatsApp com o texto pronto da seção 18. O encontro semanal nasce do combinado que o grupo já guarda (dia, horário, local) e ocupa 12 semanas da agenda; editar uma data a desprende da série, e editar a série não desfaz o que foi ajustado à mão. Detalhe em [`05-modulo-05-eventos.md`](05-modulo-05-eventos.md).
+O M06 fechou o ciclo da semana do PG: **a pessoa confirma em um toque** — no início, no evento ou pelo link do WhatsApp —, **o conselheiro marca quem veio** numa lista pré-ordenada por frequência, cadastrando ali mesmo quem chegou pela primeira vez, e **a liderança enxerga quem está se afastando**. Detalhe em [`06-modulo-06-presenca.md`](06-modulo-06-presenca.md).
 
-#### Fuso horário, desde o começo
+#### Falta só existe em lista feita
 
-A equipe ganhou um fuso (`America/Sao_Paulo`). Sem ele, "quinta às 20h" seria calculado no fuso do servidor — na VPS, UTC — e o PG apareceria às 17h. Cada ocorrência guarda o instante; a série guarda a hora local; e toda conversão é testada contra um fuso com horário de verão, porque o Brasil pode voltar a ter.
+A regra que dá sentido a todos os números: só entram na frequência os encontros **com lista feita**, e só conta como esperado quem era convidado **naquele dia** — pelo grupo em que estava, pela equipe ou pelo nome. "Ninguém fez a lista" nunca vira "todo mundo faltou", e quem entrou no PG semana passada não aparece como faltoso em setembro. Sem RSVP, ninguém faltou.
 
-#### Quem vê o quê, provado dos dois lados
+#### Sinais, não ranking
 
-A regra de visibilidade existe escrita uma vez, pura, e repetida em SQL para a agenda. Um teste confere as duas, para cada papel e cada evento — e uma mutação proposital no SQL o faz falhar. Com isso, o membro vê o que foi publicado para ele; o conselheiro, o próprio PG; rascunho, só quem pode gerenciá-lo.
+A visão do grupo mostra a frequência de cada pessoa e dois sinais — "não vem há 3 encontros" e "já veio 3 vezes em 60 dias" — só para quem cuida do grupo. Relatório e listas ficam em ordem de nome; não há frequência visível entre pares. O histórico de RSVP é preenchido por gatilho do banco: um caminho novo que esqueça de registrá-lo não consegue esquecer.
 
-#### Deploy é a última etapa
+#### De passagem
 
-Continua valendo a decisão de 04/10/2026: a implantação na VPS — domínio (D-06), specs (D-07.2), PWA no celular, cópia externa do backup — vem depois dos módulos.
+Id malformado na URL passou a responder 404 em todas as rotas (antes, 500 vindo do Postgres) e "entrar para confirmar" leva de volta ao link do evento depois da senha.
 
-**Próximo passo:** Módulo 06 — Presença: confirmar presença em um toque (inclusive pelo link público), lista de presença do conselheiro e relatório de frequência. Fecha o MVP.
+#### Deploy é a última etapa — e é a próxima
+
+Continua valendo a decisão de 04/10/2026: com os módulos do MVP prontos, vem a implantação na VPS — domínio (D-06), specs (D-07.2), PWA no celular, cópia externa do backup.
+
+**Próximo passo:** deploy do MVP — depende das respostas a D-06 (domínio) e D-07.2 (specs da VPS).

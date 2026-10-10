@@ -346,7 +346,7 @@ describe('encontro semanal e materialização', () => {
 		const antes = await ocorrencias();
 		const corte = antes[3]!.occurrenceDate!;
 
-		const removidas = await encerrarSerie(ctx.db, conselheiroAzul, serieId, corte);
+		const { removidas } = await encerrarSerie(ctx.db, conselheiroAzul, serieId, corte);
 		await garantirOcorrencias(ctx.db, ctx.teamId, {
 			agora: new Date(Date.now() + 60 * 86_400_000)
 		});

@@ -5,6 +5,7 @@
 	import Aviso from '$ui/Aviso.svelte';
 	import Campo from '$ui/Campo.svelte';
 	import Etiqueta from '$ui/Etiqueta.svelte';
+	import VoceVai from '$ui/VoceVai.svelte';
 	import { dataPorExtenso, horaCurta } from '$shared/fuso';
 	import type { ActionData, PageData } from './$types';
 
@@ -79,6 +80,46 @@
 		{#if e.descricao}<p class="descricao">{e.descricao}</p>{/if}
 	</section>
 
+	{#if e.publicado && (data.resposta.podeResponder || data.resposta.totais.length > 0)}
+		<section class="cartao" aria-label="Você vai?">
+			<VoceVai painel={data.resposta} acao="?/responder" />
+		</section>
+	{/if}
+
+	{#if data.confirmacao || data.podeFazerLista}
+		<section class="cartao" aria-label="Presença">
+			<h3>Presença</h3>
+			{#if data.confirmacao}
+				<!-- RF-06.4: confirmação × presença, depois da lista feita. -->
+				<dl class="numeros">
+					<div>
+						<dt>Confirmaram</dt>
+						<dd>{data.confirmacao.confirmaram}</dd>
+					</div>
+					<div>
+						<dt>Vieram</dt>
+						<dd>{data.confirmacao.vieram}</dd>
+					</div>
+					<div>
+						<dt>Confirmaram e vieram</dt>
+						<dd>{data.confirmacao.confirmaramEVieram}</dd>
+					</div>
+					<div>
+						<dt>Vieram sem confirmar</dt>
+						<dd>{data.confirmacao.vieramSemConfirmar}</dd>
+					</div>
+				</dl>
+			{:else if e.listaFeitaEm === null}
+				<p class="legenda">A lista ainda não foi feita. Sem lista, ninguém conta como ausente.</p>
+			{/if}
+			{#if data.podeFazerLista}
+				<Botao href="/agenda/{e.id}/presenca" variante={e.listaFeitaEm ? 'secundario' : 'primario'}>
+					{e.listaFeitaEm ? 'Rever a lista de presença' : 'Fazer a lista de presença'}
+				</Botao>
+			{/if}
+		</section>
+	{/if}
+
 	<section class="cartao" aria-label="Convidados">
 		<h3>Quem está convidado</h3>
 		<ul class="publico">
@@ -90,6 +131,22 @@
 			<p class="legenda">Responsável: {e.responsavel.nome}</p>
 		{/if}
 	</section>
+
+	{#if data.quemRespondeu && data.quemRespondeu.length > 0}
+		<section class="cartao" aria-label="Quem respondeu">
+			<h3>Quem respondeu</h3>
+			<ul class="respostas">
+				{#each data.quemRespondeu as r (r.personId)}
+					<li>
+						<a href="/pessoas/{r.personId}">{r.nome}</a>
+						<span class="resposta {r.significado}">
+							{r.texto}{#if r.convidados > 0}&nbsp;+{r.convidados}{/if}
+						</span>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
 
 	{#if data.compartilhar}
 		<section class="cartao" aria-label="Compartilhar">
@@ -157,6 +214,66 @@
 </main>
 
 <style>
+	.numeros {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--esp-2);
+		margin: 0;
+	}
+
+	.numeros div {
+		padding: var(--esp-2) var(--esp-3);
+		background: var(--cor-superficie-2);
+		border-radius: var(--raio);
+	}
+
+	.numeros dt {
+		font-size: var(--texto-xs);
+		color: var(--cor-texto-3);
+	}
+
+	.numeros dd {
+		margin: 0;
+		font-size: var(--texto-xl);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.respostas {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.respostas li {
+		display: flex;
+		justify-content: space-between;
+		gap: var(--esp-2);
+		padding: var(--esp-2) 0;
+		border-bottom: 1px solid var(--cor-linha);
+	}
+
+	.respostas li:last-child {
+		border-bottom: 0;
+	}
+
+	.resposta {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-sucesso);
+		white-space: nowrap;
+	}
+
+	.resposta.talvez {
+		color: var(--cor-aviso);
+	}
+
+	.resposta.nao {
+		color: var(--cor-texto-3);
+	}
+
 	.conteudo {
 		max-width: 560px;
 		margin-inline: auto;
