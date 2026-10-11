@@ -1,4 +1,5 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
 import type { Database } from '$server/db';
 import { groupMembership, person, smallGroup } from '$server/db/schema';
 import { uuidv7 } from '$server/db/id';
@@ -249,8 +250,6 @@ export async function aplicar(
 	return { batchId, movimentos };
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
  * Lê a tela de planejamento: para cada pessoa, `para-<id>` (destino escolhido)
  * e `de-<id>` (onde ela estava quando a tela foi aberta). Vazio = sem grupo.
@@ -264,9 +263,9 @@ export function lerPlano(form: FormData): PedidoDoPlano[] {
 		const personId = chave.slice('para-'.length);
 		const de = String(form.get(`de-${personId}`) ?? '');
 		const para = String(valor);
-		if (!UUID.test(personId)) continue;
-		if (de && !UUID.test(de)) continue;
-		if (para && !UUID.test(para)) continue;
+		if (!ehId(personId)) continue;
+		if (de && !ehId(de)) continue;
+		if (para && !ehId(para)) continue;
 		pedidos.push({ personId, de: de || null, para: para || null });
 	}
 	return pedidos;
@@ -274,14 +273,13 @@ export function lerPlano(form: FormData): PedidoDoPlano[] {
 
 /** Lê os movimentos confirmados: `mov` = "personId|de|para", vazio = sem grupo. */
 export function lerMovimentos(valores: FormDataEntryValue[]): PedidoDoPlano[] {
-	const uuid = UUID;
 	const pedidos: PedidoDoPlano[] = [];
 
 	for (const valor of valores) {
 		const [personId, de, para] = String(valor).split('|');
-		if (!personId || !uuid.test(personId)) continue;
-		if (de && !uuid.test(de)) continue;
-		if (para && !uuid.test(para)) continue;
+		if (!personId || !ehId(personId)) continue;
+		if (de && !ehId(de)) continue;
+		if (para && !ehId(para)) continue;
 		pedidos.push({ personId, de: de || null, para: para || null });
 	}
 	return pedidos;

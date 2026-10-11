@@ -415,9 +415,16 @@ describe('conta de acesso — identificador e aceite', () => {
 			tipo: 'telefone',
 			valor: '11987654321'
 		});
+		// O +55 é o mesmo número: mesma chave para o login e para o limite de
+		// tentativas (varredura de 11/10/2026).
 		expect(interpretarIdentificador('+55 11 98765-4321')).toEqual({
 			tipo: 'telefone',
-			valor: '5511987654321'
+			valor: '11987654321'
+		});
+		// DDD 55 (Santa Maria, RS) não é confundido com o código do país.
+		expect(interpretarIdentificador('(55) 99876-5432')).toEqual({
+			tipo: 'telefone',
+			valor: '55998765432'
 		});
 		expect(interpretarIdentificador('123')).toBeNull();
 		expect(interpretarIdentificador('sem-arroba')).toBeNull();

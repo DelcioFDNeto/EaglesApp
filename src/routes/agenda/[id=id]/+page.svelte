@@ -6,14 +6,18 @@
 	import Campo from '$ui/Campo.svelte';
 	import Etiqueta from '$ui/Etiqueta.svelte';
 	import VoceVai from '$ui/VoceVai.svelte';
-	import { dataPorExtenso, horaCurta } from '$shared/fuso';
+	import { dataPorExtenso, horaCurta, terminaEmOutroDia } from '$shared/fuso';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	const e = $derived(data.evento);
 	const quando = $derived(
-		e.horaFim ? `${horaCurta(e.hora)} às ${horaCurta(e.horaFim)}` : `às ${horaCurta(e.hora)}`
+		terminaEmOutroDia(e)
+			? `às ${horaCurta(e.hora)} — até ${dataPorExtenso(e.dataFim!)}${e.horaFim ? `, ${horaCurta(e.horaFim)}` : ''}`
+			: e.horaFim
+				? `${horaCurta(e.hora)} às ${horaCurta(e.horaFim)}`
+				: `às ${horaCurta(e.hora)}`
 	);
 
 	let enviando = $state<string | null>(null);

@@ -1,13 +1,21 @@
-import { and, count, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, count, eq } from 'drizzle-orm';
 import type { Database } from '$server/db';
 import { personRole } from '$server/db/schema';
 import { audit } from '$server/audit/log';
 import { issueInvite } from '$server/auth/invite';
 import { situacaoDaConta } from '$server/auth/conta';
 import { authorize, type Actor } from '$server/policy/policy';
+import { loadActor } from '$server/policy/actor';
+import { atribuicaoVigente } from '$server/policy/vigencia';
 import { contextoDaPessoa } from '$server/modules/grupos/contexto';
+import { fusoDaEquipe } from '$server/modules/eventos/eventos';
 import { verPessoa } from '$server/modules/pessoas/pessoas';
-import { AcessoRecusado, exigirReautenticacao, type ContextoSensivel } from './regras';
+import {
+	AcessoRecusado,
+	exigirReautenticacao,
+	permissoesForaDoAlcance,
+	type ContextoSensivel
+} from './regras';
 
 /**
  * Emissão de convite de acesso (RF-01.2 — lacuna G1 do M01).
@@ -15,7 +23,7 @@ import { AcessoRecusado, exigirReautenticacao, type ContextoSensivel } from './r
  * O serviço de convite existia desde o M01, mas nenhuma tela o chamava:
  * ninguém novo conseguia entrar no app.
  *
- * Três condições antes de emitir:
+ * Quatro condições antes de emitir:
  *
  *   1. `person.invite` SOBRE a pessoa. Hoje só o escopo global passa — o de
  *      grupo chega com os grupos (M04), como `person.update`.
@@ -24,6 +32,8 @@ import { AcessoRecusado, exigirReautenticacao, type ContextoSensivel } from './r
  *   3. A pessoa NÃO está em regime restrito de dados. ADR 0004: "conta de
  *      acesso para menor de idade só é emitida com o consentimento previsto no
  *      ADR 0003". Data de nascimento desconhecida conta como possível menor.
+ *   4. Quem emite já detém, no mesmo alcance, tudo o que a conta convidada vai
+ *      poder (trava 5, `permissoesForaDoAlcance`): quem tem o link tem a conta.
  *
  * Convite para quem JÁ tem conta é RECUPERAÇÃO: aceitá-lo troca a senha e
  * encerra todas as sessões. Por isso exige reautenticação — é redefinir a
@@ -34,6 +44,8 @@ import { AcessoRecusado, exigirReautenticacao, type ContextoSensivel } from './r
 export type ConviteEmitido = {
 	url: string;
 	expiraEm: Date;
+	/** Fuso da equipe — a validade no texto é a do calendário dela, não do servidor. */
+	fuso: string;
 	recuperacao: boolean;
 	primeiroNome: string;
 	/** WhatsApp da pessoa, só dígitos com DDI — para abrir a conversa direto. */
@@ -46,7 +58,8 @@ export async function emitirConvite(
 	personId: string,
 	contexto: ContextoSensivel
 ): Promise<ConviteEmitido> {
-	authorize(actor, 'person.invite', await contextoDaPessoa(db, personId));
+	const ctxDaPessoa = await contextoDaPessoa(db, personId);
+	authorize(actor, 'person.invite', ctxDaPessoa);
 
 	const pessoa = await verPessoa(db, actor, personId);
 	if (!pessoa) throw new AcessoRecusado('nao_encontrado', 'Essa pessoa não existe.');
@@ -63,12 +76,7 @@ export async function emitirConvite(
 	const [comPapel] = await db
 		.select({ total: count() })
 		.from(personRole)
-		.where(
-			and(
-				eq(personRole.personId, personId),
-				or(isNull(personRole.expiresAt), gt(personRole.expiresAt, new Date()))
-			)
-		);
+		.where(and(eq(personRole.personId, personId), atribuicaoVigente()));
 	if (Number(comPapel?.total ?? 0) === 0) {
 		throw new AcessoRecusado(
 			'sem_papel',
@@ -76,7 +84,22 @@ export async function emitirConvite(
 		);
 	}
 
+	const alvo = await loadActor(db, personId);
+	const faltam = alvo ? permissoesForaDoAlcance(actor, { ...ctxDaPessoa, ...alvo }) : [];
+	if (faltam.length > 0) {
+		throw new AcessoRecusado(
+			'escalada',
+			'Esta pessoa tem acessos que você não tem — o convite dela precisa vir de quem administra os acessos da equipe.'
+		);
+	}
+
 	const conta = await situacaoDaConta(db, personId);
+	if (conta?.desativada) {
+		throw new AcessoRecusado(
+			'conta_desativada',
+			'A conta desta pessoa está desativada. Um convite não a reativa — fale com quem administra os acessos.'
+		);
+	}
 	const recuperacao = !!conta?.temSenha;
 	if (recuperacao) exigirReautenticacao(contexto.reautenticadoRecentemente);
 
@@ -108,6 +131,7 @@ export async function emitirConvite(
 	return {
 		url: emitido.url,
 		expiraEm: emitido.expiresAt,
+		fuso: await fusoDaEquipe(db, actor.teamId),
 		recuperacao,
 		primeiroNome: pessoa.fullName.split(' ')[0] ?? pessoa.fullName,
 		whatsapp
@@ -122,9 +146,11 @@ export async function emitirConvite(
  * vê de onde veio e para que serve antes de tocar.
  */
 export function textoDoConvite(c: ConviteEmitido): string {
-	const validade = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(
-		c.expiraEm
-	);
+	const validade = new Intl.DateTimeFormat('pt-BR', {
+		day: '2-digit',
+		month: '2-digit',
+		timeZone: c.fuso
+	}).format(c.expiraEm);
 	return c.recuperacao
 		? `Oi, ${c.primeiroNome}! Aqui está o link para você recuperar seu acesso ao app dos Eagles. Ao usar, você escolhe uma senha nova: ${c.url}\n\nO link vale até ${validade}.`
 		: `Oi, ${c.primeiroNome}! Aqui está o seu acesso ao app dos Eagles — é onde ficam os encontros, a confirmação de presença e as escalas: ${c.url}\n\nO link vale até ${validade}.`;

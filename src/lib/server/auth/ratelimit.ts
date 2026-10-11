@@ -1,3 +1,5 @@
+import { env } from '../env';
+
 /**
  * Rate limit em memória, com janela deslizante.
  *
@@ -24,7 +26,15 @@ type Bucket = {
 
 const buckets = new Map<string, Bucket>();
 
-import { env } from '../env';
+/**
+ * Poda oportunista: a cada 10 minutos, quem consulta o limite limpa os baldes
+ * ociosos. `pruneRateLimits` existia e ninguém a chamava — as chaves são
+ * escolhidas por quem tenta entrar, e o mapa crescia até o processo reiniciar
+ * (varredura de 11/10/2026). Sem `setInterval`: nada de timer segurando o
+ * processo vivo nem atravessando os testes.
+ */
+const INTERVALO_DE_PODA_MS = 10 * 60_000;
+let ultimaPoda = 0;
 
 export type RateLimitRule = {
 	/** Tentativas permitidas dentro da janela. */
@@ -47,7 +57,13 @@ export const RULES = {
 	 * banco. O limite é generoso o bastante para várias pessoas atrás do mesmo
 	 * Wi-Fi na porta do PG, e apertado o bastante para não virar porta de robô.
 	 */
-	autocadastroPorIp: { limit: 5, windowSeconds: 600, blockSeconds: 1800 }
+	autocadastroPorIp: { limit: 5, windowSeconds: 600, blockSeconds: 1800 },
+	/**
+	 * Envios do autocadastro, válidos ou não: só contra robô. Erro de digitação
+	 * não pode gastar a cota de CADASTROS de quem divide o Wi-Fi do PG
+	 * (varredura de 11/10/2026).
+	 */
+	autocadastroTentativasPorIp: { limit: 30, windowSeconds: 600, blockSeconds: 600 }
 } as const satisfies Record<string, RateLimitRule>;
 
 /**
@@ -65,6 +81,10 @@ export type RateLimitResult =
 
 export function checkRateLimit(key: string, rule: RateLimitRule): RateLimitResult {
 	const agora = Date.now();
+	if (agora - ultimaPoda > INTERVALO_DE_PODA_MS) {
+		ultimaPoda = agora;
+		pruneRateLimits();
+	}
 	const bucket = buckets.get(key) ?? { hits: [], blockedUntil: 0 };
 
 	if (bucket.blockedUntil > agora) {
@@ -108,4 +128,10 @@ export function pruneRateLimits(): number {
 /** Apenas para testes. */
 export function resetRateLimits(): void {
 	buckets.clear();
+	ultimaPoda = 0;
+}
+
+/** Apenas para testes: quantos baldes estão em memória. */
+export function contarBaldes(): number {
+	return buckets.size;
 }

@@ -1,4 +1,5 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
 import type { Database } from '$server/db';
 import { groupMembership, person, smallGroup } from '$server/db/schema';
 import { audit, type AuditAction } from '$server/audit/log';
@@ -65,6 +66,12 @@ export async function moverNaTransacao(
 	actor: Actor,
 	pedido: PedidoDeMovimento
 ): Promise<Movimento> {
+	// Ids vêm de formulário: malformado é "não existe", não erro do Postgres.
+	if (!ehId(pedido.personId)) throw new GrupoRecusado('nao_encontrado', 'Essa pessoa não existe.');
+	if (pedido.paraGrupoId && !ehId(pedido.paraGrupoId)) {
+		throw new GrupoRecusado('nao_encontrado', 'Esse grupo não existe.');
+	}
+
 	const [pessoa] = await tx
 		.select({ id: person.id, nome: person.fullName })
 		.from(person)

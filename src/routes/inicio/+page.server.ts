@@ -1,4 +1,4 @@
-import { error, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import { db } from '$server/db';
 import { canAnywhere } from '$server/policy/policy';
 import { PERMISSIONS } from '$server/policy/permissions';

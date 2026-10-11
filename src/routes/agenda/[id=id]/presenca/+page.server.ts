@@ -80,6 +80,11 @@ export const actions: Actions = {
 				presentes.push(
 					await cadastrarNaPorta(db(), locals.actor, params.id, parsed.data, contexto)
 				);
+				// Já cadastrado: se algo falhar daqui em diante, a tela volta com a
+				// pessoa marcada e os campos vazios — tentar de novo não a duplica.
+				valores.visitanteNome = '';
+				valores.visitanteNascimento = '';
+				valores.visitanteWhatsapp = '';
 			}
 
 			const r = await registrarLista(db(), locals.actor, params.id, presentes, contexto);

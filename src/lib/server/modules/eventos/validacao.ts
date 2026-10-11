@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { CORES_DE_GRUPO } from '$shared/grupo';
 import { ehData, ehHora } from '$shared/fuso';
+import { ehId } from '$shared/formulario';
 import type { Alvo } from './regras';
 
 /**
@@ -23,10 +24,7 @@ const opcional = (max: number, mensagem: string) =>
 const uuidOpcional = z
 	.union([z.string(), z.null(), z.undefined()])
 	.transform((v) => (v?.trim() ? v.trim() : null))
-	.refine(
-		(v) => v === null || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v),
-		'Escolha uma opção da lista.'
-	);
+	.refine((v) => v === null || ehId(v), 'Escolha uma opção da lista.');
 
 const titulo = z
 	.string()
@@ -101,11 +99,16 @@ export const ocorrenciaSchema = z
 		local: base.local,
 		responsavelId: uuidOpcional,
 		data: data('Escolha a data.'),
+		dataFim: dataOpcional,
 		horaInicio: hora,
 		horaFim: horaOpcional
 	})
 	.superRefine((v, ctx) => {
-		if (v.horaFim && v.horaFim <= v.horaInicio) {
+		if (v.dataFim && v.dataFim < v.data) {
+			ctx.addIssue({ code: 'custom', path: ['dataFim'], message: 'Termina antes de começar.' });
+		}
+		const mesmoDia = !v.dataFim || v.dataFim === v.data;
+		if (v.horaFim && mesmoDia && v.horaFim <= v.horaInicio) {
 			ctx.addIssue({ code: 'custom', path: ['horaFim'], message: 'Termina antes de começar.' });
 		}
 	});
@@ -163,9 +166,7 @@ export function minutosEntre(inicio: string, fim: string): number {
 export function lerPublico(form: FormData): Alvo[] {
 	if (String(form.get('convite') ?? '') === 'equipe') return [{ tipo: 'equipe' }];
 
-	const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-	const unicos = (chave: string) =>
-		[...new Set(form.getAll(chave).map(String))].filter((v) => uuid.test(v));
+	const unicos = (chave: string) => [...new Set(form.getAll(chave).map(String))].filter(ehId);
 
 	return [
 		...unicos('grupos').map((groupId) => ({ tipo: 'grupo' as const, groupId })),

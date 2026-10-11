@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { FUSO_PADRAO } from '$shared/fuso';
 	import { enhance } from '$app/forms';
 	import BarraDeTopo from '$ui/BarraDeTopo.svelte';
 	import Botao from '$ui/Botao.svelte';
@@ -13,8 +14,14 @@
 
 	const p = $derived(data.pessoa);
 
-	const dataLonga = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' });
-	const dataCurta = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' });
+	const dataLonga = new Intl.DateTimeFormat('pt-BR', {
+		timeZone: FUSO_PADRAO,
+		dateStyle: 'long'
+	});
+	const dataCurta = new Intl.DateTimeFormat('pt-BR', {
+		timeZone: FUSO_PADRAO,
+		dateStyle: 'short'
+	});
 
 	function formatarData(iso: string | null): string {
 		if (!iso) return '—';

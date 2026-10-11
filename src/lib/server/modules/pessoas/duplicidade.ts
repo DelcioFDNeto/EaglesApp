@@ -1,6 +1,8 @@
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import type { Database } from '$server/db';
 import { person } from '$server/db/schema';
+import { can, type Actor } from '$server/policy/policy';
+import { gruposAtuaisDe } from '$server/modules/grupos/contexto';
 import { normalizarTexto, somenteDigitos } from '$shared/pessoa';
 
 /**
@@ -77,14 +79,45 @@ export async function procurarPossiveisDuplicatas(
 		}));
 }
 
+/**
+ * O que o aviso pode dizer a QUEM está cadastrando (varredura de 11/10/2026).
+ *
+ * Nome igual: o nome foi quem cadastra que digitou, e perfis são visíveis a
+ * quem cadastra. Telefone igual é diferente: dizer de quem é o número faria do
+ * formulário um oráculo "número → pessoa", contornando o escopo de quem pode
+ * ver contatos. Para esses, o aviso diz só que o número já está no cadastro.
+ */
+export async function duplicatasVisiveis(
+	db: Database,
+	actor: Actor,
+	duplicatas: PossivelDuplicata[]
+): Promise<{ visiveis: PossivelDuplicata[]; ocultas: number }> {
+	const grupos = await gruposAtuaisDe(
+		db,
+		duplicatas.map((d) => d.id)
+	);
+	const visiveis = duplicatas.filter(
+		(d) =>
+			d.motivo === 'nome' ||
+			can(actor, 'person.view_sensitive', { personId: d.id, groupId: grupos.get(d.id) ?? null })
+	);
+	return { visiveis, ocultas: duplicatas.length - visiveis.length };
+}
+
 /** Mensagem pronta para a tela, no plural certo. */
-export function mensagemDeDuplicata(duplicatas: PossivelDuplicata[]): string {
-	if (duplicatas.length === 0) return '';
+export function mensagemDeDuplicata(duplicatas: PossivelDuplicata[], ocultas = 0): string {
+	const outroCadastro =
+		ocultas > 0
+			? 'Esse telefone já está no cadastro de outra pessoa. Confira com a liderança antes de cadastrar de novo.'
+			: '';
+	if (duplicatas.length === 0) return outroCadastro;
 
 	const porTelefone = duplicatas.some((d) => d.motivo === 'telefone');
 	const alvo = porTelefone ? 'o mesmo telefone' : 'o mesmo nome';
 
-	return duplicatas.length === 1
-		? `Já existe alguém com ${alvo}: ${duplicatas[0]!.fullName}. Confira antes de cadastrar de novo.`
-		: `Já existem ${duplicatas.length} pessoas com ${alvo}. Confira antes de cadastrar de novo.`;
+	const visiveis =
+		duplicatas.length === 1
+			? `Já existe alguém com ${alvo}: ${duplicatas[0]!.fullName}. Confira antes de cadastrar de novo.`
+			: `Já existem ${duplicatas.length} pessoas com ${alvo}. Confira antes de cadastrar de novo.`;
+	return outroCadastro ? `${visiveis} ${outroCadastro}` : visiveis;
 }

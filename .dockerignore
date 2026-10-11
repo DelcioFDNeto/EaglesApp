@@ -1,0 +1,22 @@
+# Contexto do build da imagem do app (infra/docker-compose.yml usa a raiz).
+#
+# Sem este arquivo, o `COPY . .` do Dockerfile levava para a imagem o
+# node_modules desta máquina — binários de outra plataforma por cima dos do
+# Alpine —, o .env com os segredos e a pasta .git inteira (varredura de
+# 11/10/2026).
+.git
+node_modules
+build
+.svelte-kit
+.env
+.env.*
+!.env.example
+
+# Nada disto entra no build de produção. A semente, em especial, cria contas
+# com senha conhecida — não tem lugar numa imagem que vai para a VPS.
+tests
+test-results
+playwright-report
+docs
+seed
+*.log

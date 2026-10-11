@@ -3,9 +3,11 @@
 # O certificado Let's Encrypt é obtido e renovado sozinho. Requisito: o
 # DOMINIO precisa apontar para o IP da VPS ANTES de subir, senão o desafio
 # ACME falha e o Caddy fica tentando em laço.
-
 {
-	email {$ACME_EMAIL:admin@localhost}
+	# Obrigatório no .env (o docker-compose recusa subir sem ele). O padrão
+	# antigo, admin@localhost, é recusado pelo Let's Encrypt — o certificado
+	# não sairia (varredura de 11/10/2026).
+	email {$ACME_EMAIL}
 	# Descomente para testar sem gastar cota do Let's Encrypt:
 	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
@@ -13,15 +15,12 @@
 {$DOMINIO} {
 	encode zstd gzip
 
-	# Limite grosso, de borda. O limite fino — por conta e por rota — está na
-	# aplicação (`ratelimit.ts`), porque só ela sabe qual conta está tentando.
-	rate_limit {
-		zone geral {
-			key {remote_host}
-			events 300
-			window 1m
-		}
-	}
+	# Sem limite de borda aqui: `rate_limit` NÃO existe no Caddy oficial — é um
+	# plugin (caddy-ratelimit), e com ele o Caddy nem subia: "unrecognized
+	# directive" (varredura de 11/10/2026, conferido com o binário oficial).
+	# Compilar um Caddy próprio custa memória e tempo que uma VM gratuita não
+	# tem. Os limites que importam — login por conta e por IP, convite,
+	# autocadastro — estão na aplicação (`ratelimit.ts`), que sabe QUEM tenta.
 
 	# Cabeçalhos de segurança que não dependem da aplicação. A CSP vem do
 	# `hooks.server.ts`, onde pode variar por rota.
@@ -59,7 +58,7 @@
 	}
 }
 
-# Monitor de disponibilidade, em subdomínio próprio.
-monitor.{$DOMINIO} {
-	reverse_proxy uptime:3001
-}
+# O monitor (Uptime Kuma) NÃO fica exposto aqui: a primeira pessoa que abre a
+# tela dele cria a conta de administrador — exposto na internet, poderia ser
+# qualquer um. Ele é opcional (perfil `monitor` do docker-compose) e se acessa
+# por túnel SSH. Ver infra/README.md.

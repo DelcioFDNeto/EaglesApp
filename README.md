@@ -18,6 +18,9 @@ responsabilidades, participação e recursos financeiros — o ano inteiro.
 | [`docs/00-descoberta-e-arquitetura.md`](docs/00-descoberta-e-arquitetura.md)   | Requisitos, regras de negócio, modelo de dados, RBAC, riscos, roadmap |
 | [`docs/01-modulo-01-fundacao.md`](docs/01-modulo-01-fundacao.md)               | O que o M01 entrega e seus critérios de aceitação                     |
 | `docs/02-…` a [`docs/06-modulo-06-presenca.md`](docs/06-modulo-06-presenca.md) | Um documento por módulo: decisões, o que foi construído e a evidência |
+| [`docs/varredura-2026-10-11.md`](docs/varredura-2026-10-11.md)                 | A revisão de todos os módulos e da infra antes do deploy              |
+| [`docs/hospedagem-de-baixo-custo.md`](docs/hospedagem-de-baixo-custo.md)       | Onde e por quanto rodar — inclusive de graça                          |
+| [`infra/README.md`](infra/README.md)                                           | Subir em produção, backup e restauração                               |
 | [`docs/adr/`](docs/adr/)                                                       | Por que cada decisão importante foi tomada                            |
 
 Leia os ADRs antes de mudar algo estrutural. Em oito meses ninguém lembra por

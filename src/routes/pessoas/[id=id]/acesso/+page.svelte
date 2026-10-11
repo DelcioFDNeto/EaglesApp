@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { FUSO_PADRAO } from '$shared/fuso';
 	import { enhance } from '$app/forms';
 	import BarraDeTopo from '$ui/BarraDeTopo.svelte';
 	import Botao from '$ui/Botao.svelte';
@@ -10,8 +11,15 @@
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	const p = $derived(data.pessoa);
-	const dataCurta = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' });
-	const dataHora = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+	const dataCurta = new Intl.DateTimeFormat('pt-BR', {
+		timeZone: FUSO_PADRAO,
+		dateStyle: 'short'
+	});
+	const dataHora = new Intl.DateTimeFormat('pt-BR', {
+		timeZone: FUSO_PADRAO,
+		dateStyle: 'short',
+		timeStyle: 'short'
+	});
 
 	const ALCANCE = {
 		global: 'toda a equipe',

@@ -138,8 +138,16 @@ export function somarMeses(mes: string, n: number): string {
 	return `${d.getUTCFullYear()}-${dois(d.getUTCMonth() + 1)}`;
 }
 
-export const ehData = (v: string) =>
-	/^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(`${v}T00:00:00Z`));
+/**
+ * `AAAA-MM-DD` que existe no calendário. A volta pela data é necessária: o V8
+ * aceita "2026-02-31" e o transforma em 3 de março — passava na validação e
+ * quebrava no Postgres, ou movia o evento em silêncio (varredura de 11/10/2026).
+ */
+export const ehData = (v: string) => {
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+	const d = new Date(`${v}T00:00:00Z`);
+	return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+};
 export const ehHora = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 export const ehMes = (v: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 
@@ -180,6 +188,11 @@ export function dataCurtaComDia(data: string): string {
 export function mesPorExtenso(mes: string): string {
 	const [ano, m] = mes.split('-').map(Number) as [number, number];
 	return `${MESES[m - 1]} de ${ano}`;
+}
+
+/** Termina em outro dia — retiro, acampamento, virada de madrugada. */
+export function terminaEmOutroDia(e: { data: string; dataFim?: string | null }): boolean {
+	return !!e.dataFim && e.dataFim !== e.data;
 }
 
 /** "20h", "19h30" — de uma hora `HH:MM`. */

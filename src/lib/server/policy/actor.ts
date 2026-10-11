@@ -1,8 +1,9 @@
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db';
 import { person, personRole, role, rolePermission } from '../db/schema';
 import { isPermission, type Permission, type ScopeType } from './permissions';
 import type { Actor, RoleAssignment } from './policy';
+import { atribuicaoVigente } from './vigencia';
 
 /**
  * Monta o Actor a partir do banco: papéis da pessoa, cada um com seu escopo e
@@ -34,12 +35,7 @@ export async function loadActor(db: Database, personId: string): Promise<Actor |
 		.from(personRole)
 		.innerJoin(role, eq(personRole.roleId, role.id))
 		.leftJoin(rolePermission, eq(rolePermission.roleId, role.id))
-		.where(
-			and(
-				eq(personRole.personId, personId),
-				or(isNull(personRole.expiresAt), gt(personRole.expiresAt, new Date()))
-			)
-		);
+		.where(and(eq(personRole.personId, personId), atribuicaoVigente()));
 
 	// Agrupa por (papel, escopo) — uma pessoa pode ter o mesmo papel em grupos
 	// diferentes, e cada combinação é uma atribuição distinta.

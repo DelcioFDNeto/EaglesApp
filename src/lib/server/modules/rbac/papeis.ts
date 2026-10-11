@@ -1,5 +1,6 @@
-import { and, asc, count, countDistinct, eq, gt, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, countDistinct, eq, isNull, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { atribuicaoAtiva, atribuicaoVigente } from '$server/policy/vigencia';
 import type { Database } from '$server/db';
 import { person, personRole, role, rolePermission } from '$server/db/schema';
 import { audit } from '$server/audit/log';
@@ -34,7 +35,7 @@ export type PapelResumo = {
 };
 
 /** Atribuição ainda em vigor: sem validade, ou validade no futuro. */
-const vigente = () => or(isNull(personRole.expiresAt), gt(personRole.expiresAt, new Date()));
+const vigente = atribuicaoVigente;
 
 export async function listarPapeis(db: Database, actor: Actor): Promise<PapelResumo[]> {
 	authorize(actor, 'rbac.manage');
@@ -393,10 +394,13 @@ export async function excluirPapel(
 		);
 	}
 
+	// Só atribuições em vigor de quem está no cadastro — as que a tela do papel
+	// mostra. As vencidas saem junto com o papel (cascata da chave estrangeira).
 	const [ocupado] = await db
 		.select({ total: count() })
 		.from(personRole)
-		.where(eq(personRole.roleId, roleId));
+		.innerJoin(person, eq(person.id, personRole.personId))
+		.where(and(eq(personRole.roleId, roleId), atribuicaoAtiva()));
 	if (Number(ocupado?.total ?? 0) > 0) {
 		throw new AcessoRecusado(
 			'papel_com_pessoas',

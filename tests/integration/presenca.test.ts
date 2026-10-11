@@ -381,6 +381,27 @@ describe('lista de presença', () => {
 		).rejects.toThrow(/cancelado não tem presença/);
 	});
 
+	it('evento cancelado ou futuro recusa a porta ANTES de cadastrar ninguém', async () => {
+		const cancelado = await encontro(azul, diasAtras(4));
+		await cancelarEvento(ctx.db, lider, cancelado, null);
+		const futuro = await encontro(azul, somarDias(hoje(), 2));
+		for (const e of [cancelado, futuro]) {
+			await expect(
+				cadastrarNaPorta(
+					ctx.db,
+					conselheiroAzul,
+					e,
+					criarPessoaSchema.parse({ fullName: 'Não Deveria Ficar' })
+				)
+			).rejects.toBeInstanceOf(EventoRecusado);
+		}
+		const criadas = await ctx.db
+			.select({ id: person.id })
+			.from(person)
+			.where(eq(person.fullName, 'Não Deveria Ficar'));
+		expect(criadas).toEqual([]);
+	});
+
 	it('quem chegou pela primeira vez se cadastra na porta, já no grupo do evento (F1)', async () => {
 		const e = await encontro(azul, diasAtras(3));
 		const id = await cadastrarNaPorta(

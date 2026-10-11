@@ -72,8 +72,20 @@ fi
 
 # --- Decifra e confere antes de escrever qualquer coisa ---------------------
 TEMP=$(mktemp -d)
-# shellcheck disable=SC2064
-trap "rm -rf '$TEMP'" EXIT INT TERM
+ENSAIO_CRIADO=0
+
+# Na saída, por qualquer caminho: some o dump decifrado e, no ensaio, o banco
+# temporário. Antes, um ensaio que falhava deixava para trás um banco com os
+# dados pessoais da comunidade, decifrados (varredura de 11/10/2026).
+limpar() {
+	rm -rf "$TEMP"
+	if [ "$ENSAIO_CRIADO" -eq 1 ]; then
+		psql_ -d postgres -c "DROP DATABASE IF EXISTS \"$ALVO\"" > /dev/null 2>&1 ||
+			erro "não consegui apagar o banco de ensaio '$ALVO'. Apague à mão: ele tem dados decifrados."
+	fi
+}
+trap limpar EXIT
+trap 'exit 1' INT TERM
 DUMP="$TEMP/dump.sql"
 
 echo "Decifrando…"
@@ -93,8 +105,17 @@ if [ "$ENSAIO" -eq 0 ]; then
 	EXISTE=$(psql_ -d postgres -tAc \
 		"SELECT 1 FROM pg_database WHERE datname='$ALVO'" 2>/dev/null || echo '')
 	if [ -n "$EXISTE" ]; then
-		PESSOAS=$(psql_ -d "$ALVO" -tAc \
-			"SELECT count(*) FROM person" 2>/dev/null || echo 0)
+		# Falha fechada: se não der para contar quem está lá, não apaga. Antes,
+		# um erro na contagem virava "0 pessoas" e o banco ia embora sem
+		# --forcar (varredura de 11/10/2026).
+		if ! PESSOAS=$(psql_ -d "$ALVO" -tAc "SELECT count(*) FROM person" 2>/dev/null); then
+			if [ "$FORCAR" -eq 0 ]; then
+				erro "'$ALVO' existe, mas não consegui contar as pessoas cadastradas nele."
+				erro "Sem essa conferência, nada é apagado. Se é isso mesmo, repita com --forcar."
+				exit 1
+			fi
+			PESSOAS=0
+		fi
 		if [ "${PESSOAS:-0}" -gt 0 ] && [ "$FORCAR" -eq 0 ]; then
 			erro "'$ALVO' já tem $PESSOAS pessoas cadastradas."
 			erro "Restaurar por cima apaga tudo. Se é isso mesmo, repita com --forcar."
@@ -105,6 +126,7 @@ if [ "$ENSAIO" -eq 0 ]; then
 fi
 
 psql_ -d postgres -c "CREATE DATABASE \"$ALVO\"" > /dev/null
+[ "$ENSAIO" -eq 1 ] && ENSAIO_CRIADO=1
 echo "Restaurando em '$ALVO'…"
 
 if ! psql_ -d "$ALVO" -v ON_ERROR_STOP=1 -q -f "$DUMP" > /dev/null; then
@@ -133,7 +155,7 @@ if ! psql_ -d "$ALVO" -tAc "SELECT 1 FROM person_view LIMIT 1" > /dev/null 2>&1;
 fi
 
 if [ "$ENSAIO" -eq 1 ]; then
-	psql_ -d postgres -c "DROP DATABASE \"$ALVO\"" > /dev/null
+	# O banco temporário sai no `limpar`, na saída — por aqui ou por um erro.
 	echo "Ensaio concluído: o backup abre e está completo. Banco temporário descartado."
 else
 	echo "Restauração concluída em '$ALVO'."

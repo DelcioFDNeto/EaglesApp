@@ -46,6 +46,18 @@ test.describe('lista de pessoas — como líder', () => {
 		await expect(page.getByText('Ninguém com esse filtro')).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Limpar filtro' })).toBeVisible();
 	});
+
+	test('endereço adulterado é "não encontrado", nunca erro do servidor (varredura)', async ({
+		page
+	}) => {
+		// Filtro com id malformado: ignorado, a lista continua de pé.
+		expect((await page.goto("/pessoas?status=x'or'1&grupo=abc"))?.status()).toBe(200);
+		await expect(page.getByRole('link', { name: /Rafael Monteiro/ })).toBeVisible();
+
+		for (const caminho of ['/pessoas/abc', '/grupos/abc', '/agenda/abc', '/agenda/series/abc']) {
+			expect((await page.goto(caminho))?.status(), caminho).toBe(404);
+		}
+	});
 });
 
 test.describe('lista de pessoas — como membro', () => {

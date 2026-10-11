@@ -1,6 +1,6 @@
 # Eagles App — Documento de Descoberta e Arquitetura Inicial
 
-**Versão:** 0.7
+**Versão:** 0.8
 **Data:** 18/08/2026 — revisado em 10/10/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
@@ -37,7 +37,7 @@ Três características definem o produto e devem guiar todas as decisões:
 2. **Convive com o WhatsApp, não compete com ele.** A conversa cotidiana continua lá. O app produz a informação organizada (escala, lembrete, prestação de contas) e facilita levá-la para o WhatsApp. `[REQ]`
 3. **É configurável por natureza.** Tipos de evento, responsabilidades, campos de cadastro, categorias financeiras, papéis, permissões e funcionalidades inteiras (check-in, aprovação de despesas) são **dados no banco, não código**. `[REQ]`
 
-**Recomendação central de arquitetura:** monólito modular full-stack em **SvelteKit (TypeScript) + PostgreSQL**, entregue como **PWA instalável mobile-first**, hospedado na VPS existente via Docker Compose com Caddy (HTTPS automático). Custo operacional adicional estimado: **R$ 40–90/mês** (domínio + IA sob demanda). Alternativas comparadas na seção 14. `[DEC]`
+**Recomendação central de arquitetura:** monólito modular full-stack em **SvelteKit (TypeScript) + PostgreSQL**, entregue como **PWA instalável mobile-first**, hospedado na VPS existente via Docker Compose com Caddy (HTTPS automático). Custo operacional adicional estimado: **~R$ 6/mês sem IA** (domínio e backup externo; R$ 35–85 com a IA da V2.0) — e há caminho de R$ 0, ver [`hospedagem-de-baixo-custo.md`](hospedagem-de-baixo-custo.md). Alternativas comparadas na seção 14. `[DEC]`
 
 **Recomendação central de escopo:** MVP de **6 módulos em ~10 semanas** — Fundação, Pessoas, RBAC, Grupos, Eventos e Presença — com IA e Financeiro deliberadamente **depois**, pelas razões da seção 19. `[SUG]`
 
@@ -890,15 +890,17 @@ Dois ambientes na mesma VPS: `app.dominio` (produção) e `dev.dominio` (homolog
 
 ### 15.6 Custo mensal projetado
 
-| Item                  | Custo                                     |
-| --------------------- | ----------------------------------------- |
-| VPS                   | já existente                              |
-| Domínio .com.br       | ~R$ 3,50/mês (R$ 40/ano)                  |
-| Backup externo (B2)   | ~R$ 2/mês                                 |
-| E-mail transacional   | R$ 0 (free tier)                          |
-| Web Push              | R$ 0 (protocolo aberto)                   |
-| IA (M10, sob demanda) | R$ 30–80/mês, com teto configurável       |
-| **Total além da VPS** | **~R$ 40/mês sem IA · ~R$ 90/mês com IA** |
+| Item                  | Custo                                                                    |
+| --------------------- | ------------------------------------------------------------------------ |
+| VPS                   | já existente                                                             |
+| Domínio .com.br       | ~R$ 3,50/mês (R$ 40/ano)                                                 |
+| Backup externo (B2)   | ~R$ 2/mês                                                                |
+| E-mail transacional   | R$ 0 — o acesso é por convite no WhatsApp (D-04); o app não envia e-mail |
+| Web Push              | R$ 0 (protocolo aberto)                                                  |
+| IA (M10, sob demanda) | R$ 30–80/mês, com teto configurável                                      |
+| **Total além da VPS** | **~R$ 6/mês sem IA · ~R$ 35–85/mês com IA**                              |
+
+_Corrigido em 11/10/2026:_ a linha de total dizia "~R$ 40/mês sem IA", mas os itens somam ~R$ 6. E dá para chegar a R$ 0 — a análise das opções gratuitas de máquina e domínio está em [`hospedagem-de-baixo-custo.md`](hospedagem-de-baixo-custo.md).
 
 ---
 
@@ -1341,7 +1343,7 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 **D-05 — Estratégia de IA.** Confirma "determinístico primeiro, IA depois", com IA na V2.0 e a redação de mensagens antecipada para a V1.1? E o modelo padrão: `claude-opus-5` (~R$ 45/mês) ou `claude-haiku-4-5` (~R$ 10/mês, qualidade menor nas análises)?
 → _Só precisa de resposta antes da V1.1. Não afeta nada do MVP._
 
-**D-06 — Domínio.** Necessário para HTTPS, PWA e Web Push (~R$ 40/ano). Você compra e me passa, ou seguimos em subdomínio temporário para desenvolvimento?
+**D-06 — Domínio.** Necessário para HTTPS, PWA e Web Push (~R$ 40/ano). Você compra e me passa, ou seguimos em subdomínio temporário para desenvolvimento? Um subdomínio gratuito (deSEC, DuckDNS) também funciona em produção, com um custo escondido: trocar de domínio depois obriga todo mundo a reinstalar o app — ver [`hospedagem-de-baixo-custo.md`](hospedagem-de-baixo-custo.md).
 → _Bloqueia a segunda metade do M01 (deploy). Não bloqueia o desenvolvimento local._
 
 **D-07 — Confirmações de contexto.**
@@ -1359,7 +1361,7 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 **MVP completo: módulos 01 a 06 implementados** — fundação, pessoas, RBAC, grupos, eventos e presença.
 
-Verificação de 10/10/2026: **393 testes** de unidade e integração, **83 de ponta a ponta** em dois projetos de navegador (com e sem JavaScript), tipos limpos em 830 arquivos, build funcionando.
+Verificação de 11/10/2026, depois da varredura: **418 testes** de unidade e integração, **84 de ponta a ponta** em dois projetos de navegador (com e sem JavaScript), tipos limpos em 833 arquivos, build funcionando — e a pilha de produção rodando.
 
 O M06 fechou o ciclo da semana do PG: **a pessoa confirma em um toque** — no início, no evento ou pelo link do WhatsApp —, **o conselheiro marca quem veio** numa lista pré-ordenada por frequência, cadastrando ali mesmo quem chegou pela primeira vez, e **a liderança enxerga quem está se afastando**. Detalhe em [`06-modulo-06-presenca.md`](06-modulo-06-presenca.md).
 
@@ -1374,6 +1376,12 @@ A visão do grupo mostra a frequência de cada pessoa e dois sinais — "não ve
 #### De passagem
 
 Id malformado na URL passou a responder 404 em todas as rotas (antes, 500 vindo do Postgres) e "entrar para confirmar" leva de volta ao link do evento depois da senha.
+
+#### Varredura de 11/10/2026
+
+Antes do deploy, uma revisão de todos os módulos e da infraestrutura achou e corrigiu **32 defeitos**, cada um com teste que o reproduz. Dois eram críticos: um conselheiro podia assumir a conta de um líder que fosse membro do seu PG, gerando um "convite de recuperação" para ele; e o Caddy de produção nem subiria (`rate_limit` não existe no Caddy oficial). A pilha de produção rodou inteira pela primeira vez — ~105 MB de memória em repouso. Detalhe em [`varredura-2026-10-11.md`](varredura-2026-10-11.md).
+
+A conta de custo da seção 15.6 também foi corrigida (~R$ 6/mês sem IA, não ~R$ 40), e existe um caminho de **R$ 0/mês**: [`hospedagem-de-baixo-custo.md`](hospedagem-de-baixo-custo.md).
 
 #### Deploy é a última etapa — e é a próxima
 

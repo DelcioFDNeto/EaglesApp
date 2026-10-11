@@ -1,16 +1,18 @@
 import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
 import type { Database } from '$server/db';
 import {
 	groupMembership,
 	membershipStatus,
 	person,
 	personRelation,
+	personRole,
 	personStatusHistory,
 	personView,
 	smallGroup
 } from '$server/db/schema';
 import { audit } from '$server/audit/log';
-import { authorize, authorizeAnywhere, can, type Actor } from '$server/policy/policy';
+import { authorize, authorizeAnywhere, can, PolicyDenied, type Actor } from '$server/policy/policy';
 import { normalizarTexto, type OrigemDoCadastro } from '$shared/pessoa';
 import { SEM_GRUPO } from '$shared/grupo';
 import { contextoDaPessoa } from '$server/modules/grupos/contexto';
@@ -19,10 +21,15 @@ import {
 	moverNaTransacao,
 	type Movimento
 } from '$server/modules/grupos/composicao';
+import {
+	contarAdministradoresAtivos,
+	exigirAdministradorRestante,
+	travarAdministracao
+} from '$server/modules/rbac/administradores';
 import { consentimentosDe } from './consentimento';
-import { regimeDe, type Regime } from './regime';
+import { CAMPOS_SENSIVEIS, regimeDe, type Regime } from './regime';
 import { estagioPadrao } from './status';
-import type { AtualizarPessoaEntrada, CriarPessoaEntrada } from './validacao';
+import { ehMenorDeIdade, type AtualizarPessoaEntrada, type CriarPessoaEntrada } from './validacao';
 
 /**
  * Serviço de pessoas.
@@ -149,13 +156,14 @@ export async function listarPessoas(
 		condicoes.push(sql`${person.fullNameNormalized} like ${alvo}`);
 	}
 
-	if (filtros.statusId) {
+	// Filtros vêm da URL: id malformado é filtro ignorado, não erro 500.
+	if (filtros.statusId && ehId(filtros.statusId)) {
 		condicoes.push(eq(person.currentStatusId, filtros.statusId));
 	}
 
 	if (filtros.grupoId === SEM_GRUPO) {
 		condicoes.push(isNull(groupMembership.id));
-	} else if (filtros.grupoId) {
+	} else if (filtros.grupoId && ehId(filtros.grupoId)) {
 		condicoes.push(eq(groupMembership.groupId, filtros.grupoId));
 	}
 
@@ -205,7 +213,8 @@ export async function listarPessoas(
 			statusCor: l.statusCor,
 			grupo: l.grupoId ? { id: l.grupoId, nome: l.grupoNome!, cor: l.grupoCor } : null,
 			phone: podeVerContato ? l.phone : null,
-			ehMenor: idade.ehMenor
+			// "É menor" revela a idade: vai com o contato.
+			ehMenor: podeVerContato ? idade.ehMenor : null
 		};
 	});
 }
@@ -278,7 +287,9 @@ export async function verPessoa(
 	return {
 		id: linha.p.id,
 		fullName: linha.p.fullName,
-		birthDate: linha.p.birthDate,
+		// A data exata é dado pessoal: vai junto com o contato. A idade, que o
+		// perfil mostra a todos, continua em `idadeAnos`.
+		birthDate: contatoVisivel ? linha.p.birthDate : null,
 		ehMenor: idade.ehMenor,
 		idadeAnos: idade.idadeAnos,
 		joinedAt: linha.p.joinedAt,
@@ -327,9 +338,7 @@ function exigirRegimeCompativel(
 ): void {
 	if (!regime.restrito) return;
 
-	const proibidos = ['phone', 'whatsapp', 'email', 'relationshipStatus', 'notes'].filter(
-		(campo) => dados[campo] != null && dados[campo] !== ''
-	);
+	const proibidos = CAMPOS_SENSIVEIS.filter((campo) => dados[campo] != null && dados[campo] !== '');
 
 	if (proibidos.length > 0) {
 		throw new RegimeRestrito(proibidos, regime.motivo ?? 'Cadastro em regime restrito.');
@@ -444,7 +453,19 @@ export async function atualizarPessoa(
 	dados: AtualizarPessoaEntrada,
 	contexto: { ip?: string | null; userAgent?: string | null } = {}
 ): Promise<void> {
-	authorize(actor, 'person.update', await contextoDaPessoa(db, personId));
+	const ctx = await contextoDaPessoa(db, personId);
+	authorize(actor, 'person.update', ctx);
+
+	// Quem não VÊ o nascimento e o contato desta pessoa também não os escreve.
+	// Sem isto, um papel com `person.update` e sem `view_sensitive` receberia o
+	// formulário com esses campos vazios — e salvar só o nome os apagaria.
+	const veSensiveis = actor.personId === personId || can(actor, 'person.view_sensitive', ctx);
+	if (
+		!veSensiveis &&
+		(['birthDate', ...CAMPOS_SENSIVEIS] as const).some((c) => dados[c] !== undefined)
+	) {
+		throw new PolicyDenied('person.view_sensitive', ctx);
+	}
 
 	const [antes] = await db
 		.select()
@@ -516,7 +537,15 @@ export async function removerPessoa(
 		throw new Error('Você não pode remover o próprio cadastro.');
 	}
 
-	await db.transaction(async (tx) => {
+	const papeisRemovidos = await db.transaction(async (tx) => {
+		// Remover pessoa pode remover um administrador: mesma serialização e
+		// mesma trava da retirada de papel (D-M03-2, trava 4).
+		await travarAdministracao(tx as unknown as Database, actor.teamId);
+		const administradoresAntes = await contarAdministradoresAtivos(
+			tx as unknown as Database,
+			actor.teamId
+		);
+
 		await tx
 			.update(person)
 			.set({ deletedAt: new Date(), updatedAt: new Date() })
@@ -533,6 +562,26 @@ export async function removerPessoa(
 				endedByPersonId: actor.personId
 			})
 			.where(and(eq(groupMembership.personId, personId), isNull(groupMembership.leftAt)));
+
+		// E sai dos papéis. Atribuição de quem saiu do cadastro não autoriza
+		// nada, mas travava o arquivamento do grupo e a exclusão do papel —
+		// sem aparecer em tela nenhuma (varredura de 11/10/2026).
+		const removidos = await tx
+			.delete(personRole)
+			.where(eq(personRole.personId, personId))
+			.returning({
+				id: personRole.id,
+				roleId: personRole.roleId,
+				scopeType: personRole.scopeType,
+				scopeId: personRole.scopeId
+			});
+
+		// A remoção não pode ZERAR os administradores. Se já não havia nenhum,
+		// não foi ela que trancou a equipe.
+		if (administradoresAntes > 0) {
+			await exigirAdministradorRestante(tx as unknown as Database, actor.teamId);
+		}
+		return removidos;
 	});
 
 	await audit(db, {
@@ -541,6 +590,7 @@ export async function removerPessoa(
 		action: 'person.removida',
 		entity: 'person',
 		entityId: personId,
+		after: papeisRemovidos.length > 0 ? { papeisRemovidos } : undefined,
 		ip: contexto.ip,
 		userAgent: contexto.userAgent
 	});
@@ -649,17 +699,9 @@ export async function autocadastrarVisitante(
  *
  * `null` — data desconhecida — continua significando "trate como menor".
  */
+/** Uma regra de idade só — a mesma do autocadastro (`ehMenorDeIdade`). */
 function calcularEhMenor(birthDate: string | null | undefined): boolean | null {
-	if (!birthDate) return null;
-	const nasc = new Date(`${birthDate}T00:00:00Z`);
-	if (Number.isNaN(nasc.getTime())) return null;
-
-	const hoje = new Date();
-	let anos = hoje.getUTCFullYear() - nasc.getUTCFullYear();
-	const mes = hoje.getUTCMonth() - nasc.getUTCMonth();
-	if (mes < 0 || (mes === 0 && hoje.getUTCDate() < nasc.getUTCDate())) anos--;
-
-	return anos < 18;
+	return ehMenorDeIdade(birthDate ?? null);
 }
 
 function recorte(objeto: Record<string, unknown>, campos: string[]): Record<string, unknown> {

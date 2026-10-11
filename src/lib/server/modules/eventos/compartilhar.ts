@@ -1,5 +1,5 @@
 import { env } from '$server/env';
-import { dataCurtaComDia, horaCurta } from '$shared/fuso';
+import { dataCurtaComDia, horaCurta, terminaEmOutroDia } from '$shared/fuso';
 
 /**
  * Compartilhar no WhatsApp (seção 18): texto pronto + link público.
@@ -20,12 +20,15 @@ export function textoDoEvento(
 		titulo: string;
 		data: string;
 		hora: string;
+		dataFim?: string | null;
 		local: string | null;
 		cancelado: boolean;
 	},
 	link: string
 ): string {
-	const quando = `${dataCurtaComDia(evento.data)} às ${horaCurta(evento.hora)}`;
+	const quando =
+		`${dataCurtaComDia(evento.data)} às ${horaCurta(evento.hora)}` +
+		(terminaEmOutroDia(evento) ? ` até ${dataCurtaComDia(evento.dataFim!)}` : '');
 	const linhas = [
 		evento.cancelado ? `*CANCELADO — ${evento.titulo}*` : `*${evento.titulo}*`,
 		quando,

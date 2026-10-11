@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import type { Database } from '../db';
 import { person, session, userAccount } from '../db/schema';
 import { audit } from '../audit/log';
@@ -39,8 +39,27 @@ export function interpretarIdentificador(texto: string | null | undefined): Iden
 	}
 
 	const digitos = limpo.replace(/\D/g, '');
-	// 10 ou 11 dígitos é número brasileiro com DDD; até 13 cobre o +55 na frente.
-	return digitos.length >= 10 && digitos.length <= 13 ? { tipo: 'telefone', valor: digitos } : null;
+	// 10 ou 11 dígitos é número brasileiro com DDD. Com o 55 do país na frente
+	// (12 ou 13), é o MESMO número — e precisa virar a mesma chave: antes,
+	// "+55 11 98765-4321" e "(11) 98765-4321" eram contas diferentes para o
+	// login (varredura de 11/10/2026).
+	const nacional =
+		(digitos.length === 12 || digitos.length === 13) && digitos.startsWith('55')
+			? digitos.slice(2)
+			: digitos;
+	return nacional.length === 10 || nacional.length === 11
+		? { tipo: 'telefone', valor: nacional }
+		: null;
+}
+
+/**
+ * Condição de busca do identificador. Telefone também casa com a forma antiga,
+ * gravada com o 55 na frente antes da normalização acima.
+ */
+function condicaoDoIdentificador(id: Identificador) {
+	return id.tipo === 'email'
+		? sql`lower(${userAccount.email}) = ${id.valor}`
+		: inArray(userAccount.phone, [id.valor, `55${id.valor}`]);
 }
 
 /** Chave estável do identificador — a mesma para qualquer formatação. */
@@ -58,10 +77,7 @@ export async function encontrarContaPorIdentificador(db: Database, texto: string
 	const id = interpretarIdentificador(texto);
 	if (!id) return null;
 
-	const condicao =
-		id.tipo === 'email'
-			? sql`lower(${userAccount.email}) = ${id.valor}`
-			: eq(userAccount.phone, id.valor);
+	const condicao = condicaoDoIdentificador(id);
 
 	const [linha] = await db
 		.select({ conta: userAccount, pessoa: person })
@@ -136,17 +152,23 @@ export async function aceitarConvite(
 	}
 
 	const [existente] = await db
-		.select({ id: userAccount.id })
+		.select({ id: userAccount.id, desativada: userAccount.disabledAt })
 		.from(userAccount)
 		.where(eq(userAccount.personId, convite.personId))
 		.limit(1);
 
+	// Conta desativada não volta por convite: a troca de senha "funcionaria",
+	// mas a sessão nova morreria na validação — e o convite estaria gasto.
+	if (existente?.desativada) {
+		return {
+			ok: false,
+			mensagem: 'Esta conta está desativada. Fale com quem administra os acessos dos Eagles.'
+		};
+	}
+
 	// Verificação antecipada, para a mensagem sair sem custo de transação. A
 	// garantia de verdade é a unicidade do banco, tratada logo abaixo.
-	const comparacao =
-		identificador.tipo === 'email'
-			? sql`lower(${userAccount.email}) = ${identificador.valor}`
-			: eq(userAccount.phone, identificador.valor);
+	const comparacao = condicaoDoIdentificador(identificador);
 	const [emUso] = await db
 		.select({ id: userAccount.id })
 		.from(userAccount)

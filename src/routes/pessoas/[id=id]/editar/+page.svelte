@@ -57,15 +57,25 @@
 			obrigatorio
 		/>
 
-		<Campo
-			id="birthDate"
-			rotulo="Data de nascimento"
-			tipo="date"
-			valor={valor('birthDate', p.birthDate)}
-			erro={erroDe('birthDate')}
-		/>
+		<!--
+			Nascimento e contato só aparecem — e só se editam — para quem pode vê-los.
+			Mostrá-los vazios a quem não pode faria o "salvar" apagá-los.
+		-->
+		{#if !p.sensiveis}
+			<p class="legenda">
+				Data de nascimento e contato só aparecem para quem pode ver os dados sensíveis desta pessoa.
+			</p>
+		{:else}
+			<Campo
+				id="birthDate"
+				rotulo="Data de nascimento"
+				tipo="date"
+				valor={valor('birthDate', p.birthDate)}
+				erro={erroDe('birthDate')}
+			/>
+		{/if}
 
-		{#if p.regime.podeGuardarContato}
+		{#if p.sensiveis && p.regime.podeGuardarContato}
 			<Campo
 				id="phone"
 				rotulo="Telefone"
@@ -136,5 +146,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--esp-4);
+	}
+
+	.legenda {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-3);
 	}
 </style>

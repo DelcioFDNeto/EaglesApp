@@ -24,8 +24,11 @@ RUN addgroup -g 1000 -S eagles 2>/dev/null || true; \
 COPY --from=build --chown=1000:1000 /app/build ./build
 COPY --from=build --chown=1000:1000 /app/node_modules ./node_modules
 COPY --from=build --chown=1000:1000 /app/package.json ./
-# As migrações viajam junto: o deploy aplica antes de trocar as réplicas.
+# As migrações viajam junto, COM quem as aplica: o serviço `migrate` do
+# docker-compose roda `migrate.ts` antes de o app subir. Antes, só a pasta
+# viajava — e nada na imagem sabia aplicá-la (varredura de 11/10/2026).
 COPY --from=build --chown=1000:1000 /app/src/lib/server/db/migrations ./migrations
+COPY --from=build --chown=1000:1000 /app/src/lib/server/db/migrate.ts ./migrate.ts
 
 USER 1000:1000
 ENV NODE_ENV=production PORT=3000

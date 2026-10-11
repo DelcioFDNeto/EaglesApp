@@ -338,6 +338,24 @@ describe('o grupo é o contexto da pessoa', () => {
 		).rejects.toBeInstanceOf(PolicyDenied);
 	});
 
+	it('vínculo é das duas pessoas: não liga alguém do próprio grupo a um menor de outro', async () => {
+		const meuMembro = await novaPessoa('Responsável Pretexto', { grupo: azul });
+		const menorDeOutroGrupo = await novaPessoa('Menor do Verde', { grupo: verde });
+		await expect(
+			criarVinculo(ctx.db, conselheiroAzul, {
+				pessoaId: meuMembro,
+				outraPessoaId: menorDeOutroGrupo,
+				tipo: 'responsavel_legal'
+			})
+		).rejects.toBeInstanceOf(PolicyDenied);
+		// Quem cuida dos dois lados, pode.
+		await criarVinculo(ctx.db, lider, {
+			pessoaId: meuMembro,
+			outraPessoaId: menorDeOutroGrupo,
+			tipo: 'responsavel_legal'
+		});
+	});
+
 	it('G6: não apaga vínculo alheio usando uma pessoa do próprio grupo como pretexto', async () => {
 		const a = await novaPessoa('Irmã A', { grupo: verde });
 		const b = await novaPessoa('Irmã B', { grupo: verde });
@@ -656,6 +674,31 @@ describe('o grupo em si', () => {
 		expect(await grupoAtual(p)).toBe(g);
 	});
 
+	it('responsável vencido ou removido do cadastro não trava o arquivamento (varredura)', async () => {
+		const g = await criarGrupoPeloServico(ctx.db, lider, dados('PG Que Acabou'));
+		const vencido = await novaPessoa('Conselheiro de Antes');
+		await ctx.db.insert(personRole).values({
+			personId: vencido,
+			roleId: ctx.papeis.conselheiro!,
+			scopeType: 'group',
+			scopeId: g,
+			expiresAt: new Date(Date.now() - 86_400_000)
+		});
+		const removido = await novaPessoa('Conselheiro Removido');
+		await ctx.db.insert(personRole).values({
+			personId: removido,
+			roleId: ctx.papeis.conselheiro!,
+			scopeType: 'group',
+			scopeId: g
+		});
+		await ctx.db.update(person).set({ deletedAt: new Date() }).where(eq(person.id, removido));
+
+		// Nenhum dos dois aparece como responsável — e nenhum dos dois trava:
+		// nem o serviço, nem o gatilho do banco (migração 0011).
+		expect((await verGrupo(ctx.db, lider, g))!.responsaveis).toEqual([]);
+		await arquivarGrupo(ctx.db, lider, g);
+	});
+
 	it('conselheiro não arquiva nem o próprio grupo', async () => {
 		await expect(arquivarGrupo(ctx.db, conselheiroAzul, azul)).rejects.toBeInstanceOf(PolicyDenied);
 	});
@@ -729,6 +772,13 @@ describe('visão do conselheiro (RF-04.3)', () => {
 		expect(visao!.sairamRecentemente).toEqual([
 			expect.objectContaining({ personId: p, motivo: 'Mudou de novo' })
 		]);
+
+		// O motivo é texto livre de quem cuida do grupo: quem não vê dados
+		// sensíveis daquele grupo vê a saída, mas não o porquê (varredura).
+		const deFora = await verGrupo(ctx.db, conselheiroVerde, g);
+		expect(deFora!.sairamRecentemente).toEqual([
+			expect.objectContaining({ personId: p, motivo: null })
+		]);
 	});
 
 	it('outro conselheiro vê quem está no grupo, mas não contato nem pendências', async () => {
@@ -737,5 +787,7 @@ describe('visão do conselheiro (RF-04.3)', () => {
 		expect(visao!.pessoas.every((p) => p.telefone === null && p.pendencias.length === 0)).toBe(
 			true
 		);
+		// Nem o sinal de menor de idade — que diz a idade tanto quanto a pendência.
+		expect(visao!.pessoas.every((p) => p.ehMenor === null)).toBe(true);
 	});
 });

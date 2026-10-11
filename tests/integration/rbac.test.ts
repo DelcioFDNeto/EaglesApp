@@ -11,11 +11,13 @@ import { and, eq } from 'drizzle-orm';
 import { criarBancoDeTeste, criarGrupo, type BancoDeTeste } from './helpers/banco';
 import {
 	auditLog,
+	groupMembership,
 	person,
 	personRole,
 	rolePermission,
 	userAccount
 } from '../../src/lib/server/db/schema';
+import { aceitarConvite } from '../../src/lib/server/auth/conta';
 import { loadActor } from '../../src/lib/server/policy/actor';
 import { can, PolicyDenied, type Actor } from '../../src/lib/server/policy/policy';
 import { hashPassword } from '../../src/lib/server/auth/password';
@@ -33,6 +35,7 @@ import {
 	removerAtribuicao
 } from '../../src/lib/server/modules/rbac/atribuicoes';
 import { emitirConvite } from '../../src/lib/server/modules/rbac/convites';
+import { removerPessoa } from '../../src/lib/server/modules/pessoas/pessoas';
 import { contarAdministradoresAtivos } from '../../src/lib/server/modules/rbac/administradores';
 import { AcessoRecusado } from '../../src/lib/server/modules/rbac/regras';
 import { ROLE_SEEDS } from '../../src/lib/server/policy/roles';
@@ -464,6 +467,76 @@ describe('papéis personalizados', () => {
 		await excluirPapel(ctx.db, lider, id, COM_REAUTH);
 		expect(await verPapel(ctx.db, lider, id)).toBeNull();
 	});
+
+	it('atribuição VENCIDA não impede excluir o papel — a tela já não a mostra (varredura)', async () => {
+		const id = await criarPapel(
+			ctx.db,
+			lider,
+			{ name: 'Mutirão de março', defaultScope: 'self', permissoes: ['event.view'] },
+			COM_REAUTH
+		);
+		await ctx.db.insert(personRole).values({
+			personId: await pessoa(null),
+			roleId: id,
+			scopeType: 'self',
+			expiresAt: new Date(Date.now() - 86_400_000)
+		});
+		expect((await verPapel(ctx.db, lider, id))!.quemTem).toEqual([]);
+		await excluirPapel(ctx.db, lider, id, COM_REAUTH);
+		expect(await verPapel(ctx.db, lider, id)).toBeNull();
+	});
+});
+
+describe('remover pessoa (varredura de 11/10/2026)', () => {
+	it('encerra os papéis dela junto', async () => {
+		const outroLider = await pessoa('lider');
+		await removerPessoa(ctx.db, lider, outroLider);
+		expect(await atribuicoesDe(ctx.db, outroLider)).toEqual([]);
+	});
+
+	it('papel com person.delete não remove o único administrador ativo', async () => {
+		// Banco próprio: o principal tem vários líderes de outros testes.
+		const isolado = await criarBancoDeTeste();
+		try {
+			const [l] = await isolado.db
+				.insert(person)
+				.values({ teamId: isolado.teamId, fullName: 'Único Líder', birthDate: '1990-01-01' })
+				.returning({ id: person.id });
+			await isolado.db.insert(personRole).values({
+				personId: l!.id,
+				roleId: isolado.papeis.lider!,
+				scopeType: 'global'
+			});
+			await isolado.db.insert(userAccount).values({
+				personId: l!.id,
+				email: 'unico@eagles.test',
+				passwordHash: await hashPassword('uma senha de teste comprida')
+			});
+			const [r] = await isolado.db
+				.insert(person)
+				.values({ teamId: isolado.teamId, fullName: 'Quem Remove' })
+				.returning({ id: person.id });
+			const quemRemove: Actor = {
+				personId: r!.id,
+				teamId: isolado.teamId,
+				assignments: [
+					{
+						roleKey: 'limpeza',
+						scopeType: 'global',
+						scopeId: null,
+						permissions: new Set(['person.view', 'person.delete'] as const)
+					}
+				]
+			};
+
+			const recusada = await recusa(removerPessoa(isolado.db, quemRemove, l!.id));
+			expect(recusada.motivo).toBe('ultimo_administrador');
+			const [ainda] = await isolado.db.select().from(person).where(eq(person.id, l!.id));
+			expect(ainda!.deletedAt, 'a remoção voltou inteira').toBeNull();
+		} finally {
+			await isolado.fechar();
+		}
+	});
 });
 
 describe('convite (lacuna G1)', () => {
@@ -499,5 +572,60 @@ describe('convite (lacuna G1)', () => {
 	it('membro não convida ninguém', async () => {
 		const alvo = await pessoa('membro', { conta: false });
 		await expect(emitirConvite(ctx.db, membro, alvo, COM_REAUTH)).rejects.toThrow(PolicyDenied);
+	});
+});
+
+describe('trava 5: convite não é atalho para poder (varredura de 11/10/2026)', () => {
+	// Quem emite recebe o link cru — e quem tem o link fica com a conta.
+	let grupo: string;
+	let conselheiro: Actor;
+
+	beforeAll(async () => {
+		grupo = await criarGrupo(ctx, 'PG da Trava 5');
+		conselheiro = await ator(await pessoa('conselheiro', { escopoGrupo: grupo }));
+	});
+
+	async function noGrupo(personId: string) {
+		await ctx.db.insert(groupMembership).values({ groupId: grupo, personId });
+		return personId;
+	}
+
+	it('conselheiro não gera RECUPERAÇÃO para o líder que é membro do PG dele', async () => {
+		const liderNoPg = await noGrupo(await pessoa('lider'));
+		const r = await recusa(emitirConvite(ctx.db, conselheiro, liderNoPg, COM_REAUTH));
+		expect(r.motivo).toBe('escalada');
+	});
+
+	it('nem o PRIMEIRO convite de quem já recebeu papel de líder', async () => {
+		const novoLider = await noGrupo(await pessoa('lider', { conta: false }));
+		const r = await recusa(emitirConvite(ctx.db, conselheiro, novoLider, COM_REAUTH));
+		expect(r.motivo).toBe('escalada');
+		// Quem administra os acessos continua podendo.
+		expect((await emitirConvite(ctx.db, lider, novoLider, COM_REAUTH)).url).toMatch(/convite/);
+	});
+
+	it('o caso de todo dia continua: conselheiro convida quem é membro do PG dele', async () => {
+		const membroDoPg = await noGrupo(await pessoa('membro', { conta: false }));
+		const c = await emitirConvite(ctx.db, conselheiro, membroDoPg, SEM_REAUTH);
+		expect(c.recuperacao).toBe(false);
+	});
+
+	it('conta desativada: nem emite, nem aceita um convite antigo', async () => {
+		const alvo = await pessoa('membro');
+		const antigo = await emitirConvite(ctx.db, lider, alvo, COM_REAUTH);
+		await ctx.db
+			.update(userAccount)
+			.set({ disabledAt: new Date() })
+			.where(eq(userAccount.personId, alvo));
+
+		const r = await recusa(emitirConvite(ctx.db, lider, alvo, COM_REAUTH));
+		expect(r.motivo).toBe('conta_desativada');
+
+		const aceite = await aceitarConvite(ctx.db, {
+			token: antigo.url.split('/').pop()!,
+			senha: 'uma senha nova bem comprida',
+			identificador: 'desativada@eagles.test'
+		});
+		expect(aceite.ok).toBe(false);
 	});
 });

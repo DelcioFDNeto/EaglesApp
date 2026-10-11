@@ -317,7 +317,7 @@ html{scroll-behavior:smooth}
 
   <header class="hero">
     <div class="col">
-      <p class="eyebrow">Documento de descoberta · versão 0.7 · arquitetura aprovada</p>
+      <p class="eyebrow">Documento de descoberta · versão 0.8 · arquitetura aprovada</p>
       <h1>Organizar pessoas <em>sem</em> burocratizar a comunidade.</h1>
       <p class="lede">Descoberta, requisitos, modelo de dados, arquitetura e plano de entrega do Eagles App — a plataforma de gestão interna dos Eagles para o ano inteiro.</p>
       <div class="meta">
@@ -354,7 +354,7 @@ html{scroll-behavior:smooth}
       </ol>
       <div class="call">
         <h4>Recomendação central</h4>
-        <p><strong>Arquitetura:</strong> monólito modular full-stack em SvelteKit (TypeScript) + PostgreSQL, entregue como PWA instalável mobile-first, na VPS existente via Docker Compose com Caddy. Custo adicional: <strong>R$ 40–90/mês</strong>. <span class="tag t-dec">DEC</span></p>
+        <p><strong>Arquitetura:</strong> monólito modular full-stack em SvelteKit (TypeScript) + PostgreSQL, entregue como PWA instalável mobile-first, na VPS existente via Docker Compose com Caddy. Custo adicional: <strong>~R$ 6/mês sem IA</strong> (R$ 35–85 com a IA da V2.0) — e existe caminho de R$ 0. <span class="tag t-dec">DEC</span></p>
         <p><strong>Escopo:</strong> MVP de <strong>6 módulos em ~10 semanas</strong> — Fundação, Pessoas, RBAC, Grupos, Eventos e Presença — com IA e Financeiro deliberadamente depois. <span class="tag t-sug">SUG</span></p>
       </div>
     </div>
@@ -1239,10 +1239,10 @@ uptime:     # Uptime Kuma — monitor leve</pre>
           <tr><td>VPS</td><td class="num">já existente</td></tr>
           <tr><td>Domínio .com.br</td><td class="num">~R$ 3,50/mês</td></tr>
           <tr><td>Backup externo (B2)</td><td class="num">~R$ 2/mês</td></tr>
-          <tr><td>E-mail transacional</td><td class="num">R$ 0</td></tr>
+          <tr><td>E-mail transacional</td><td class="num">R$ 0 (o app não envia e-mail)</td></tr>
           <tr><td>Web Push</td><td class="num">R$ 0</td></tr>
           <tr><td>IA (M10, sob demanda)</td><td class="num">R$ 30–80/mês</td></tr>
-          <tr><td><strong>Total além da VPS</strong></td><td class="num"><strong>~R$ 40 sem IA · ~R$ 90 com IA</strong></td></tr>
+          <tr><td><strong>Total além da VPS</strong></td><td class="num"><strong>~R$ 6 sem IA · ~R$ 35–85 com IA</strong></td></tr>
         </tbody>
       </table></div>
     </div>
@@ -1747,8 +1747,8 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
 
       <div class="dcard imp">
         <div class="dhead"><span class="dcode">D-06</span><span class="dtitle">Domínio</span><span class="dstate s-imp">importante</span></div>
-        <p>Preciso de um domínio para HTTPS, PWA e Web Push (~R$ 40/ano).</p>
-        <p class="ask">Você compra e me passa, ou seguimos em subdomínio temporário só para desenvolvimento?</p>
+        <p>Preciso de um domínio para HTTPS, PWA e Web Push (~R$ 40/ano). Um subdomínio gratuito (deSEC, DuckDNS) também funciona em produção — com um custo escondido: trocar de domínio depois obriga todo mundo a reinstalar o app.</p>
+        <p class="ask">Você compra e me passa, ou seguimos com um subdomínio gratuito?</p>
       </div>
 
       <div class="dcard quick">
@@ -1764,7 +1764,7 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
 
       <div class="col" style="margin-top:2.4rem">
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin-bottom:.6rem">Onde a construção está</h3>
-        <p><strong>MVP completo: módulos 01 a 06 implementados</strong> — fundação, pessoas, papéis com gestão de acesso, grupos, eventos e presença. Verificação de 10 de outubro: <strong>393 testes</strong> de unidade e integração, <strong>83 de ponta a ponta</strong> em dois projetos de navegador — com e sem JavaScript —, tipos limpos e build funcionando.</p>
+        <p><strong>MVP completo: módulos 01 a 06 implementados</strong> — fundação, pessoas, papéis com gestão de acesso, grupos, eventos e presença. Verificação de 11 de outubro, depois da varredura: <strong>418 testes</strong> de unidade e integração, <strong>84 de ponta a ponta</strong> em dois projetos de navegador — com e sem JavaScript —, tipos limpos, build funcionando e a pilha de produção rodando.</p>
         <p>O M06 fechou o ciclo da semana do PG: <strong>a pessoa confirma em um toque</strong> — no início, no evento ou pelo link do WhatsApp —, <strong>o conselheiro marca quem veio</strong> numa lista que já vem na ordem de quem mais frequenta, cadastrando ali mesmo quem chegou pela primeira vez, e <strong>a liderança enxerga quem está se afastando</strong>.</p>
 
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Falta só existe em lista feita</h3>
@@ -1773,15 +1773,21 @@ Confirme sua presença: eagles.app/e/a7f3</pre>
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Sinais, não ranking</h3>
         <p>Quem cuida do grupo vê a frequência de cada pessoa e dois sinais: <strong>“não vem há 3 encontros”</strong> e <strong>“já veio 3 vezes em 60 dias”</strong> — o visitante que talvez queira dar o próximo passo. Listas e relatório ficam em ordem de nome, e ninguém vê a frequência de um colega. Cada resposta ao “você vai?” fica guardada pelo próprio banco, mesmo quando a pessoa muda de ideia.</p>
 
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">A varredura antes do deploy</h3>
+        <p>Uma revisão de todos os módulos e da infraestrutura achou e corrigiu <strong>32 defeitos</strong>, cada um com um teste que o reproduz. Dois eram críticos: um conselheiro conseguia assumir a conta de um líder que fosse membro do seu PG, gerando para ele um "convite de recuperação"; e o servidor de produção nem subiria, por uma configuração que o Caddy oficial não reconhece. A pilha de produção rodou inteira pela primeira vez: cerca de <strong>105 MB de memória</strong> em repouso — cabe numa máquina gratuita.</p>
+
+        <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Dá para rodar de graça</h3>
+        <p>Uma máquina gratuita (a e2-micro do Google, por exemplo) e um subdomínio gratuito fecham a conta em <strong>R$ 0/mês</strong>. A recomendação é gastar só <strong>R$ 40 por ano</strong> num <code>.com.br</code>: o domínio é a única escolha do deploy difícil de desfazer depois. A soma de custos deste documento também foi corrigida — sem IA, são cerca de R$ 6 por mês, não R$ 40.</p>
+
         <h3 style="font-family:&quot;Archivo&quot;,sans-serif;font-size:1.1rem;letter-spacing:-.015em;margin:1.6rem 0 .6rem">Agora, o deploy</h3>
         <p>Como decidido em 4 de outubro, a implantação na VPS — domínio, app instalado no celular e cópia do backup enviada para fora — vem <strong>depois dos módulos</strong>. Os módulos do MVP estão prontos.</p>
-        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: o deploy do MVP — precisa do domínio (D-06) e das specs da VPS (D-07.2).</p></div>
+        <div class="close" style="margin-top:1.6rem"><p>Próximo passo: o deploy do MVP — precisa da escolha do domínio (D-06) e da máquina (a VPS existente, D-07.2, ou uma gratuita).</p></div>
       </div>
     </div>
   </section>
 
   <footer>
-    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.7 · 18 de agosto de 2026, revisado em 10 de outubro<br>
+    Eagles App · Documento de descoberta e arquitetura inicial · versão 0.8 · 18 de agosto de 2026, revisado em 11 de outubro<br>
     Fonte no repositório: <code>docs/00-descoberta-e-arquitetura.md</code>
   </footer>
 </div>

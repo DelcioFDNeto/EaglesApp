@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { dataPorExtenso, horaCurta } from '$shared/fuso';
+	import { dataCurtaComDia, dataPorExtenso, horaCurta, terminaEmOutroDia } from '$shared/fuso';
 
 	/**
 	 * Um evento numa lista — agenda, início, tela do grupo.
@@ -14,6 +14,7 @@
 		tipo: { nome: string; cor: string | null };
 		data: string;
 		hora: string;
+		dataFim?: string | null;
 		horaFim: string | null;
 		local: string | null;
 		grupo: { nome: string } | null;
@@ -41,9 +42,11 @@
 	);
 
 	const quando = $derived(
-		evento.horaFim
-			? `${horaCurta(evento.hora)}–${horaCurta(evento.horaFim)}`
-			: horaCurta(evento.hora)
+		terminaEmOutroDia(evento)
+			? `${horaCurta(evento.hora)} · até ${dataCurtaComDia(evento.dataFim!)}`
+			: evento.horaFim
+				? `${horaCurta(evento.hora)}–${horaCurta(evento.horaFim)}`
+				: horaCurta(evento.hora)
 	);
 </script>
 

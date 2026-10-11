@@ -126,12 +126,21 @@ fi
 # --- Cópia externa ----------------------------------------------------------
 # Só arquivos .age chegam aqui — não existe caminho que envie texto em claro.
 if [ -n "${B2_BUCKET:-}" ] && command -v rclone > /dev/null 2>&1; then
+	# Cada envio num `if`: sob `set -e`, uma falha solta aqui encerrava o
+	# script antes da retenção e da varredura de texto em claro (varredura).
 	if rclone copy "$BASE.age" "b2:$B2_BUCKET/banco/" --quiet; then
-		[ -f "$ANEXOS.age" ] && rclone copy "$ANEXOS.age" "b2:$B2_BUCKET/anexos/" --quiet
-		log "cópia externa enviada"
+		log "cópia externa do banco enviada"
 	else
-		erro "cópia externa FALHOU. O backup de hoje existe só nesta máquina."
+		erro "cópia externa do banco FALHOU. O backup de hoje existe só nesta máquina."
 		SAIDA=1
+	fi
+	if [ -f "$ANEXOS.age" ]; then
+		if rclone copy "$ANEXOS.age" "b2:$B2_BUCKET/anexos/" --quiet; then
+			log "cópia externa dos anexos enviada"
+		else
+			erro "cópia externa dos anexos FALHOU."
+			SAIDA=1
+		fi
 	fi
 else
 	erro "sem cópia externa: configure B2_BUCKET e o rclone."
@@ -139,9 +148,12 @@ else
 	SAIDA=1
 fi
 
-# --- Retenção: 7 diários, preservando o dia 01 de cada mês ------------------
+# --- Retenção: 7 diários, e o do dia 01 de cada mês por um ano --------------
+# O nome é eagles_AAAA-MM-DD_HHMM: o dia 01 é "-01_". O padrão antigo,
+# '*_01_*', nunca casava — e os mensais iam embora junto com os diários.
 find "$DESTINO" -name 'eagles_*.sql.gz.age' -mtime "+$RETENCAO" \
-	! -name '*_01_*' -delete 2>/dev/null || true
+	! -name 'eagles_????-??-01_*' -delete 2>/dev/null || true
+find "$DESTINO" -name 'eagles_????-??-01_*.sql.gz.age' -mtime +400 -delete 2>/dev/null || true
 find "$DESTINO" -name 'anexos_*.tar.gz.age' -mtime "+$RETENCAO" -delete 2>/dev/null || true
 
 # Varredura de segurança: se algum texto em claro sobrou de uma execução

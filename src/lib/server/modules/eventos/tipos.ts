@@ -1,4 +1,5 @@
 import { and, asc, count, eq, isNull, ne, sql } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
 import type { Database } from '$server/db';
 import { event, eventSeries, eventType } from '$server/db/schema';
 import { audit } from '$server/audit/log';
@@ -170,6 +171,7 @@ export async function atualizarTipo(
 	contexto: ContextoDeRequisicao = {}
 ): Promise<void> {
 	authorize(actor, 'settings.manage');
+	if (!ehId(tipoId)) throw new EventoRecusado('nao_encontrado', 'Esse tipo de evento não existe.');
 
 	const [antes] = await db
 		.select()
@@ -225,6 +227,7 @@ export async function arquivarTipo(
 	contexto: ContextoDeRequisicao = {}
 ): Promise<void> {
 	authorize(actor, 'settings.manage');
+	if (!ehId(tipoId)) throw new EventoRecusado('nao_encontrado', 'Esse tipo de evento não existe.');
 
 	const [tipo] = await db
 		.select()

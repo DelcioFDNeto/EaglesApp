@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { Database } from '$server/db';
 import { person, personRelation } from '$server/db/schema';
 import { audit } from '$server/audit/log';
@@ -100,6 +100,23 @@ export async function criarVinculo(
 	if (entrada.pessoaId === entrada.outraPessoaId) {
 		throw new VinculoInvalido('Não dá para vincular uma pessoa a ela mesma.');
 	}
+
+	// O vínculo é das DUAS pessoas — e "responsável legal" muda o regime de
+	// dados de quem é o dependente (ADR 0003). Quem só pode editar um dos lados
+	// não decide pelo outro (varredura de 11/10/2026).
+	const [outra] = await db
+		.select({ id: person.id })
+		.from(person)
+		.where(
+			and(
+				eq(person.id, entrada.outraPessoaId),
+				eq(person.teamId, actor.teamId),
+				isNull(person.deletedAt)
+			)
+		)
+		.limit(1);
+	if (!outra) throw new VinculoInvalido('A outra pessoa não existe.');
+	authorize(actor, 'person.update', await contextoDaPessoa(db, entrada.outraPessoaId));
 
 	const { personA, personB } = ordenarPar(entrada.pessoaId, entrada.outraPessoaId, entrada.tipo);
 

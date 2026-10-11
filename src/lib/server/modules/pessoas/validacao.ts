@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ehData } from '$shared/fuso';
 import {
 	IDADE_MINIMA,
 	SITUACOES_DE_RELACIONAMENTO,
@@ -58,7 +59,7 @@ export const emailSchema = opcional().refine(
 );
 
 export const dataDeNascimentoSchema = opcional()
-	.refine((v) => v === null || /^\d{4}-\d{2}-\d{2}$/.test(v), 'Data inválida.')
+	.refine((v) => v === null || ehData(v), 'Data inválida.')
 	.refine((v) => {
 		if (v === null) return true;
 		const data = new Date(`${v}T00:00:00Z`);

@@ -123,7 +123,12 @@ function linhasDoPublico(
 	}));
 }
 
-function alvoDaLinha(l: { kind: string; groupId: string | null; personId: string | null }): Alvo {
+/** Linha de `event_audience` → alvo. Uma tradução só, também para a frequência (M06). */
+export function alvoDaLinha(l: {
+	kind: string;
+	groupId: string | null;
+	personId: string | null;
+}): Alvo {
 	if (l.kind === 'grupo') return { tipo: 'grupo', groupId: l.groupId! };
 	if (l.kind === 'pessoa') return { tipo: 'pessoa', personId: l.personId! };
 	return { tipo: 'equipe' };
@@ -320,6 +325,8 @@ export type EventoResumo = {
 	/** Data e hora locais, no fuso da equipe — prontas para a tela. */
 	data: string;
 	hora: string;
+	/** Data local do fim — difere de `data` em evento de vários dias. */
+	dataFim: string | null;
 	horaFim: string | null;
 	local: string | null;
 	grupo: { id: string; nome: string; cor: string | null } | null;
@@ -387,6 +394,7 @@ function resumir(l: LinhaDoResumo, fuso: string): EventoResumo {
 		fim: l.fim,
 		data: dataNoFuso(l.inicio, fuso),
 		hora: horaNoFuso(l.inicio, fuso),
+		dataFim: l.fim ? dataNoFuso(l.fim, fuso) : null,
 		horaFim: l.fim ? horaNoFuso(l.fim, fuso) : null,
 		local: l.local,
 		grupo: l.grupoId ? { id: l.grupoId, nome: l.grupoNome!, cor: l.grupoCor } : null,
@@ -623,6 +631,7 @@ export type EventoPublico = {
 	tipo: string;
 	data: string;
 	hora: string;
+	dataFim: string | null;
 	horaFim: string | null;
 	local: string | null;
 	descricao: string | null;
@@ -670,6 +679,7 @@ export async function eventoPorCodigo(db: Database, codigo: string): Promise<Eve
 		tipo: linha.tipo,
 		data: dataNoFuso(linha.inicio, linha.fuso),
 		hora: horaNoFuso(linha.inicio, linha.fuso),
+		dataFim: linha.fim ? dataNoFuso(linha.fim, linha.fuso) : null,
 		horaFim: linha.fim ? horaNoFuso(linha.fim, linha.fuso) : null,
 		local: linha.local,
 		descricao: linha.descricao,
@@ -848,9 +858,26 @@ export async function editarEvento(
 	exigirPublicoNoEscopo(actor, publico);
 	await exigirReferencias(db, actor.teamId, { responsavelId: dados.responsavelId, publico });
 
+	// Uma data de encontro semanal começa e termina no mesmo dia, como a série.
+	if (antes.seriesId !== null && dados.dataFim && dados.dataFim !== dados.data) {
+		throw new EventoRecusado(
+			'periodo_invalido',
+			'Uma data do encontro semanal começa e termina no mesmo dia.'
+		);
+	}
+
+	// O fim se calcula como na criação. Antes, a edição o refazia na data de
+	// INÍCIO: mudar só o título de um retiro de sexta a domingo o encurtava
+	// para sexta (varredura de 11/10/2026).
 	const fuso = await fusoDaEquipe(db, actor.teamId);
 	const inicio = instanteLocal(dados.data, dados.horaInicio, fuso);
-	const fim = dados.horaFim ? instanteLocal(dados.data, dados.horaFim, fuso) : null;
+	const fim =
+		dados.horaFim || dados.dataFim
+			? instanteLocal(dados.dataFim ?? dados.data, dados.horaFim ?? '23:59', fuso)
+			: null;
+	if (fim && fim <= inicio) {
+		throw new EventoRecusado('periodo_invalido', 'O evento termina antes de começar.');
+	}
 
 	await db.transaction(async (tx) => {
 		await tx

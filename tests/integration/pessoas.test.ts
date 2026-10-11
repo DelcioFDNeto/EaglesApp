@@ -19,7 +19,11 @@ import {
 	registrarConsentimento
 } from '../../src/lib/server/modules/pessoas/consentimento';
 import { criarVinculo, vinculosDe } from '../../src/lib/server/modules/pessoas/relacoes';
-import { procurarPossiveisDuplicatas } from '../../src/lib/server/modules/pessoas/duplicidade';
+import {
+	duplicatasVisiveis,
+	mensagemDeDuplicata,
+	procurarPossiveisDuplicatas
+} from '../../src/lib/server/modules/pessoas/duplicidade';
 import { PolicyDenied } from '../../src/lib/server/policy/policy';
 
 let ctx: BancoDeTeste;
@@ -439,6 +443,68 @@ describe('permissões (RN-08, RN-32)', () => {
 		expect(doLider.some((p) => p.phone !== null)).toBe(true);
 	});
 
+	it('a data de nascimento exata vai junto com o contato — a idade, não', async () => {
+		const id = await criarPessoa(ctx.db, lider, {
+			fullName: 'Nascimento Protegido',
+			birthDate: '1995-06-15',
+			phone: null,
+			whatsapp: null,
+			email: null,
+			relationshipStatus: null,
+			joinedAt: null,
+			notes: null,
+			statusId: null
+		});
+		const comoMembro = await verPessoa(ctx.db, membro, id);
+		expect(comoMembro?.birthDate, 'nem na página, nem escondida no HTML').toBeNull();
+		expect(comoMembro?.idadeAnos).toBeGreaterThan(20);
+		expect((await verPessoa(ctx.db, lider, id))?.birthDate).toBe('1995-06-15');
+	});
+
+	it('quem edita sem ver dados sensíveis não os apaga — nem os escreve (varredura)', async () => {
+		const id = await criarPessoa(ctx.db, lider, {
+			fullName: 'Contato Que Fica',
+			birthDate: '1990-02-02',
+			phone: '11944443333',
+			whatsapp: null,
+			email: 'fica@eagles.test',
+			relationshipStatus: null,
+			joinedAt: null,
+			notes: 'observação da liderança',
+			statusId: null
+		});
+		// Um papel personalizado possível: edita cadastro, mas não vê contato.
+		const editor: Actor = {
+			personId: membro.personId,
+			teamId: ctx.teamId,
+			assignments: [
+				{
+					roleKey: 'secretaria',
+					scopeType: 'global',
+					scopeId: null,
+					permissions: new Set(['person.view', 'person.update'] as const)
+				}
+			]
+		};
+
+		await atualizarPessoa(ctx.db, editor, id, { fullName: 'Contato Que Ficou' });
+		const [gravada] = await ctx.db.select().from(person).where(eq(person.id, id));
+		expect(gravada).toMatchObject({
+			fullName: 'Contato Que Ficou',
+			phone: '11944443333',
+			email: 'fica@eagles.test',
+			notes: 'observação da liderança',
+			birthDate: '1990-02-02'
+		});
+
+		await expect(atualizarPessoa(ctx.db, editor, id, { phone: null })).rejects.toThrow(
+			PolicyDenied
+		);
+		await expect(atualizarPessoa(ctx.db, editor, id, { birthDate: '2001-01-01' })).rejects.toThrow(
+			PolicyDenied
+		);
+	});
+
 	it('membro NÃO pode criar pessoa', async () => {
 		await expect(
 			criarPessoa(ctx.db, membro, {
@@ -581,6 +647,17 @@ describe('duplicidade avisa, nunca bloqueia (RF-02.6)', () => {
 		});
 
 		expect(achados.some((a) => a.motivo === 'telefone')).toBe(true);
+
+		// Quem não vê o contato daquela pessoa recebe o aviso, mas não o NOME
+		// do dono do número — senão o formulário vira um "de quem é este número?".
+		const { visiveis, ocultas } = await duplicatasVisiveis(ctx.db, membro, achados);
+		expect(visiveis).toEqual([]);
+		expect(ocultas).toBe(1);
+		const aviso = mensagemDeDuplicata(visiveis, ocultas);
+		expect(aviso).toMatch(/já está no cadastro de outra pessoa/);
+		expect(aviso).not.toContain('Telefone Repetido');
+
+		expect((await duplicatasVisiveis(ctx.db, lider, achados)).visiveis).toHaveLength(1);
 	});
 
 	it('não acusa duplicata de nomes diferentes', async () => {

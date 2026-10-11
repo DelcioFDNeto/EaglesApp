@@ -14,7 +14,7 @@ import {
 } from '$server/db/schema';
 import { authorize, can, type Actor } from '$server/policy/policy';
 import { contextoDaPessoa } from '$server/modules/grupos/contexto';
-import { fusoDaEquipe } from '$server/modules/eventos/eventos';
+import { alvoDaLinha, fusoDaEquipe } from '$server/modules/eventos/eventos';
 import type { Alvo } from '$server/modules/eventos/regras';
 import { dataNoFuso } from '$shared/fuso';
 import {
@@ -97,13 +97,7 @@ export async function publicosDe(db: Database, eventIds: string[]): Promise<Map<
 		.from(eventAudience)
 		.where(inArray(eventAudience.eventId, eventIds));
 	for (const l of linhas) {
-		const alvo: Alvo =
-			l.kind === 'grupo'
-				? { tipo: 'grupo', groupId: l.groupId! }
-				: l.kind === 'pessoa'
-					? { tipo: 'pessoa', personId: l.personId! }
-					: { tipo: 'equipe' };
-		mapa.set(l.eventId!, [...(mapa.get(l.eventId!) ?? []), alvo]);
+		mapa.set(l.eventId!, [...(mapa.get(l.eventId!) ?? []), alvoDaLinha(l)]);
 	}
 	return mapa;
 }

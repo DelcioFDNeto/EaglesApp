@@ -91,18 +91,22 @@ export async function registrarConsentimento(
 	db: Database,
 	registro: RegistroDeConsentimento
 ): Promise<void> {
-	await db.insert(consent).values({
-		personId: registro.personId,
-		kind: registro.kind,
-		granted: registro.granted,
-		grantedByPersonId: registro.grantedByPersonId ?? null,
-		recordedByPersonId: registro.recordedByPersonId ?? null,
-		evidence: registro.evidence ?? null
-	});
+	// Uma transação de verdade: o log é append-only, então uma revogação
+	// registrada com o contato ainda guardado não teria conserto depois.
+	await db.transaction(async (tx) => {
+		await tx.insert(consent).values({
+			personId: registro.personId,
+			kind: registro.kind,
+			granted: registro.granted,
+			grantedByPersonId: registro.grantedByPersonId ?? null,
+			recordedByPersonId: registro.recordedByPersonId ?? null,
+			evidence: registro.evidence ?? null
+		});
 
-	if (!registro.granted && registro.kind === 'dados_cadastrais') {
-		await apagarDadosDeContato(db, registro.personId);
-	}
+		if (!registro.granted && registro.kind === 'dados_cadastrais') {
+			await apagarDadosDeContato(tx as unknown as Database, registro.personId);
+		}
+	});
 
 	await audit(db, {
 		teamId: registro.teamId ?? null,

@@ -1,4 +1,4 @@
-import type { Actor } from '$server/policy/policy';
+import { can, type Actor, type RoleAssignment } from '$server/policy/policy';
 import type { Permission } from '$server/policy/permissions';
 import { REAUTH_WINDOW_MINUTES } from '$shared/sessao';
 
@@ -21,7 +21,8 @@ export type MotivoDeRecusa =
 	| 'nao_encontrado'
 	| 'nome_em_uso'
 	| 'sem_papel'
-	| 'regime_restrito';
+	| 'regime_restrito'
+	| 'conta_desativada';
 
 /**
  * Recusa de uma alteração de acesso, com a explicação para a tela.
@@ -76,6 +77,36 @@ export function exigirSemEscalada(actor: Actor, pedidas: Iterable<Permission>): 
 			`Você não pode conceder uma permissão que não tem: ${faltam.join(', ')}.`
 		);
 	}
+}
+
+/**
+ * Trava 5 — convite não é atalho para poder (varredura de 11/10/2026).
+ *
+ * Quem emite um convite recebe o link e pode abri-lo antes de mandá-lo; na
+ * recuperação, aceitar troca a senha E o identificador de entrada. Emitir um
+ * convite equivale, portanto, a obter tudo o que a conta convidada pode fazer.
+ * Sem esta trava, o conselheiro de um PG em que o líder é membro geraria um
+ * "convite de recuperação" para o líder e ficaria com a conta dele.
+ *
+ * Só convida quem já detém cada permissão da pessoa NO MESMO ALCANCE: global
+ * para o que é global, o grupo (ou global) para o que é do grupo, e poder
+ * sobre a pessoa para o que é dela mesma. Devolve o que falta; vazio = pode.
+ */
+export function permissoesForaDoAlcance(
+	actor: Actor,
+	alvo: { personId: string; groupId: string | null; assignments: readonly RoleAssignment[] }
+): Permission[] {
+	const faltam = new Set<Permission>();
+	for (const a of alvo.assignments) {
+		const ctx =
+			a.scopeType === 'global'
+				? {}
+				: a.scopeType === 'group'
+					? { groupId: a.scopeId }
+					: { personId: alvo.personId, groupId: alvo.groupId };
+		for (const p of a.permissions) if (!can(actor, p, ctx)) faltam.add(p);
+	}
+	return [...faltam].sort();
 }
 
 /** Trava 3 — ninguém altera o próprio acesso (princípio dos quatro olhos). */
@@ -134,6 +165,7 @@ export function statusDaRecusa(motivo: MotivoDeRecusa): 400 | 403 | 404 | 409 {
 		case 'ultimo_administrador':
 		case 'papel_com_pessoas':
 		case 'nome_em_uso':
+		case 'conta_desativada':
 			return 409;
 		default:
 			return 400;

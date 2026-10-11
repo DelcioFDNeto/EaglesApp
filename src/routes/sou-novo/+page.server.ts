@@ -60,16 +60,18 @@ export const actions: Actions = {
 		}
 
 		const ip = getClientAddress();
-		const limite = checkRateLimit(`autocadastro:${ip}`, RULES.autocadastroPorIp);
+		const muitos = (segundos: number): Falha => ({
+			erro:
+				`Muitos cadastros deste dispositivo. Tente de novo em ` +
+				`${Math.ceil(segundos / 60)} minutos, ou peça ajuda a alguém dos Eagles.`
+		});
 
-		if (!limite.allowed) {
-			const falha: Falha = {
-				erro:
-					`Muitos cadastros deste dispositivo. Tente de novo em ` +
-					`${Math.ceil(limite.retryAfterSeconds / 60)} minutos, ou peça ajuda a alguém dos Eagles.`
-			};
-			return fail(429, falha);
-		}
+		// Envios, válidos ou não: freio contra robô, folgado para gente.
+		const tentativas = checkRateLimit(
+			`autocadastro:tentativa:${ip}`,
+			RULES.autocadastroTentativasPorIp
+		);
+		if (!tentativas.allowed) return fail(429, muitos(tentativas.retryAfterSeconds));
 
 		const form = await request.formData();
 		const bruto = Object.fromEntries(form) as Record<string, string>;
@@ -99,6 +101,11 @@ export const actions: Actions = {
 			};
 			return fail(400, falha);
 		}
+
+		// A cota de CADASTROS só se gasta com cadastro válido — o erro de
+		// digitação de um não bloqueia quem está atrás no mesmo Wi-Fi.
+		const limite = checkRateLimit(`autocadastro:${ip}`, RULES.autocadastroPorIp);
+		if (!limite.allowed) return fail(429, muitos(limite.retryAfterSeconds));
 
 		const { ehMenor: menor } = await autocadastrarVisitante(db(), equipe.id, parsed.data, {
 			ip,

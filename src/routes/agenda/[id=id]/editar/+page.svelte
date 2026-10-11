@@ -61,6 +61,16 @@
 			/>
 			<Campo id="horaFim" rotulo="Termina" tipo="time" valor={v('horaFim')} erro={erros.horaFim} />
 		</div>
+		{#if !data.evento.serieId}
+			<Campo
+				id="dataFim"
+				rotulo="Termina em outro dia?"
+				tipo="date"
+				valor={v('dataFim')}
+				erro={erros.dataFim}
+				ajuda="Para acampamento, retiro: a data do último dia."
+			/>
+		{/if}
 		<Campo id="local" rotulo="Local" valor={v('local')} erro={erros.local} />
 
 		<CamposDoConvite

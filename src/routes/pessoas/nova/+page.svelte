@@ -49,7 +49,7 @@
 	{#if form?.avisoDeDuplicata}
 		<Aviso tom="aviso" titulo="Confira antes de continuar">
 			{form.avisoDeDuplicata}
-			{#if form.duplicatas}
+			{#if form.duplicatas?.length}
 				<ul class="duplicatas">
 					{#each form.duplicatas as d (d.id)}
 						<li><a href="/pessoas/{d.id}">{d.fullName}</a></li>

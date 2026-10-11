@@ -1,6 +1,7 @@
-import { and, countDistinct, eq, gt, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, countDistinct, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import type { Database } from '$server/db';
 import { person, personRole, role, rolePermission, userAccount } from '$server/db/schema';
+import { atribuicaoVigente } from '$server/policy/vigencia';
 import { AcessoRecusado } from './regras';
 
 /**
@@ -32,7 +33,7 @@ export async function contarAdministradoresAtivos(db: Database, teamId: string):
 			and(
 				eq(role.teamId, teamId),
 				eq(personRole.scopeType, 'global'),
-				or(isNull(personRole.expiresAt), gt(personRole.expiresAt, new Date())),
+				atribuicaoVigente(),
 				isNull(person.deletedAt),
 				isNull(userAccount.disabledAt),
 				isNotNull(userAccount.passwordHash),

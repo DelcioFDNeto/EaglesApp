@@ -25,18 +25,36 @@ export const PRESENCAS_DE_VISITANTE = 3;
 export const JANELA_DE_VISITANTE_DIAS = 60;
 export const JANELA_DE_FREQUENCIA_SEMANAS = 8;
 
+/**
+ * Índice das passagens por pessoa, montado uma vez por lista. Sem ele, cada
+ * "estava no grupo?" varria as passagens da equipe inteira — pessoas ×
+ * eventos × passagens num relatório de um ano (varredura de 11/10/2026).
+ * A lista é tratada como imutável: quem a monta não a altera depois.
+ */
+const indices = new WeakMap<readonly Passagem[], Map<string, Passagem[]>>();
+
+function passagensDe(passagens: readonly Passagem[], personId: string): Passagem[] {
+	let indice = indices.get(passagens);
+	if (!indice) {
+		indice = new Map();
+		for (const p of passagens) {
+			const daPessoa = indice.get(p.personId);
+			if (daPessoa) daPessoa.push(p);
+			else indice.set(p.personId, [p]);
+		}
+		indices.set(passagens, indice);
+	}
+	return indice.get(personId) ?? [];
+}
+
 export function estavaNoGrupo(
-	passagens: Passagem[],
+	passagens: readonly Passagem[],
 	personId: string,
 	groupId: string,
 	quando: Date
 ): boolean {
-	return passagens.some(
-		(p) =>
-			p.personId === personId &&
-			p.groupId === groupId &&
-			p.entrada <= quando &&
-			(p.saida === null || p.saida > quando)
+	return passagensDe(passagens, personId).some(
+		(p) => p.groupId === groupId && p.entrada <= quando && (p.saida === null || p.saida > quando)
 	);
 }
 

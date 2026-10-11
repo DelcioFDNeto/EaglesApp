@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { FUSO_PADRAO } from '$shared/fuso';
 	import { enhance } from '$app/forms';
 	import Botao from '$ui/Botao.svelte';
 	import Aviso from '$ui/Aviso.svelte';
@@ -9,6 +10,7 @@
 	let confirmando = $state(false);
 
 	const formatador = new Intl.DateTimeFormat('pt-BR', {
+		timeZone: FUSO_PADRAO,
 		day: '2-digit',
 		month: 'short',
 		hour: '2-digit',

@@ -7,7 +7,10 @@
 #   Kubernetes     absurdo nesta escala
 #   MinIO          volume em disco resolve até dezenas de GB de anexos
 #
-# Uso:  docker compose -f infra/docker-compose.yml --env-file .env up -d
+# Uso:  docker compose -f infra/docker-compose.yml --env-file .env up -d --build
+#
+# Cabe numa VM de 1 GB (a gratuita do Google, por exemplo): uma réplica do app,
+# Postgres, Caddy e o backup. O monitor é opcional (perfil `monitor`).
 
 name: eagles
 
@@ -25,19 +28,42 @@ services:
       - caddy_config:/config
     environment:
       DOMINIO: ${DOMINIO:?defina DOMINIO no .env}
+      ACME_EMAIL: ${ACME_EMAIL:?defina ACME_EMAIL no .env — o Let's Encrypt exige um e-mail válido}
     depends_on:
       app:
         condition: service_healthy
     networks: [borda, interna]
 
+  # Aplica as migrações e sai. O app só sobe depois que ela termina bem — antes,
+  # as migrações viajavam na imagem e nada as aplicava (varredura de 11/10/2026).
+  migrate:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: eagles-app
+    command: ['node', '--experimental-strip-types', 'migrate.ts']
+    restart: 'no'
+    environment:
+      DATABASE_URL: postgres://eagles:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}@postgres:5432/eagles
+    depends_on:
+      postgres:
+        condition: service_healthy
+    user: '1000:1000'
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    networks: [interna]
+
   app:
     build:
       context: ..
       dockerfile: infra/Dockerfile
+    image: eagles-app
     restart: unless-stopped
-    # Duas réplicas para o deploy trocar uma de cada vez, sem janela de queda.
+    # Uma réplica por padrão: cabe numa VM gratuita de 1 GB. Com memória
+    # sobrando, APP_REPLICAS=2 permite trocar uma de cada vez no deploy. Cada
+    # réplica tem o próprio contador de tentativas de login (ratelimit.ts).
     deploy:
-      replicas: 2
+      replicas: ${APP_REPLICAS:-1}
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://eagles:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}@postgres:5432/eagles
@@ -72,6 +98,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     # Contêiner sem root e sem escalada de privilégio.
     user: '1000:1000'
     security_opt: [no-new-privileges:true]
@@ -82,6 +110,9 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    # O "hoje" do banco é o da equipe: gatilhos e a view de idade usam
+    # CURRENT_DATE, e em UTC ele vira o dia seguinte às 21h de Brasília.
+    command: ['postgres', '-c', 'timezone=${FUSO:-America/Sao_Paulo}']
     # SEM `ports:` — o banco não fica exposto à internet. O acesso externo,
     # quando necessário, é por túnel SSH.
     environment:
@@ -111,6 +142,12 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
       RETENCAO_DIARIA: 7
       B2_BUCKET: ${B2_BUCKET:-}
+      # O rclone lê o remoto `b2:` destas variáveis. Sem elas, a cópia externa
+      # falhava sempre — só B2_BUCKET chegava ao contêiner (varredura).
+      RCLONE_CONFIG_B2_TYPE: b2
+      RCLONE_CONFIG_B2_ACCOUNT: ${B2_ACCOUNT_ID:-}
+      RCLONE_CONFIG_B2_KEY: ${B2_APPLICATION_KEY:-}
+      TZ: ${FUSO:-America/Sao_Paulo}
       # Chave PÚBLICA age. Só ela fica na VPS: quem invadir a máquina consegue
       # criar backups novos, mas não consegue ler nenhum dos antigos.
       # A chave privada fica fora daqui — ver infra/README.md.
@@ -125,7 +162,11 @@ services:
       - |
         while true; do
           agora=$$(date +%s)
-          proxima=$$(date -d 'tomorrow 03:00' +%s 2>/dev/null || echo $$((agora + 86400)))
+          # As próximas 3h no fuso do contêiner (TZ). O `date` do busybox não
+          # entende "tomorrow 03:00": antes, o backup caía 24h depois de o
+          # contêiner subir, em hora nenhuma em especial (varredura).
+          hoje=$$(date -d "$$(date +%Y-%m-%d) 03:00" +%s)
+          if [ "$$hoje" -gt "$$agora" ]; then proxima=$$hoje; else proxima=$$((hoje + 86400)); fi
           sleep $$((proxima - agora))
           /bin/sh /backup.sh
         done
@@ -134,12 +175,20 @@ services:
         condition: service_healthy
     networks: [interna]
 
+  # Opcional: `docker compose --profile monitor up -d`. Só escuta na própria
+  # máquina — acesse com `ssh -L 3001:127.0.0.1:3001 <vps>` e crie a conta de
+  # administrador na hora: a primeira pessoa que abre a tela é quem a cria.
+  # Numa VM de 1 GB, prefira um monitor externo gratuito apontando para
+  # /api/health.
   uptime:
     image: louislam/uptime-kuma:1
+    profiles: [monitor]
     restart: unless-stopped
+    ports:
+      - '127.0.0.1:3001:3001'
     volumes:
       - uptime:/app/data
-    networks: [interna, borda]
+    networks: [interna]
 
 volumes:
   pgdata:

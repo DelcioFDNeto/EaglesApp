@@ -46,6 +46,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		valores: {
 			titulo: evento.titulo,
 			data: evento.data,
+			// Só quando difere: o campo é o "termina em outro dia?".
+			dataFim: evento.dataFim && evento.dataFim !== evento.data ? evento.dataFim : '',
 			horaInicio: evento.hora,
 			horaFim: evento.horaFim ?? '',
 			local: evento.local ?? '',

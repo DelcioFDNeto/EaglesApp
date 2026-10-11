@@ -1,17 +1,5 @@
-import {
-	and,
-	asc,
-	count,
-	desc,
-	eq,
-	gt,
-	inArray,
-	isNotNull,
-	isNull,
-	ne,
-	or,
-	sql
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { atribuicaoAtiva, atribuicaoVigente } from '$server/policy/vigencia';
 import type { Database } from '$server/db';
 import {
 	groupMembership,
@@ -93,7 +81,7 @@ export type GrupoDetalhe = GrupoResumo & {
 	sairamRecentemente: ExMembro[];
 };
 
-const vigente = () => or(isNull(personRole.expiresAt), gt(personRole.expiresAt, new Date()));
+const vigente = atribuicaoVigente;
 
 /** Responsáveis por grupo: papéis em vigor com escopo apontando para ele. */
 async function responsaveisDe(
@@ -272,6 +260,7 @@ export async function verGrupo(
 		)
 		.map((l) => l.personId);
 	const podeVer = new Set(visiveis);
+	const veMotivos = can(actor, 'person.view_sensitive', { groupId });
 
 	const ids = linhas.map((l) => l.personId);
 	const [idades, pendencias, responsaveis, sairam] = await Promise.all([
@@ -307,7 +296,8 @@ export async function verGrupo(
 			desde: l.desde,
 			estagioNome: l.estagioNome,
 			estagioCor: l.estagioCor,
-			ehMenor: idade.ehMenor,
+			// "É menor" diz a idade: mesma regra do contato e das pendências.
+			ehMenor: podeVer.has(l.personId) ? idade.ehMenor : null,
 			telefone: podeVer.has(l.personId) ? l.telefone : null,
 			pendencias: pendencias.get(l.personId) ?? []
 		};
@@ -327,7 +317,8 @@ export async function verGrupo(
 				personId: s.personId,
 				nome: s.nome,
 				saiuEm: s.saiuEm as Date,
-				motivo: s.motivo
+				// O motivo é texto livre de quem cuida do grupo — às vezes pessoal.
+				motivo: veMotivos ? s.motivo : null
 			}))
 	};
 }
@@ -549,10 +540,14 @@ export async function arquivarGrupo(
 		);
 	}
 
+	// Só quem a tela mostra como responsável: atribuição em vigor, de pessoa
+	// no cadastro. Contar as vencidas travava o grupo para sempre, por um
+	// motivo que nenhuma tela mostrava (varredura de 11/10/2026).
 	const [responsaveis] = await db
 		.select({ total: count() })
 		.from(personRole)
-		.where(eq(personRole.scopeId, groupId));
+		.innerJoin(person, eq(person.id, personRole.personId))
+		.where(and(eq(personRole.scopeId, groupId), atribuicaoAtiva()));
 	if (Number(responsaveis?.total ?? 0) > 0) {
 		throw new GrupoRecusado(
 			'tem_responsaveis',

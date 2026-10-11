@@ -576,6 +576,57 @@ describe('escopo de quem cria', () => {
 // Link público (D-M05-8) e compartilhamento
 // ---------------------------------------------------------------------------
 
+describe('evento de vários dias (varredura de 11/10/2026)', () => {
+	it('editar só o título não encurta o retiro de sexta a domingo', async () => {
+		const sexta = proxima(5, 10);
+		const domingo = somarDias(sexta, 2);
+		const id = await novo(
+			lider,
+			{ titulo: 'Retiro', data: sexta, dataFim: domingo, horaInicio: '09:00', horaFim: '17:00' },
+			[{ tipo: 'equipe' }]
+		);
+
+		// O que o formulário de edição manda: os valores que ele mesmo preencheu.
+		await editarEvento(
+			ctx.db,
+			lider,
+			id,
+			ocorrenciaSchema.parse({
+				titulo: 'Retiro de primavera',
+				data: sexta,
+				dataFim: domingo,
+				horaInicio: '09:00',
+				horaFim: '17:00'
+			}),
+			[{ tipo: 'equipe' }]
+		);
+		const [e] = await ctx.db.select().from(event).where(eq(event.id, id));
+		expect(dataNoFuso(e!.endsAt!, FUSO)).toBe(domingo);
+		expect(horaNoFuso(e!.endsAt!, FUSO)).toBe('17:00');
+		expect((await verEvento(ctx.db, lider, id))?.dataFim).toBe(domingo);
+	});
+
+	it('a virada de sábado para domingo também se edita', async () => {
+		const sabado = proxima(6, 10);
+		const id = await novo(lider, { data: sabado, horaInicio: '22:00' }, [{ tipo: 'equipe' }]);
+		await editarEvento(
+			ctx.db,
+			lider,
+			id,
+			ocorrenciaSchema.parse({
+				titulo: 'Vigília',
+				data: sabado,
+				dataFim: somarDias(sabado, 1),
+				horaInicio: '22:00',
+				horaFim: '02:00'
+			}),
+			[{ tipo: 'equipe' }]
+		);
+		const [e] = await ctx.db.select().from(event).where(eq(event.id, id));
+		expect(dataNoFuso(e!.endsAt!, FUSO)).toBe(somarDias(sabado, 1));
+	});
+});
+
 describe('link público', () => {
 	it('mostra o evento publicado, sem nada sobre pessoas', async () => {
 		const id = await novo(

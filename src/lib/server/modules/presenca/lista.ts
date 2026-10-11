@@ -165,6 +165,24 @@ export async function listaDePresenca(
 
 type ContextoDeRequisicao = { ip?: string | null; userAgent?: string | null };
 
+/** A lista deste evento pode ser feita agora? Recusa evento cancelado ou futuro. */
+async function exigirListaAberta(
+	db: Database,
+	actor: Actor,
+	e: { status: string; inicio: Date }
+): Promise<void> {
+	if (e.status === 'cancelado') {
+		throw new EventoRecusado('ja_aconteceu', 'Evento cancelado não tem lista de presença.');
+	}
+	const fuso = await fusoDaEquipe(db, actor.teamId);
+	if (dataNoFuso(e.inicio, fuso) > hojeNoFuso(fuso)) {
+		throw new EventoRecusado(
+			'periodo_invalido',
+			'A lista de presença se faz no dia do encontro ou depois.'
+		);
+	}
+}
+
 /**
  * Grava a lista: os marcados PASSAM A SER a presença do evento — quem foi
  * desmarcado sai, quem foi marcado entra — e o evento fica com lista feita.
@@ -181,17 +199,7 @@ export async function registrarLista(
 ): Promise<{ presentes: number; entraram: number; sairam: number }> {
 	const e = await eventoDaEquipe(db, actor, eventId);
 	authorize(actor, 'attendance.record', { groupId: e.groupId });
-
-	if (e.status === 'cancelado') {
-		throw new EventoRecusado('ja_aconteceu', 'Evento cancelado não tem lista de presença.');
-	}
-	const fuso = await fusoDaEquipe(db, actor.teamId);
-	if (dataNoFuso(e.inicio, fuso) > hojeNoFuso(fuso)) {
-		throw new EventoRecusado(
-			'periodo_invalido',
-			'A lista de presença se faz no dia do encontro ou depois.'
-		);
-	}
+	await exigirListaAberta(db, actor, e);
 
 	const pedidos = [...new Set(presentes)].filter(ehId);
 	const validos =
@@ -281,6 +289,10 @@ export async function cadastrarNaPorta(
 ): Promise<string> {
 	const e = await eventoDaEquipe(db, actor, eventId);
 	authorize(actor, 'attendance.record', { groupId: e.groupId });
+	// ANTES de cadastrar: se a lista vai ser recusada (evento cancelado com a
+	// tela aberta, data futura), a pessoa não pode ficar criada — e cada nova
+	// tentativa criaria outra (varredura de 11/10/2026).
+	await exigirListaAberta(db, actor, e);
 
 	const id = await criarPessoa(db, actor, dados, { ...contexto, grupoId: e.groupId });
 

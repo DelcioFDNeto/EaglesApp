@@ -1,4 +1,6 @@
-import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
+import { atribuicaoVigente } from '$server/policy/vigencia';
 import type { Database } from '$server/db';
 import { person, personRole, role, rolePermission, smallGroup } from '$server/db/schema';
 import { audit } from '$server/audit/log';
@@ -32,7 +34,7 @@ export type Atribuicao = {
 	expiraEm: Date | null;
 };
 
-const vigente = () => or(isNull(personRole.expiresAt), gt(personRole.expiresAt, new Date()));
+const vigente = atribuicaoVigente;
 
 /** Papéis em vigor de uma pessoa. Leitura aberta a quem já pode ver a pessoa. */
 export async function atribuicoesDe(db: Database, personId: string): Promise<Atribuicao[]> {
@@ -99,6 +101,12 @@ export async function atribuirPapel(
 	authorize(actor, 'rbac.manage');
 	exigirReautenticacao(contexto.reautenticadoRecentemente);
 	exigirOutraPessoa(actor, entrada.personId);
+	if (!ehId(entrada.personId) || !ehId(entrada.roleId)) {
+		throw new AcessoRecusado('nao_encontrado', 'Escolha a pessoa e o papel da lista.');
+	}
+	if (entrada.grupoId && !ehId(entrada.grupoId)) {
+		throw new AcessoRecusado('nao_encontrado', 'Esse grupo não existe.');
+	}
 
 	const [alvo] = await db
 		.select({ id: person.id })
@@ -206,6 +214,8 @@ export async function removerAtribuicao(
 ): Promise<void> {
 	authorize(actor, 'rbac.manage');
 	exigirReautenticacao(contexto.reautenticadoRecentemente);
+	if (!ehId(atribuicaoId))
+		throw new AcessoRecusado('nao_encontrado', 'Essa atribuição não existe.');
 
 	const [atual] = await db
 		.select({

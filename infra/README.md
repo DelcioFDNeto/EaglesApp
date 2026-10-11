@@ -113,9 +113,58 @@ EAGLES_BACKUP_RECIPIENT=age1... PGHOST=127.0.0.1 PGPORT=5432 \
 
 ---
 
-## Pendente
+## Subir em produção
 
-O deploy ainda não foi aplicado: falta o domínio (D-06) e as specs da VPS
-(D-07.2). Enquanto isso, `docker-compose.yml`, `Caddyfile` e as imagens estão
-versionados e prontos, mas nunca rodaram numa máquina real — e ninguém deve
-tratá-los como validados até que rodem.
+Pré-requisitos: uma máquina com Docker e Docker Compose, as portas 80 e 443
+abertas, e o `DOMINIO` já apontando para o IP dela (o Caddy pede o
+certificado na primeira subida — sem o DNS certo, o desafio do Let's Encrypt
+falha).
+
+```sh
+cp .env.example .env    # preencha a seção "Só em produção"
+docker compose -f infra/docker-compose.yml --env-file .env up -d --build
+```
+
+A ordem é garantida pelo próprio compose: Postgres saudável → serviço
+`migrate` aplica as migrações e sai → app sobe → Caddy publica com HTTPS. Uma
+migração que falha segura o app velho no ar (ou nenhum, na primeira vez) em
+vez de subir código novo com banco velho.
+
+O monitor (Uptime Kuma) é opcional e não fica exposto na internet:
+
+```sh
+docker compose -f infra/docker-compose.yml --env-file .env --profile monitor up -d
+ssh -L 3001:127.0.0.1:3001 usuario@sua-vps   # e abra http://localhost:3001
+```
+
+Crie a conta de administrador dele na primeira abertura — a primeira pessoa
+que abre a tela é quem a cria. Numa VM de 1 GB, um monitor externo gratuito
+apontando para `https://SEU_DOMINIO/api/health` sai mais barato em memória.
+
+---
+
+## O que foi validado, e o que ainda não
+
+Em **11/10/2026** a pilha rodou pela primeira vez, com as imagens e o
+Caddyfile deste diretório (`DOMINIO=localhost`):
+
+- Caddy oficial aceita o Caddyfile (`caddy validate`) — antes, a diretiva
+  `rate_limit` (plugin, fora do Caddy oficial) impedia o Caddy de subir;
+- Postgres → `migrate` (12 migrações) → app saudável → Caddy, nessa ordem;
+- login completo por HTTPS, cookie `Secure; HttpOnly; SameSite=Lax`, POST de
+  outra origem recusado (403), HTTP redirecionado para HTTPS;
+- memória em repouso: app ~50 MB, Postgres ~42 MB, Caddy ~15 MB;
+- `backup.sh` e `restore.sh` contra esse banco: dump cifrado sem sobra em
+  claro, retenção preservando o dia 1º, ensaio restaurando e descartando o
+  banco temporário — inclusive quando o ensaio falha no meio —, recusa de
+  restaurar por cima de banco com pessoas, e recusa quando não dá para contar.
+
+Ainda **não** validados, por limite do ambiente de teste, não do projeto:
+
+- o build de `Dockerfile.backup` (`apk add age rclone`) — o repositório do
+  Alpine estava bloqueado pelo proxy do ambiente; os scripts foram testados
+  com o `age` oficial fora do contêiner;
+- o certificado real do Let's Encrypt e o envio ao B2 — exigem domínio
+  público e credenciais.
+
+Esses três são os primeiros a conferir na VPS de verdade.

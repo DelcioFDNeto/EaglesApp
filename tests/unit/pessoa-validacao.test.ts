@@ -17,6 +17,11 @@ describe('cadastro progressivo (RN-05)', () => {
 		expect(criarPessoaSchema.safeParse({ fullName: '   ' }).success).toBe(false);
 	});
 
+	it('recusa nascimento que não existe no calendário (31 de fevereiro)', () => {
+		const r = criarPessoaSchema.safeParse({ fullName: 'Ana', birthDate: '2000-02-31' });
+		expect(r.success).toBe(false);
+	});
+
 	it('campo em branco vira null, nunca string vazia', () => {
 		// `''` no banco é um valor que finge estar preenchido e quebra toda
 		// consulta por "quem ainda não tem telefone".

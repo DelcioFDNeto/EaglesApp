@@ -8,7 +8,12 @@ import { mudarDeGrupo } from '$server/modules/grupos/composicao';
 import { GrupoRecusado, statusDaRecusaDeGrupo } from '$server/modules/grupos/regras';
 import { motivoSchema } from '$server/modules/grupos/validacao';
 import { SEM_GRUPO } from '$shared/grupo';
-import { linhaDoTempo, listarEstagios, mudarEstagio } from '$server/modules/pessoas/status';
+import {
+	EstagioInvalido,
+	linhaDoTempo,
+	listarEstagios,
+	mudarEstagio
+} from '$server/modules/pessoas/status';
 import { vinculosDe } from '$server/modules/pessoas/relacoes';
 import { historicoDeConsentimento } from '$server/modules/pessoas/consentimento';
 import { atribuicoesDe } from '$server/modules/rbac/atribuicoes';
@@ -78,7 +83,9 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			quando: i.occurredAt.toISOString(),
 			de: i.de,
 			para: i.para,
-			motivo: i.motivo
+			// Motivo é texto livre, às vezes pessoal: só para quem vê os dados
+			// sensíveis desta pessoa.
+			motivo: veSensiveis ? i.motivo : null
 		})),
 		vinculos,
 		estagios: estagios.map((e) => ({ valor: e.id, rotulo: e.name })),
@@ -129,15 +136,22 @@ export const actions: Actions = {
 			return fail(400, { erro: 'Escolha o estágio de destino.' });
 		}
 
-		await mudarEstagio(db(), {
-			personId: params.id,
-			paraEstagioId,
-			porPersonId: locals.actor.personId,
-			motivo,
-			teamId: locals.actor.teamId,
-			ip: getClientAddress(),
-			userAgent: request.headers.get('user-agent')
-		});
+		try {
+			await mudarEstagio(db(), {
+				personId: params.id,
+				paraEstagioId,
+				porPersonId: locals.actor.personId,
+				motivo,
+				teamId: locals.actor.teamId,
+				ip: getClientAddress(),
+				userAgent: request.headers.get('user-agent')
+			});
+		} catch (erro) {
+			// Estágio removido com a tela aberta, ou id adulterado: a recusa do
+			// serviço vai para a tela, em vez da página genérica de erro.
+			if (erro instanceof EstagioInvalido) return fail(400, { erro: erro.message });
+			throw erro;
+		}
 
 		return { sucesso: 'Estágio atualizado.' };
 	},

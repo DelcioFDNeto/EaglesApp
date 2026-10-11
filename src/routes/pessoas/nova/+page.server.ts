@@ -6,6 +6,7 @@ import { GrupoRecusado, statusDaRecusaDeGrupo } from '$server/modules/grupos/reg
 import { criarPessoa, RegimeRestrito } from '$server/modules/pessoas/pessoas';
 import { criarPessoaSchema } from '$server/modules/pessoas/validacao';
 import {
+	duplicatasVisiveis,
 	mensagemDeDuplicata,
 	procurarPossiveisDuplicatas
 } from '$server/modules/pessoas/duplicidade';
@@ -121,12 +122,13 @@ export const actions: Actions = {
 		const confirmouDuplicata = form.get('confirmar_duplicata') === 'sim';
 
 		if (!confirmouDuplicata) {
-			const duplicatas = await procurarPossiveisDuplicatas(banco, locals.actor.teamId, parsed.data);
-			if (duplicatas.length > 0) {
+			const achadas = await procurarPossiveisDuplicatas(banco, locals.actor.teamId, parsed.data);
+			if (achadas.length > 0) {
+				const { visiveis, ocultas } = await duplicatasVisiveis(banco, locals.actor, achadas);
 				const falha: Falha = {
 					valores: bruto,
-					duplicatas,
-					avisoDeDuplicata: mensagemDeDuplicata(duplicatas)
+					duplicatas: visiveis,
+					avisoDeDuplicata: mensagemDeDuplicata(visiveis, ocultas)
 				};
 				return fail(409, falha);
 			}

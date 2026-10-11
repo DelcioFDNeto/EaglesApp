@@ -3,6 +3,7 @@ import {
 	dataNoFuso,
 	dataPorExtenso,
 	diaDaSemana,
+	ehData,
 	hojeNoFuso,
 	horaNoFuso,
 	instanteLocal,
@@ -64,6 +65,20 @@ describe('"hoje" é o da equipe, não o do servidor', () => {
 		const agora = new Date('2026-10-10T02:00:00Z');
 		expect(hojeNoFuso('America/Sao_Paulo', agora)).toBe('2026-10-09');
 		expect(hojeNoFuso('UTC', agora)).toBe('2026-10-10');
+	});
+});
+
+describe('data que não existe no calendário (varredura de 11/10/2026)', () => {
+	it('recusa 31 de fevereiro e 31 de abril — o V8 os empurraria para março e maio', () => {
+		expect(ehData('2026-02-31')).toBe(false);
+		expect(ehData('2026-02-29')).toBe(false);
+		expect(ehData('2026-04-31')).toBe(false);
+		expect(ehData('2026-13-01')).toBe(false);
+	});
+
+	it('aceita o que existe, inclusive 29 de fevereiro de ano bissexto', () => {
+		expect(ehData('2024-02-29')).toBe(true);
+		expect(ehData('2026-12-31')).toBe(true);
 	});
 });
 

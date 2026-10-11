@@ -1,4 +1,5 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
 import type { Database } from '$server/db';
 import {
 	groupMembership,
@@ -70,6 +71,9 @@ export async function mudarEstagio(
 		userAgent?: string | null;
 	}
 ): Promise<void> {
+	if (!ehId(entrada.personId)) throw new EstagioInvalido('Pessoa não encontrada.');
+	if (!ehId(entrada.paraEstagioId)) throw new EstagioInvalido('Escolha um estágio da lista.');
+
 	const [pessoa] = await db
 		.select({ id: person.id, statusAtual: person.currentStatusId, teamId: person.teamId })
 		.from(person)
