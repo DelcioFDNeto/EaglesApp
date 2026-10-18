@@ -22,25 +22,33 @@
 	# tem. Os limites que importam — login por conta e por IP, convite,
 	# autocadastro — estão na aplicação (`ratelimit.ts`), que sabe QUEM tenta.
 
-	# Cabeçalhos de segurança que não dependem da aplicação. A CSP vem do
-	# `hooks.server.ts`, onde pode variar por rota.
-	header {
-		Strict-Transport-Security "max-age=63072000; includeSubDomains"
-		X-Content-Type-Options "nosniff"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		X-Frame-Options "DENY"
-		-Server
-	}
+	# Cabeçalhos de segurança como PADRÃO: valem para o que o app não responde
+	# sozinho (os arquivos estáticos, servidos antes dos hooks), e o app decide
+	# nas páginas. `?` = só se a resposta ainda não tiver o cabeçalho.
+	#
+	# Uma diretiva por cabeçalho, de propósito. Num bloco só, o Caddy exige que
+	# TODOS estejam ausentes para escrever qualquer um — o app manda
+	# X-Frame-Options e os outros três sumiam. E sem `?` o Caddy SOBRESCREVIA o
+	# app: o `strict-origin` da página de convite virava
+	# `strict-origin-when-cross-origin` (revisão de 17/10/2026, conferido com o
+	# Caddy oficial 2.11). A CSP vem do `svelte.config.js`.
+	header ?Strict-Transport-Security "max-age=63072000; includeSubDomains"
+	header ?X-Content-Type-Options "nosniff"
+	header ?Referrer-Policy "strict-origin-when-cross-origin"
+	header ?X-Frame-Options "DENY"
+	header -Server
 
 	# Arquivos versionados do build: cache longo, seguro porque o nome muda a
-	# cada deploy.
+	# cada deploy. O app já o manda; aqui é só o padrão (`?`) — antes saíam
+	# dois Cache-Control em cada arquivo.
 	@imutavel path /_app/immutable/*
-	header @imutavel Cache-Control "public, max-age=31536000, immutable"
+	header @imutavel ?Cache-Control "public, max-age=31536000, immutable"
 
 	# O service worker NUNCA pode ser cacheado: um SW velho segura a versão
-	# antiga do app no aparelho das pessoas indefinidamente.
+	# antiga do app no aparelho das pessoas indefinidamente. `>` substitui o
+	# que o app mandar, depois de ele responder.
 	@sw path /service-worker.js
-	header @sw Cache-Control "no-cache, no-store, must-revalidate"
+	header @sw >Cache-Control "no-cache, no-store, must-revalidate"
 
 	reverse_proxy app:3000 {
 		lb_policy round_robin
@@ -49,12 +57,21 @@
 		health_timeout 5s
 	}
 
+	# O token do convite está no caminho (`/convite/<token>`) e, nas páginas
+	# abertas a partir dele, no Referer. Quem lê o log não pode ler o token:
+	# convite de recuperação é a conta de alguém (revisão de 17/10/2026).
 	log {
 		output file /data/access.log {
 			roll_size 20mb
 			roll_keep 5
 		}
-		format json
+		format filter {
+			wrap json
+			fields {
+				request>uri regexp ^/convite/[^/?]+ /convite/-
+				request>headers>Referer delete
+			}
+		}
 	}
 }
 

@@ -1,4 +1,5 @@
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
+import { ehId } from '$shared/formulario';
 import type { Database } from '$server/db';
 import { person, personRelation } from '$server/db/schema';
 import { audit } from '$server/audit/log';
@@ -45,6 +46,16 @@ export class VinculoInvalido extends Error {
 		super(mensagem);
 		this.name = 'VinculoInvalido';
 	}
+}
+
+/** A pessoa está no cadastro desta equipe? */
+async function estaNoCadastro(db: Database, teamId: string, personId: string): Promise<boolean> {
+	const [linha] = await db
+		.select({ id: person.id })
+		.from(person)
+		.where(and(eq(person.id, personId), eq(person.teamId, teamId), isNull(person.deletedAt)))
+		.limit(1);
+	return !!linha;
 }
 
 /** Vínculos de uma pessoa, olhando os dois lados da tabela. */
@@ -95,6 +106,9 @@ export async function criarVinculo(
 	actor: Actor,
 	entrada: { pessoaId: string; outraPessoaId: string; tipo: TipoDeVinculo }
 ): Promise<void> {
+	if (!ehId(entrada.pessoaId) || !ehId(entrada.outraPessoaId)) {
+		throw new VinculoInvalido('A outra pessoa não existe.');
+	}
 	authorize(actor, 'person.update', await contextoDaPessoa(db, entrada.pessoaId));
 
 	if (entrada.pessoaId === entrada.outraPessoaId) {
@@ -104,18 +118,9 @@ export async function criarVinculo(
 	// O vínculo é das DUAS pessoas — e "responsável legal" muda o regime de
 	// dados de quem é o dependente (ADR 0003). Quem só pode editar um dos lados
 	// não decide pelo outro (varredura de 11/10/2026).
-	const [outra] = await db
-		.select({ id: person.id })
-		.from(person)
-		.where(
-			and(
-				eq(person.id, entrada.outraPessoaId),
-				eq(person.teamId, actor.teamId),
-				isNull(person.deletedAt)
-			)
-		)
-		.limit(1);
-	if (!outra) throw new VinculoInvalido('A outra pessoa não existe.');
+	if (!(await estaNoCadastro(db, actor.teamId, entrada.outraPessoaId))) {
+		throw new VinculoInvalido('A outra pessoa não existe.');
+	}
 	authorize(actor, 'person.update', await contextoDaPessoa(db, entrada.outraPessoaId));
 
 	const { personA, personB } = ordenarPar(entrada.pessoaId, entrada.outraPessoaId, entrada.tipo);
@@ -152,6 +157,7 @@ export async function removerVinculo(
 	vinculoId: string,
 	pessoaId: string
 ): Promise<void> {
+	if (!ehId(vinculoId) || !ehId(pessoaId)) return;
 	authorize(actor, 'person.update', await contextoDaPessoa(db, pessoaId));
 
 	const [antes] = await db
@@ -166,6 +172,15 @@ export async function removerVinculo(
 	// editar alguém do próprio grupo apagaria o vínculo entre duas pessoas de
 	// outro grupo — bastava mandar o id do vínculo alheio (lacuna G6 do M04).
 	if (antes.personA !== pessoaId && antes.personB !== pessoaId) return;
+
+	// Desfazer também é decidir pelos dois lados: tirar o "responsável legal"
+	// muda o regime do menor tanto quanto criá-lo. O criar já conferia os dois;
+	// o remover, só um (revisão de 17/10/2026). Quem saiu do cadastro não tem
+	// lado a proteger — o vínculo com ela se desfaz por quem cuida da outra.
+	const outra = antes.personA === pessoaId ? antes.personB : antes.personA;
+	if (await estaNoCadastro(db, actor.teamId, outra)) {
+		authorize(actor, 'person.update', await contextoDaPessoa(db, outra));
+	}
 
 	await db.delete(personRelation).where(eq(personRelation.id, vinculoId));
 

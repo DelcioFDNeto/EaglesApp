@@ -18,6 +18,7 @@ import { alvoDaLinha, fusoDaEquipe } from '$server/modules/eventos/eventos';
 import type { Alvo } from '$server/modules/eventos/regras';
 import { dataNoFuso } from '$shared/fuso';
 import {
+	agruparPorPessoa,
 	chaveDePresenca,
 	esperadoNo,
 	frequenciaDe,
@@ -26,7 +27,7 @@ import {
 	sinaisDe,
 	type EventoComLista,
 	type Frequencia,
-	type Passagem,
+	type PassagensPorPessoa,
 	type PessoaParaCalculo,
 	type Sinal
 } from './calculo';
@@ -97,12 +98,18 @@ export async function publicosDe(db: Database, eventIds: string[]): Promise<Map<
 		.from(eventAudience)
 		.where(inArray(eventAudience.eventId, eventIds));
 	for (const l of linhas) {
-		mapa.set(l.eventId!, [...(mapa.get(l.eventId!) ?? []), alvoDaLinha(l)]);
+		const publico = mapa.get(l.eventId!);
+		if (publico) publico.push(alvoDaLinha(l));
+		else mapa.set(l.eventId!, [alvoDaLinha(l)]);
 	}
 	return mapa;
 }
 
-export async function passagensDaEquipe(db: Database, teamId: string): Promise<Passagem[]> {
+/** As passagens pelos grupos de cada pessoa da equipe. */
+export async function passagensPorPessoa(
+	db: Database,
+	teamId: string
+): Promise<PassagensPorPessoa> {
 	const linhas = await db
 		.select({
 			personId: groupMembership.personId,
@@ -113,7 +120,7 @@ export async function passagensDaEquipe(db: Database, teamId: string): Promise<P
 		.from(groupMembership)
 		.innerJoin(person, eq(person.id, groupMembership.personId))
 		.where(eq(person.teamId, teamId));
-	return linhas;
+	return agruparPorPessoa(linhas);
 }
 
 export async function presencasDe(db: Database, eventIds: string[]): Promise<Set<string>> {
@@ -194,7 +201,7 @@ export async function frequenciaDoGrupo(
 
 	const [eventos, passagens, pessoas] = await Promise.all([
 		eventosComLista(db, actor.teamId, { de, ate: agora }),
-		passagensDaEquipe(db, actor.teamId),
+		passagensPorPessoa(db, actor.teamId),
 		pessoasDaEquipe(db, actor.teamId)
 	]);
 	const presencas = await presencasDe(
@@ -205,8 +212,9 @@ export async function frequenciaDoGrupo(
 
 	const mapa = new Map<string, FrequenciaNoGrupo>();
 	for (const p of pessoas.filter((p) => p.grupoAtual?.id === groupId)) {
-		const f = frequenciaDe(p, naJanela, passagens, presencas);
-		const paraSinais = frequenciaDe(p, eventos, passagens, presencas, {
+		const daPessoa = passagens.get(p.id) ?? [];
+		const f = frequenciaDe(p, naJanela, daPessoa, presencas);
+		const paraSinais = frequenciaDe(p, eventos, daPessoa, presencas, {
 			recentesDesde: desdeVisitante
 		});
 		mapa.set(p.id, {
@@ -245,25 +253,26 @@ export async function frequenciaDaPessoa(
 	const de = new Date(agora.getTime() - JANELA_DE_FREQUENCIA_SEMANAS * 7 * DIA);
 	const [eventos, passagens, pessoas, fuso] = await Promise.all([
 		eventosComLista(db, actor.teamId, { de, ate: agora }),
-		passagensDaEquipe(db, actor.teamId),
+		passagensPorPessoa(db, actor.teamId),
 		pessoasDaEquipe(db, actor.teamId),
 		fusoDaEquipe(db, actor.teamId)
 	]);
 	const pessoa = pessoas.find((p) => p.id === personId);
 	if (!pessoa) return null;
+	const daPessoa = passagens.get(personId) ?? [];
 
 	const presencas = await presencasDe(
 		db,
 		eventos.map((e) => e.id)
 	);
-	const frequencia = frequenciaDe(pessoa, eventos, passagens, presencas);
+	const frequencia = frequenciaDe(pessoa, eventos, daPessoa, presencas);
 
 	const lista = eventos
 		.map((e) => ({
 			id: e.id,
 			titulo: e.titulo,
 			data: dataNoFuso(e.inicio, fuso),
-			esperado: esperadoNo(e, pessoa, passagens),
+			esperado: esperadoNo(e, pessoa, daPessoa),
 			presente: presencas.has(chaveDePresenca(e.id, personId))
 		}))
 		.filter((e) => e.esperado || e.presente)
@@ -321,7 +330,7 @@ export async function relatorio(
 
 	const [todos, passagens, pessoas, fuso] = await Promise.all([
 		eventosComLista(db, actor.teamId, filtro),
-		passagensDaEquipe(db, actor.teamId),
+		passagensPorPessoa(db, actor.teamId),
 		pessoasDaEquipe(db, actor.teamId),
 		fusoDaEquipe(db, actor.teamId)
 	]);
@@ -343,9 +352,8 @@ export async function relatorio(
 	// Com grupo: quem esteve nele em algum momento do período.
 	const doEscopo = grupoId
 		? pessoas.filter((p) =>
-				passagens.some(
+				(passagens.get(p.id) ?? []).some(
 					(ps) =>
-						ps.personId === p.id &&
 						ps.groupId === grupoId &&
 						ps.entrada < filtro.ate &&
 						(ps.saida === null || ps.saida > filtro.de)
@@ -355,7 +363,7 @@ export async function relatorio(
 
 	const linhas: LinhaDoRelatorio[] = [];
 	for (const p of doEscopo) {
-		const f = frequenciaDe(p, eventos, passagens, presencas);
+		const f = frequenciaDe(p, eventos, passagens.get(p.id) ?? [], presencas);
 		if (f.esperados === 0 && f.foraDoEsperado === 0) continue;
 		linhas.push({
 			personId: p.id,
@@ -373,7 +381,7 @@ export async function relatorio(
 		eventos.map((e) => e.id)
 	);
 	const resumoDosEventos = eventos.map((e) => {
-		const esperados = pessoas.filter((p) => esperadoNo(e, p, passagens)).length;
+		const esperados = pessoas.filter((p) => esperadoNo(e, p, passagens.get(p.id) ?? [])).length;
 		return {
 			id: e.id,
 			titulo: e.titulo,

@@ -1,7 +1,7 @@
 # Eagles App — Documento de Descoberta e Arquitetura Inicial
 
-**Versão:** 0.8
-**Data:** 18/08/2026 — revisado em 10/10/2026
+**Versão:** 0.9
+**Data:** 18/08/2026 — revisado em 17/10/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
 | Decisão                   | Escolha aprovada                                                                                                                   |
@@ -1361,7 +1361,7 @@ Nenhum estado é comunicado **apenas** por cor — requisito de acessibilidade (
 
 **MVP completo: módulos 01 a 06 implementados** — fundação, pessoas, RBAC, grupos, eventos e presença.
 
-Verificação de 11/10/2026, depois da varredura: **418 testes** de unidade e integração, **84 de ponta a ponta** em dois projetos de navegador (com e sem JavaScript), tipos limpos em 833 arquivos, build funcionando — e a pilha de produção rodando.
+Verificação de 17/10/2026, depois da revisão da varredura: **455 testes** de unidade e integração, **85 de ponta a ponta** em dois projetos de navegador (com e sem JavaScript), tipos limpos em 836 arquivos, build funcionando — e a pilha de produção rodando.
 
 O M06 fechou o ciclo da semana do PG: **a pessoa confirma em um toque** — no início, no evento ou pelo link do WhatsApp —, **o conselheiro marca quem veio** numa lista pré-ordenada por frequência, cadastrando ali mesmo quem chegou pela primeira vez, e **a liderança enxerga quem está se afastando**. Detalhe em [`06-modulo-06-presenca.md`](06-modulo-06-presenca.md).
 
@@ -1382,6 +1382,10 @@ Id malformado na URL passou a responder 404 em todas as rotas (antes, 500 vindo 
 Antes do deploy, uma revisão de todos os módulos e da infraestrutura achou e corrigiu **32 defeitos**, cada um com teste que o reproduz. Dois eram críticos: um conselheiro podia assumir a conta de um líder que fosse membro do seu PG, gerando um "convite de recuperação" para ele; e o Caddy de produção nem subiria (`rate_limit` não existe no Caddy oficial). A pilha de produção rodou inteira pela primeira vez — ~105 MB de memória em repouso. Detalhe em [`varredura-2026-10-11.md`](varredura-2026-10-11.md).
 
 A conta de custo da seção 15.6 também foi corrigida (~R$ 6/mês sem IA, não ~R$ 40), e existe um caminho de **R$ 0/mês**: [`hospedagem-de-baixo-custo.md`](hospedagem-de-baixo-custo.md).
+
+#### Revisão da varredura — 17/10/2026
+
+A varredura foi relida como um revisor que não queria aprová-la, e deixava passar **15 problemas**. O mais sério: a trava contra o convite como atalho para poder só valia na emissão — bastava guardar o link de um membro comum até a promoção dele. Agora o aceite repete as regras da emissão. Também: pessoa removida perdia o acesso só por acaso, o retiro de vários dias sumia do início no segundo dia e o token do convite ia para o log de acesso. Rodar a configuração de verdade mostrou mais três — entre eles, o Caddy sobrescrevendo os cabeçalhos que o app manda por página. Detalhe, inclusive das críticas descartadas depois de conferidas, em [`revisao-2026-10-17.md`](revisao-2026-10-17.md).
 
 #### Deploy é a última etapa — e é a próxima
 

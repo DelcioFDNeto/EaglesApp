@@ -11,9 +11,13 @@ import type { LayoutServerLoad } from './$types';
  *
  * Existe desde o M03. As telas de pessoas do M02 foram entregues sem nenhum
  * caminho até elas; só se chegava digitando o endereço.
+ *
+ * Leva também o fuso da equipe: toda tela que formata uma data o usa, em vez
+ * de uma constante própria (revisão de 17/10/2026).
  */
 export const load: LayoutServerLoad = async ({ locals }) => {
-	if (!locals.actor) return { navegacao: null };
+	const fuso = locals.fuso;
+	if (!locals.actor) return { navegacao: null, fuso };
 
 	// No máximo 5 itens (Anexo A.3). O que é de uso eventual — a própria
 	// conta, papéis e acessos, tipos de evento — mora em "Mais" (D-M05-9).
@@ -33,5 +37,5 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 
 	itens.push({ href: '/mais', rotulo: 'Mais', icone: 'mais' });
 
-	return { navegacao: itens };
+	return { navegacao: itens, fuso };
 };

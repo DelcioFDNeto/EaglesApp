@@ -2,9 +2,15 @@ import { and, count, eq } from 'drizzle-orm';
 import type { Database } from '$server/db';
 import { personRole } from '$server/db/schema';
 import { audit } from '$server/audit/log';
-import { issueInvite } from '$server/auth/invite';
-import { situacaoDaConta } from '$server/auth/conta';
-import { authorize, type Actor } from '$server/policy/policy';
+import {
+	INVITE_REASON_MESSAGE,
+	issueInvite,
+	lookupInvite,
+	revogarConvite,
+	type InviteLookup
+} from '$server/auth/invite';
+import { aceitarConvite, situacaoDaConta, type ResultadoDoAceite } from '$server/auth/conta';
+import { authorize, PolicyDenied, type Actor } from '$server/policy/policy';
 import { loadActor } from '$server/policy/actor';
 import { atribuicaoVigente } from '$server/policy/vigencia';
 import { contextoDaPessoa } from '$server/modules/grupos/contexto';
@@ -35,6 +41,12 @@ import {
  *   4. Quem emite já detém, no mesmo alcance, tudo o que a conta convidada vai
  *      poder (trava 5, `permissoesForaDoAlcance`): quem tem o link tem a conta.
  *
+ * As quatro valem também NO ACEITE (`abrirConvite`, `aceitarConviteDeAcesso`):
+ * o link vive dias, e nesse tempo a pessoa pode ganhar um papel que quem
+ * emitiu não tem — ou quem emitiu pode perder o seu. Conferidas só na emissão,
+ * bastava guardar o link de um membro comum e esperar a promoção dele
+ * (revisão de 17/10/2026).
+ *
  * Convite para quem JÁ tem conta é RECUPERAÇÃO: aceitá-lo troca a senha e
  * encerra todas as sessões. Por isso exige reautenticação — é redefinir a
  * credencial de outra pessoa. O primeiro convite não exige: quem ainda não tem
@@ -52,16 +64,15 @@ export type ConviteEmitido = {
 	whatsapp: string | null;
 };
 
-export async function emitirConvite(
-	db: Database,
-	actor: Actor,
-	personId: string,
-	contexto: ContextoSensivel
-): Promise<ConviteEmitido> {
+/**
+ * As condições 1 a 4, sobre o estado de AGORA. Lança `PolicyDenied` ou
+ * `AcessoRecusado`; devolve a pessoa como o emissor a vê.
+ */
+async function exigirConvitePossivel(db: Database, emissor: Actor, personId: string) {
 	const ctxDaPessoa = await contextoDaPessoa(db, personId);
-	authorize(actor, 'person.invite', ctxDaPessoa);
+	authorize(emissor, 'person.invite', ctxDaPessoa);
 
-	const pessoa = await verPessoa(db, actor, personId);
+	const pessoa = await verPessoa(db, emissor, personId);
 	if (!pessoa) throw new AcessoRecusado('nao_encontrado', 'Essa pessoa não existe.');
 
 	if (pessoa.regime.restrito) {
@@ -85,13 +96,24 @@ export async function emitirConvite(
 	}
 
 	const alvo = await loadActor(db, personId);
-	const faltam = alvo ? permissoesForaDoAlcance(actor, { ...ctxDaPessoa, ...alvo }) : [];
+	const faltam = alvo ? permissoesForaDoAlcance(emissor, { ...ctxDaPessoa, ...alvo }) : [];
 	if (faltam.length > 0) {
 		throw new AcessoRecusado(
 			'escalada',
 			'Esta pessoa tem acessos que você não tem — o convite dela precisa vir de quem administra os acessos da equipe.'
 		);
 	}
+
+	return pessoa;
+}
+
+export async function emitirConvite(
+	db: Database,
+	actor: Actor,
+	personId: string,
+	contexto: ContextoSensivel
+): Promise<ConviteEmitido> {
+	const pessoa = await exigirConvitePossivel(db, actor, personId);
 
 	const conta = await situacaoDaConta(db, personId);
 	if (conta?.desativada) {
@@ -136,6 +158,68 @@ export async function emitirConvite(
 		primeiroNome: pessoa.fullName.split(' ')[0] ?? pessoa.fullName,
 		whatsapp
 	};
+}
+
+/** Quem emitiu o convite ainda poderia emiti-lo hoje? */
+async function emissorAindaPode(
+	db: Database,
+	convite: { personId: string; emitidoPor: string | null }
+): Promise<boolean> {
+	if (!convite.emitidoPor) return false;
+	// Removido do cadastro, quem emitiu não tem ator — e o link morre junto.
+	const emissor = await loadActor(db, convite.emitidoPor);
+	if (!emissor) return false;
+	try {
+		await exigirConvitePossivel(db, emissor, convite.personId);
+		return true;
+	} catch (erro) {
+		if (erro instanceof AcessoRecusado || erro instanceof PolicyDenied) return false;
+		throw erro;
+	}
+}
+
+/**
+ * Abre um convite para a tela de aceite: o token vale E quem o emitiu ainda
+ * poderia emiti-lo. Sem efeito colateral — é um GET, e a prévia de link do
+ * WhatsApp também o abre.
+ */
+export async function abrirConvite(db: Database, token: string): Promise<InviteLookup> {
+	const convite = await lookupInvite(db, token);
+	if (!convite.ok) return convite;
+	return (await emissorAindaPode(db, convite)) ? convite : { ok: false, reason: 'revogado' };
+}
+
+/**
+ * Aceite de convite, como a rota o faz: as condições da emissão de novo, e só
+ * então a troca de credencial (`aceitarConvite`, em auth).
+ *
+ * O convite que não passa é cancelado e a tentativa fica na auditoria: um link
+ * guardado até a promoção de quem foi convidado é exatamente o que a trava 5
+ * existe para barrar.
+ */
+export async function aceitarConviteDeAcesso(
+	db: Database,
+	entrada: Parameters<typeof aceitarConvite>[1]
+): Promise<ResultadoDoAceite> {
+	const convite = await lookupInvite(db, entrada.token);
+	if (!convite.ok) return { ok: false, mensagem: INVITE_REASON_MESSAGE[convite.reason] };
+
+	if (!(await emissorAindaPode(db, convite))) {
+		await revogarConvite(db, convite.inviteId);
+		await audit(db, {
+			teamId: convite.teamId,
+			actorPersonId: null,
+			action: 'invite.revogado',
+			entity: 'person',
+			entityId: convite.personId,
+			after: { motivo: 'emissor_sem_alcance', emitidoPor: convite.emitidoPor },
+			ip: entrada.ip,
+			userAgent: entrada.userAgent
+		});
+		return { ok: false, mensagem: INVITE_REASON_MESSAGE.revogado };
+	}
+
+	return aceitarConvite(db, entrada);
 }
 
 /**

@@ -21,11 +21,14 @@ import {
 	moverNaTransacao,
 	type Movimento
 } from '$server/modules/grupos/composicao';
+import { revogarConvitesDaPessoa } from '$server/auth/invite';
+import { revogarSessoesDaPessoa } from '$server/auth/session';
 import {
 	contarAdministradoresAtivos,
 	exigirAdministradorRestante,
 	travarAdministracao
 } from '$server/modules/rbac/administradores';
+import { AcessoRecusado } from '$server/modules/rbac/regras';
 import { consentimentosDe } from './consentimento';
 import { CAMPOS_SENSIVEIS, regimeDe, type Regime } from './regime';
 import { estagioPadrao } from './status';
@@ -316,6 +319,14 @@ export async function verPessoa(
 // Escrita
 // ---------------------------------------------------------------------------
 
+/** A pessoa não está no cadastro desta equipe — ou já saiu dele. */
+export class PessoaNaoEncontrada extends Error {
+	constructor() {
+		super('Essa pessoa não está no cadastro.');
+		this.name = 'PessoaNaoEncontrada';
+	}
+}
+
 export class RegimeRestrito extends Error {
 	readonly campos: string[];
 	constructor(campos: string[], motivo: string) {
@@ -453,6 +464,7 @@ export async function atualizarPessoa(
 	dados: AtualizarPessoaEntrada,
 	contexto: { ip?: string | null; userAgent?: string | null } = {}
 ): Promise<void> {
+	if (!ehId(personId)) throw new PessoaNaoEncontrada();
 	const ctx = await contextoDaPessoa(db, personId);
 	authorize(actor, 'person.update', ctx);
 
@@ -473,7 +485,7 @@ export async function atualizarPessoa(
 		.where(and(eq(person.id, personId), eq(person.teamId, actor.teamId), isNull(person.deletedAt)))
 		.limit(1);
 
-	if (!antes) throw new Error('Pessoa não encontrada.');
+	if (!antes) throw new PessoaNaoEncontrada();
 
 	// A data de nascimento pode estar mudando nesta mesma edição — o regime é
 	// avaliado sobre o valor NOVO, não sobre o que estava gravado.
@@ -531,13 +543,14 @@ export async function removerPessoa(
 	personId: string,
 	contexto: { ip?: string | null; userAgent?: string | null } = {}
 ): Promise<void> {
+	if (!ehId(personId)) throw new PessoaNaoEncontrada();
 	authorize(actor, 'person.delete', await contextoDaPessoa(db, personId));
 
 	if (personId === actor.personId) {
-		throw new Error('Você não pode remover o próprio cadastro.');
+		throw new AcessoRecusado('propria_conta', 'Você não pode remover o próprio cadastro.');
 	}
 
-	const papeisRemovidos = await db.transaction(async (tx) => {
+	const efeitos = await db.transaction(async (tx) => {
 		// Remover pessoa pode remover um administrador: mesma serialização e
 		// mesma trava da retirada de papel (D-M03-2, trava 4).
 		await travarAdministracao(tx as unknown as Database, actor.teamId);
@@ -546,10 +559,18 @@ export async function removerPessoa(
 			actor.teamId
 		);
 
-		await tx
+		// Primeiro a pessoa, e só se ela está NESTA equipe e ainda no cadastro.
+		// Antes, o resto da remoção (grupos, papéis) filtrava só pelo id: valia
+		// para a pessoa de outra equipe, e remover duas vezes reescrevia a data
+		// da remoção e duplicava a auditoria (revisão de 17/10/2026).
+		const [removida] = await tx
 			.update(person)
 			.set({ deletedAt: new Date(), updatedAt: new Date() })
-			.where(and(eq(person.id, personId), eq(person.teamId, actor.teamId)));
+			.where(
+				and(eq(person.id, personId), eq(person.teamId, actor.teamId), isNull(person.deletedAt))
+			)
+			.returning({ id: person.id });
+		if (!removida) throw new PessoaNaoEncontrada();
 
 		// Quem sai do cadastro sai também do grupo — senão continuaria contando
 		// como membro e impediria o grupo de ser arquivado. O vínculo é
@@ -576,12 +597,21 @@ export async function removerPessoa(
 				scopeId: personRole.scopeId
 			});
 
+		// E sai do app agora, não "quando a sessão expirar": aparelhos
+		// desconectados e convites pendentes cancelados.
+		const sessoesEncerradas = await revogarSessoesDaPessoa(tx as unknown as Database, personId);
+		const convitesCancelados = await revogarConvitesDaPessoa(tx as unknown as Database, personId);
+
 		// A remoção não pode ZERAR os administradores. Se já não havia nenhum,
 		// não foi ela que trancou a equipe.
 		if (administradoresAntes > 0) {
 			await exigirAdministradorRestante(tx as unknown as Database, actor.teamId);
 		}
-		return removidos;
+		return {
+			...(removidos.length > 0 && { papeisRemovidos: removidos }),
+			...(sessoesEncerradas > 0 && { sessoesEncerradas }),
+			...(convitesCancelados > 0 && { convitesCancelados })
+		};
 	});
 
 	await audit(db, {
@@ -590,7 +620,7 @@ export async function removerPessoa(
 		action: 'person.removida',
 		entity: 'person',
 		entityId: personId,
-		after: papeisRemovidos.length > 0 ? { papeisRemovidos } : undefined,
+		after: Object.keys(efeitos).length > 0 ? efeitos : undefined,
 		ip: contexto.ip,
 		userAgent: contexto.userAgent
 	});
@@ -695,11 +725,11 @@ export async function autocadastrarVisitante(
 
 /**
  * Menoridade a partir da data de nascimento, para decidir o regime ANTES de a
- * linha existir no banco (e portanto antes de a view poder responder).
+ * linha existir no banco (e portanto antes de a view poder responder). Uma
+ * regra de idade só — a mesma do autocadastro (`ehMenorDeIdade`).
  *
  * `null` — data desconhecida — continua significando "trate como menor".
  */
-/** Uma regra de idade só — a mesma do autocadastro (`ehMenorDeIdade`). */
 function calcularEhMenor(birthDate: string | null | undefined): boolean | null {
 	return ehMenorDeIdade(birthDate ?? null);
 }

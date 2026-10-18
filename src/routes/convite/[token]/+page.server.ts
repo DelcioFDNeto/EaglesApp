@@ -1,10 +1,10 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { INVITE_REASON_MESSAGE, lookupInvite } from '$server/auth/invite';
-import { aceitarConvite } from '$server/auth/conta';
+import { INVITE_REASON_MESSAGE } from '$server/auth/invite';
+import { abrirConvite, aceitarConviteDeAcesso } from '$server/modules/rbac/convites';
 import { createSession, setSessionCookie } from '$server/auth/session';
-import { checkRateLimit, RULES } from '$server/auth/ratelimit';
+import { chaveDeIp, checkRateLimit, RULES } from '$server/auth/ratelimit';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -16,6 +16,10 @@ import type { Actions, PageServerLoad } from './$types';
  * senha recebe um novo convite). A regra de cada um vive em
  * `$server/auth/conta`, e não aqui — foi a lógica inline nesta rota que deixou
  * passar a conta criada sem identificador de entrada.
+ *
+ * A rota passa por `rbac/convites`, nunca direto pelo auth: é lá que o convite
+ * só vale enquanto quem o emitiu ainda poderia emiti-lo (trava 5 no aceite).
+ * `tests/unit/convite-passa-pela-trava.test.ts` impede o atalho.
  */
 
 /**
@@ -40,12 +44,12 @@ const schema = z
 	});
 
 export const load: PageServerLoad = async ({ params, getClientAddress }) => {
-	const limite = checkRateLimit(`convite:ip:${getClientAddress()}`, RULES.convitePorIp);
+	const limite = checkRateLimit(`convite:ip:${chaveDeIp(getClientAddress())}`, RULES.convitePorIp);
 	if (!limite.allowed) {
 		return { estado: 'bloqueado' as const, mensagem: 'Muitas tentativas. Aguarde alguns minutos.' };
 	}
 
-	const resultado = await lookupInvite(db(), params.token);
+	const resultado = await abrirConvite(db(), params.token);
 
 	if (!resultado.ok) {
 		return { estado: 'invalido' as const, mensagem: INVITE_REASON_MESSAGE[resultado.reason] };
@@ -63,7 +67,7 @@ export const actions: Actions = {
 		const ip = getClientAddress();
 		const userAgent = request.headers.get('user-agent');
 
-		const limite = checkRateLimit(`convite:ip:${ip}`, RULES.convitePorIp);
+		const limite = checkRateLimit(`convite:ip:${chaveDeIp(ip)}`, RULES.convitePorIp);
 		if (!limite.allowed) {
 			const falha: FalhaConvite = { erro: 'Muitas tentativas. Aguarde alguns minutos.' };
 			return fail(429, falha);
@@ -91,7 +95,7 @@ export const actions: Actions = {
 		}
 
 		const banco = db();
-		const resultado = await aceitarConvite(banco, {
+		const resultado = await aceitarConviteDeAcesso(banco, {
 			token: params.token,
 			senha: parsed.data.senha,
 			identificador: parsed.data.identificador,

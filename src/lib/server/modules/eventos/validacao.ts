@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CORES_DE_GRUPO } from '$shared/grupo';
-import { ehData, ehHora } from '$shared/fuso';
+import { ehData, ehHora, somarDias } from '$shared/fuso';
 import { ehId } from '$shared/formulario';
 import type { Alvo } from './regras';
 
@@ -85,7 +85,7 @@ export const eventoSchema = z
 			});
 		}
 		const mesmoDia = !v.dataFim || v.dataFim === v.data;
-		if (v.horaFim && mesmoDia && v.horaFim <= v.horaInicio) {
+		if (v.horaFim && mesmoDia && !terminaDepois(v.horaInicio, v.horaFim)) {
 			ctx.addIssue({ code: 'custom', path: ['horaFim'], message: 'Termina antes de começar.' });
 		}
 	});
@@ -108,7 +108,7 @@ export const ocorrenciaSchema = z
 			ctx.addIssue({ code: 'custom', path: ['dataFim'], message: 'Termina antes de começar.' });
 		}
 		const mesmoDia = !v.dataFim || v.dataFim === v.data;
-		if (v.horaFim && mesmoDia && v.horaFim <= v.horaInicio) {
+		if (v.horaFim && mesmoDia && !terminaDepois(v.horaInicio, v.horaFim)) {
 			ctx.addIssue({ code: 'custom', path: ['horaFim'], message: 'Termina antes de começar.' });
 		}
 	});
@@ -125,7 +125,7 @@ export const serieSchema = z
 		horaFim: horaOpcional
 	})
 	.superRefine((v, ctx) => {
-		if (v.horaFim && v.horaFim <= v.horaInicio) {
+		if (v.horaFim && !terminaDepois(v.horaInicio, v.horaFim)) {
 			ctx.addIssue({ code: 'custom', path: ['horaFim'], message: 'Termina antes de começar.' });
 		}
 	});
@@ -149,11 +149,40 @@ export const tipoSchema = z.object({
 
 export type TipoEntrada = z.output<typeof tipoSchema>;
 
-/** Minutos entre duas horas `HH:MM` do mesmo dia. */
+/**
+ * Fim `00:00` no mesmo dia é a meia-noite do FIM do dia — "das 20h à 0h" —,
+ * e não o começo dele. Sem isso, "22:00 até 00:00" era recusado como
+ * "termina antes de começar" (revisão de 17/10/2026).
+ */
+const comoFim = (hora: string) => (hora === '00:00' ? '24:00' : hora);
+
+/** A hora de fim vem depois da de início, no mesmo dia? */
+export function terminaDepois(inicio: string, fim: string): boolean {
+	return comoFim(fim) > inicio;
+}
+
+/** Minutos entre duas horas `HH:MM` do mesmo dia — `00:00` no fim é meia-noite. */
 export function minutosEntre(inicio: string, fim: string): number {
 	const [h1, m1] = inicio.split(':').map(Number) as [number, number];
-	const [h2, m2] = fim.split(':').map(Number) as [number, number];
+	const [h2, m2] = comoFim(fim).split(':').map(Number) as [number, number];
 	return h2 * 60 + m2 - (h1 * 60 + m1);
+}
+
+/**
+ * Data e hora locais em que o evento termina, ou nulo se não tem fim.
+ * Sem data de fim, é no mesmo dia; sem hora, no fim dele.
+ */
+export function fimLocal(d: {
+	data: string;
+	dataFim: string | null;
+	horaFim: string | null;
+}): { data: string; hora: string } | null {
+	if (!d.horaFim && !d.dataFim) return null;
+	const data = d.dataFim ?? d.data;
+	if (d.horaFim === '00:00' && data === d.data) {
+		return { data: somarDias(d.data, 1), hora: '00:00' };
+	}
+	return { data, hora: d.horaFim ?? '23:59' };
 }
 
 /**

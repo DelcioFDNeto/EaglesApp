@@ -7,6 +7,16 @@ import {
 } from '../../src/lib/server/modules/pessoas/validacao';
 import { formatarTelefone, normalizarTexto, somenteDigitos } from '../../src/lib/shared/pessoa';
 
+describe('cada data com a sua mensagem (revisão de 17/10/2026)', () => {
+	it('a data de entrada no futuro fala da entrada, não do nascimento', () => {
+		const r = criarPessoaSchema.safeParse({ fullName: 'Ana', joinedAt: '2999-01-01' });
+		expect(r.success).toBe(false);
+		const mensagem = r.error?.flatten().fieldErrors.joinedAt?.[0] ?? '';
+		expect(mensagem).toMatch(/entrada/);
+		expect(mensagem).not.toMatch(/nascimento/);
+	});
+});
+
 describe('cadastro progressivo (RN-05)', () => {
 	it('aceita uma pessoa só com o nome', () => {
 		const r = criarPessoaSchema.safeParse({ fullName: 'Ana Clara Souza' });

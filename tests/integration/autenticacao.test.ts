@@ -426,9 +426,38 @@ describe('conta de acesso — identificador e aceite', () => {
 			tipo: 'telefone',
 			valor: '55998765432'
 		});
+		expect(interpretarIdentificador('+55 (55) 99876-5432')).toEqual({
+			tipo: 'telefone',
+			valor: '55998765432'
+		});
 		expect(interpretarIdentificador('123')).toBeNull();
 		expect(interpretarIdentificador('sem-arroba')).toBeNull();
 		expect(interpretarIdentificador('')).toBeNull();
+	});
+
+	it('telefone: o jeito que as pessoas escrevem, e só número brasileiro (revisão de 17/10/2026)', () => {
+		const tel = (t: string) => interpretarIdentificador(t)?.valor ?? null;
+		// O 0 da longa distância e a discagem de fora do país.
+		expect(tel('(011) 98765-4321')).toBe('11987654321');
+		expect(tel('0055 11 98765-4321')).toBe('11987654321');
+		expect(tel('+55 (011) 98765-4321')).toBe('11987654321');
+		// Fixo, com 8 dígitos começando de 2 a 5.
+		expect(tel('(11) 3333-4444')).toBe('1133334444');
+		// Número de outro país não vira um número de Bauru (DDD 14).
+		expect(tel('+1 415 555 2671')).toBeNull();
+		// Nem celular antigo, sem o 9, nem DDD com zero.
+		expect(tel('(11) 8765-4321')).toBeNull();
+		expect(tel('(10) 98765-4321')).toBeNull();
+	});
+
+	it('o banco recusa telefone de entrada fora da forma única (migração 0012)', async () => {
+		const id = await criarPessoa('Telefone Fora Do Formato');
+		await expect(
+			ctx.db.insert(userAccount).values({ personId: id, phone: '5511987654321' })
+		).rejects.toThrow(/user_account_phone_nacional/);
+		await expect(
+			ctx.db.insert(userAccount).values({ personId: id, phone: '(11) 98765-4321' })
+		).rejects.toThrow(/user_account_phone_nacional/);
 	});
 
 	it('identificador já usado por OUTRA conta é recusado — e o convite continua valendo', async () => {

@@ -26,12 +26,7 @@ export async function issueInvite(
 
 	// Um convite anterior ainda aberto é revogado: dois links válidos para a
 	// mesma pessoa é superfície de ataque sem utilidade.
-	await db
-		.update(invite)
-		.set({ revokedAt: new Date() })
-		.where(
-			and(eq(invite.personId, params.personId), isNull(invite.usedAt), isNull(invite.revokedAt))
-		);
+	await revogarConvitesDaPessoa(db, params.personId);
 
 	await db.insert(invite).values({
 		teamId: params.teamId,
@@ -61,6 +56,8 @@ export type InviteLookup =
 			 * encerra todas as sessões abertas.
 			 */
 			recuperacao: boolean;
+			/** Quem emitiu — o aceite confere se essa pessoa ainda poderia emitir. */
+			emitidoPor: string | null;
 	  }
 	| { ok: false; reason: 'inexistente' | 'expirado' | 'usado' | 'revogado' };
 
@@ -90,6 +87,10 @@ export async function lookupInvite(db: Database, token: string): Promise<InviteL
 	if (convite.revokedAt) return { ok: false, reason: 'revogado' };
 	if (convite.usedAt) return { ok: false, reason: 'usado' };
 	if (convite.expiresAt <= new Date()) return { ok: false, reason: 'expirado' };
+	// Quem saiu do cadastro não ganha conta. Antes, o aceite gravava senha e
+	// identificador para a pessoa removida — e ocupava aquele telefone ou
+	// e-mail para todo mundo (revisão de 17/10/2026).
+	if (pessoa.deletedAt) return { ok: false, reason: 'revogado' };
 	// Quem já tem senha NÃO é recusado. O ADR 0004 define o novo convite como o
 	// caminho de recuperação de acesso; recusar aqui deixava sem saída
 	// justamente quem esqueceu a senha (defeito do M01, corrigido no M03).
@@ -99,8 +100,27 @@ export async function lookupInvite(db: Database, token: string): Promise<InviteL
 		personId: pessoa.id,
 		teamId: pessoa.teamId,
 		fullName: pessoa.fullName,
-		recuperacao: !!conta?.passwordHash
+		recuperacao: !!conta?.passwordHash,
+		emitidoPor: convite.createdByPersonId
 	};
+}
+
+/** Cancela os convites ainda abertos da pessoa. Devolve quantos. */
+export async function revogarConvitesDaPessoa(db: Database, personId: string): Promise<number> {
+	const revogados = await db
+		.update(invite)
+		.set({ revokedAt: new Date() })
+		.where(and(eq(invite.personId, personId), isNull(invite.usedAt), isNull(invite.revokedAt)))
+		.returning({ id: invite.id });
+	return revogados.length;
+}
+
+/** Cancela um convite ainda aberto. */
+export async function revogarConvite(db: Database, inviteId: string): Promise<void> {
+	await db
+		.update(invite)
+		.set({ revokedAt: new Date() })
+		.where(and(eq(invite.id, inviteId), isNull(invite.usedAt), isNull(invite.revokedAt)));
 }
 
 /** Marca o convite como usado. Só tem efeito se ainda estiver aberto. */

@@ -214,8 +214,9 @@ export async function removerAtribuicao(
 ): Promise<void> {
 	authorize(actor, 'rbac.manage');
 	exigirReautenticacao(contexto.reautenticadoRecentemente);
-	if (!ehId(atribuicaoId))
+	if (!ehId(atribuicaoId)) {
 		throw new AcessoRecusado('nao_encontrado', 'Essa atribuição não existe.');
+	}
 
 	const [atual] = await db
 		.select({

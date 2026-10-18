@@ -9,6 +9,7 @@ import {
 	statusDaRecusaDeEvento
 } from '$server/modules/eventos/regras';
 import type { FalhaDeFormulario } from '$shared/formulario';
+import { terminaEmOutroDia } from '$shared/fuso';
 import { opcoesDoFormulario, valoresDoFormulario } from '../../opcoes.server';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -46,8 +47,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		valores: {
 			titulo: evento.titulo,
 			data: evento.data,
-			// Só quando difere: o campo é o "termina em outro dia?".
-			dataFim: evento.dataFim && evento.dataFim !== evento.data ? evento.dataFim : '',
+			// Só quando termina em outro dia: o campo é o "termina em outro dia?".
+			// Meia-noite é o fim do mesmo dia — "00:00" no fim, sem data.
+			dataFim: terminaEmOutroDia(evento) ? evento.dataFim! : '',
 			horaInicio: evento.hora,
 			horaFim: evento.horaFim ?? '',
 			local: evento.local ?? '',

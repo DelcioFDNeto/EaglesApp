@@ -190,9 +190,46 @@ export function mesPorExtenso(mes: string): string {
 	return `${MESES[m - 1]} de ${ano}`;
 }
 
-/** Termina em outro dia — retiro, acampamento, virada de madrugada. */
-export function terminaEmOutroDia(e: { data: string; dataFim?: string | null }): boolean {
-	return !!e.dataFim && e.dataFim !== e.data;
+/** O período de um evento, nas datas e horas locais da equipe. */
+export type Periodo = {
+	data: string;
+	hora: string;
+	dataFim?: string | null;
+	horaFim?: string | null;
+};
+
+/**
+ * Termina em outro dia — retiro, acampamento, virada de madrugada.
+ *
+ * Terminar à 0h do dia seguinte NÃO é outro dia: é o fim do mesmo dia. Sem
+ * isso, a vigília das 22h à meia-noite aparecia como "até sábado" (revisão de
+ * 17/10/2026).
+ */
+export function terminaEmOutroDia(e: Periodo): boolean {
+	if (!e.dataFim || e.dataFim === e.data) return false;
+	return !(e.horaFim === '00:00' && e.dataFim === somarDias(e.data, 1));
+}
+
+/**
+ * O período por extenso: "às 20h", "das 20h às 22h", "às 9h — até domingo,
+ * 19 de outubro, 17h". Uma regra só para a página do evento, o link público e
+ * o texto do WhatsApp — eram três redações, e cada uma tratava o fim de um
+ * jeito.
+ */
+export function periodoPorExtenso(e: Periodo): string {
+	const inicio = horaCurta(e.hora);
+	if (terminaEmOutroDia(e)) {
+		const hora = e.horaFim ? `, ${horaCurta(e.horaFim)}` : '';
+		return `às ${inicio} — até ${dataPorExtenso(e.dataFim!)}${hora}`;
+	}
+	return e.horaFim ? `das ${inicio} às ${horaCurta(e.horaFim)}` : `às ${inicio}`;
+}
+
+/** O período curto, para as listas: "20h", "20h–22h", "9h · até Domingo, 19/10". */
+export function periodoCurto(e: Periodo): string {
+	const inicio = horaCurta(e.hora);
+	if (terminaEmOutroDia(e)) return `${inicio} · até ${dataCurtaComDia(e.dataFim!)}`;
+	return e.horaFim ? `${inicio}–${horaCurta(e.horaFim)}` : inicio;
 }
 
 /** "20h", "19h30" — de uma hora `HH:MM`. */

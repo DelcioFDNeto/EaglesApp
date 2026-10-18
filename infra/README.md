@@ -141,6 +141,17 @@ Crie a conta de administrador dele na primeira abertura — a primeira pessoa
 que abre a tela é quem a cria. Numa VM de 1 GB, um monitor externo gratuito
 apontando para `https://SEU_DOMINIO/api/health` sai mais barato em memória.
 
+### Duas coisas para não esquecer
+
+- **O fuso aparece em dois lugares e precisa ser o mesmo.** `FUSO`, no
+  `.env`, é o do Postgres (o "hoje" dos gatilhos e da idade) e o do agendamento
+  do backup. O app usa o fuso da equipe gravado no banco (`team.timezone`,
+  `America/Sao_Paulo` por padrão). Mudou um, mude o outro.
+- **O log de acesso do Caddy (`/data/access.log`) não guarda o token dos
+  convites**: o caminho `/convite/…` sai mascarado e o `Referer` sai inteiro do
+  registro. Se trocar o formato do log, mantenha o filtro — convite de
+  recuperação é a conta de alguém.
+
 ---
 
 ## O que foi validado, e o que ainda não
@@ -168,3 +179,11 @@ Ainda **não** validados, por limite do ambiente de teste, não do projeto:
   público e credenciais.
 
 Esses três são os primeiros a conferir na VPS de verdade.
+
+Em **17/10/2026** o Caddyfile rodou de novo — Caddy oficial 2.11.7 na frente
+do app compilado — e mostrou o que a leitura não mostrava: o bloco `header`
+sobrescrevia os cabeçalhos que o app manda por página, e os padrões com `?`
+num bloco só não valiam quando o app mandava qualquer um deles. Hoje cada
+cabeçalho de segurança sai uma vez só, o do app prevalece e o Caddy completa o
+que falta (os arquivos estáticos não passam pelo app). Detalhe em
+[`docs/revisao-2026-10-17.md`](../docs/revisao-2026-10-17.md).

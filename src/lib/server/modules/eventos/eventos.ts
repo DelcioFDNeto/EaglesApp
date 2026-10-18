@@ -49,6 +49,7 @@ import {
 import { datasEntre } from './recorrencia';
 import { alvosForaDoEscopo, EventoRecusado, podeVerEvento, type Alvo } from './regras';
 import {
+	fimLocal,
 	minutosEntre,
 	type EventoEntrada,
 	type OcorrenciaEntrada,
@@ -475,7 +476,14 @@ function visibilidade(actor: Actor, meuGrupo: string | null, escopo: EscopoDaAge
 async function listar(
 	db: Database,
 	actor: Actor,
-	filtro: { de: Date; ate?: Date; escopo: EscopoDaAgenda; limite?: number }
+	filtro: {
+		de: Date;
+		ate?: Date;
+		escopo: EscopoDaAgenda;
+		limite?: number;
+		/** Inclui também o que começou antes de `de` e ainda não terminou neste instante. */
+		emAndamentoEm?: Date;
+	}
 ): Promise<EventoResumo[]> {
 	// Em QUALQUER escopo: o conselheiro tem `event.view` só no grupo, e ainda
 	// assim tem agenda. O que cada um vê sai da regra de visibilidade, abaixo.
@@ -495,7 +503,9 @@ async function listar(
 		.where(
 			and(
 				eq(event.teamId, actor.teamId),
-				gte(event.startsAt, filtro.de),
+				filtro.emAndamentoEm
+					? or(gte(event.startsAt, filtro.de), gt(event.endsAt, filtro.emAndamentoEm))
+					: gte(event.startsAt, filtro.de),
 				filtro.ate ? lt(event.startsAt, filtro.ate) : undefined,
 				visibilidade(actor, meuGrupo, filtro.escopo)
 			)
@@ -535,10 +545,13 @@ export async function proximosEventos(
 	opcoes: { limite: number; grupoId?: string; agora?: Date }
 ): Promise<EventoResumo[]> {
 	const agora = opcoes.agora ?? new Date();
-	// Começou há menos de 3 horas ainda é "o encontro de agora".
+	// Começou há menos de 3 horas ainda é "o encontro de agora". E o que ainda
+	// não terminou também: o retiro de sexta a domingo sumia do início no
+	// sábado, no meio dele (revisão de 17/10/2026).
 	const de = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
 	const eventos = await listar(db, actor, {
 		de,
+		emAndamentoEm: agora,
 		escopo: opcoes.grupoId ? { tipo: 'grupo', groupId: opcoes.grupoId } : { tipo: 'minha' },
 		limite: opcoes.limite + 10
 	});
@@ -781,10 +794,8 @@ export async function criarEvento(
 	}
 
 	const inicio = instanteLocal(dados.data, dados.horaInicio, fuso);
-	const fim =
-		dados.horaFim || dados.dataFim
-			? instanteLocal(dados.dataFim ?? dados.data, dados.horaFim ?? '23:59', fuso)
-			: null;
+	const ate = fimLocal(dados);
+	const fim = ate ? instanteLocal(ate.data, ate.hora, fuso) : null;
 	if (fim && fim <= inicio) {
 		throw new EventoRecusado('periodo_invalido', 'O evento termina antes de começar.');
 	}
@@ -871,10 +882,8 @@ export async function editarEvento(
 	// para sexta (varredura de 11/10/2026).
 	const fuso = await fusoDaEquipe(db, actor.teamId);
 	const inicio = instanteLocal(dados.data, dados.horaInicio, fuso);
-	const fim =
-		dados.horaFim || dados.dataFim
-			? instanteLocal(dados.dataFim ?? dados.data, dados.horaFim ?? '23:59', fuso)
-			: null;
+	const ate = fimLocal(dados);
+	const fim = ate ? instanteLocal(ate.data, ate.hora, fuso) : null;
 	if (fim && fim <= inicio) {
 		throw new EventoRecusado('periodo_invalido', 'O evento termina antes de começar.');
 	}

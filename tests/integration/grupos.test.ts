@@ -375,6 +375,57 @@ describe('o grupo é o contexto da pessoa', () => {
 			.where(eq(personRelation.id, vinculo!.id));
 		expect(restantes, 'o vínculo do PG Verde continua lá').toHaveLength(1);
 	});
+
+	it('desfazer o vínculo também é das duas pessoas (revisão de 17/10/2026)', async () => {
+		const responsavel = await novaPessoa('Responsável do Azul', { grupo: azul });
+		const menor = await novaPessoa('Dependente do Verde', { grupo: verde });
+		await criarVinculo(ctx.db, lider, {
+			pessoaId: responsavel,
+			outraPessoaId: menor,
+			tipo: 'responsavel_legal'
+		});
+		const [vinculo] = await ctx.db
+			.select({ id: personRelation.id })
+			.from(personRelation)
+			.where(eq(personRelation.personA, responsavel));
+
+		// Tirar o responsável muda o regime do menor do PG Verde: quem só cuida
+		// do lado do Azul não decide isso.
+		await expect(
+			removerVinculo(ctx.db, conselheiroAzul, vinculo!.id, responsavel)
+		).rejects.toBeInstanceOf(PolicyDenied);
+		expect(
+			await ctx.db.select().from(personRelation).where(eq(personRelation.id, vinculo!.id))
+		).toHaveLength(1);
+
+		await removerVinculo(ctx.db, lider, vinculo!.id, responsavel);
+		expect(
+			await ctx.db.select().from(personRelation).where(eq(personRelation.id, vinculo!.id))
+		).toHaveLength(0);
+	});
+
+	it('vínculo com quem saiu do cadastro se desfaz por quem cuida da outra pessoa', async () => {
+		const daqui = await novaPessoa('Irmão que Ficou', { grupo: azul });
+		const saiu = await novaPessoa('Irmão que Saiu', { grupo: verde });
+		await criarVinculo(ctx.db, lider, { pessoaId: daqui, outraPessoaId: saiu, tipo: 'irmao' });
+		await removerPessoa(ctx.db, lider, saiu);
+		const [vinculo] = await ctx.db
+			.select({ id: personRelation.id })
+			.from(personRelation)
+			.where(eq(personRelation.personA, daqui < saiu ? daqui : saiu));
+
+		await removerVinculo(ctx.db, conselheiroAzul, vinculo!.id, daqui);
+		expect(
+			await ctx.db.select().from(personRelation).where(eq(personRelation.id, vinculo!.id))
+		).toHaveLength(0);
+	});
+
+	it('ids malformados no vínculo não viram erro 500', async () => {
+		await expect(
+			criarVinculo(ctx.db, lider, { pessoaId: 'x', outraPessoaId: doAzul, tipo: 'irmao' })
+		).rejects.toThrow(/não existe/);
+		await expect(removerVinculo(ctx.db, lider, 'x', doAzul)).resolves.toBeUndefined();
+	});
 });
 
 describe('cadastro com grupo', () => {

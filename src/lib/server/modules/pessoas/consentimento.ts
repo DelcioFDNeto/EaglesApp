@@ -108,6 +108,11 @@ export async function registrarConsentimento(
 		}
 	});
 
+	// A auditoria fica FORA da transação, de propósito. `audit` nunca lança
+	// (a operação pedida não pode cair por causa dela) — dentro da transação,
+	// um INSERT de auditoria que falhasse deixaria a transação abortada, e o
+	// COMMIT viraria ROLLBACK em silêncio: a revogação sumiria sem erro
+	// nenhum (revisão de 17/10/2026).
 	await audit(db, {
 		teamId: registro.teamId ?? null,
 		actorPersonId: registro.recordedByPersonId ?? null,

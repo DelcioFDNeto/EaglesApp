@@ -70,6 +70,23 @@ test.describe('entrada', () => {
 	});
 });
 
+test.describe('cabeçalhos de segurança', () => {
+	// Revisão de 17/10/2026: a página de convite tem o token no endereço. Com
+	// `strict-origin-when-cross-origin`, cada arquivo que ela carrega levava a
+	// URL inteira no Referer — e o Referer vai para o log de acesso. O aceite
+	// seguido de "Sair" (em `acesso.spec.ts`) prova que o POST continua com
+	// origem válida.
+	test('a página de convite manda só a origem no Referer, nunca o caminho', async ({ request }) => {
+		const convite = await request.get('/convite/um-token-que-nao-existe-mas-tem-tamanho');
+		expect(convite.headers()['referrer-policy']).toBe('strict-origin');
+
+		const entrar = await request.get('/entrar');
+		expect(entrar.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');
+		expect(entrar.headers()['x-frame-options']).toBe('DENY');
+		expect(entrar.headers()['x-content-type-options']).toBe('nosniff');
+	});
+});
+
 test.describe('bloqueio progressivo', () => {
 	// MAX_LOGIN_ATTEMPTS = 5 no ambiente da suíte.
 	test.beforeEach(async () => {

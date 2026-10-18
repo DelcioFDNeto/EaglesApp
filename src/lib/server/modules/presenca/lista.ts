@@ -12,7 +12,7 @@ import { dataNoFuso, hojeNoFuso, horaNoFuso } from '$shared/fuso';
 import { esperadoNo, frequenciaDe, JANELA_DE_FREQUENCIA_SEMANAS } from './calculo';
 import {
 	eventosComLista,
-	passagensDaEquipe,
+	passagensPorPessoa,
 	pessoasDaEquipe,
 	presencasDe,
 	publicosDe
@@ -91,7 +91,7 @@ export async function listaDePresenca(
 
 	const [pessoas, passagens, publicos, anteriores, presentes, respostas] = await Promise.all([
 		pessoasDaEquipe(db, actor.teamId),
-		passagensDaEquipe(db, actor.teamId),
+		passagensPorPessoa(db, actor.teamId),
 		publicosDe(db, [eventId]),
 		eventosComLista(db, actor.teamId, { de, ate: e.inicio }),
 		presencasDe(db, [eventId]),
@@ -123,7 +123,8 @@ export async function listaDePresenca(
 			resposta: r
 				? { texto: r.texto, significado: r.significado as Significado, convidados: r.convidados }
 				: null,
-			percentual: frequenciaDe(p, anteriores, passagens, presencasAnteriores).percentual
+			percentual: frequenciaDe(p, anteriores, passagens.get(p.id) ?? [], presencasAnteriores)
+				.percentual
 		};
 	};
 
@@ -135,7 +136,7 @@ export async function listaDePresenca(
 	const outros: ListaDePresenca['outros'] = [];
 	for (const p of pessoas) {
 		const l = linha(p);
-		if (esperadoNo(esteEvento, p, passagens)) esperados.push(l);
+		if (esperadoNo(esteEvento, p, passagens.get(p.id) ?? [])) esperados.push(l);
 		else if (l.presente) alemDoEsperado.push({ ...l, grupo: p.grupoAtual?.nome ?? null });
 		else outros.push({ ...l, grupo: p.grupoAtual?.nome ?? null });
 	}

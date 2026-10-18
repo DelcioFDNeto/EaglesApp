@@ -124,6 +124,10 @@ export function redact(value: unknown, depth = 0): unknown {
  * Nunca lança: falhar ao auditar não pode derrubar a operação que o usuário
  * pediu. Mas o erro vai para o log da aplicação, alto e visível — auditoria
  * silenciosamente quebrada é pior que auditoria ausente.
+ *
+ * Por isso NÃO se chama dentro de uma transação: o erro engolido aqui deixaria
+ * a transação abortada, e o COMMIT dela viraria ROLLBACK sem aviso — a
+ * operação pedida sumiria em silêncio. Audite depois do commit.
  */
 export async function audit(db: Database, entry: AuditEntry): Promise<void> {
 	try {

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import type { Database } from '../db';
 import { person, session, userAccount } from '../db/schema';
 import { audit } from '../audit/log';
@@ -38,28 +38,37 @@ export function interpretarIdentificador(texto: string | null | undefined): Iden
 		return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? { tipo: 'email', valor: email } : null;
 	}
 
-	const digitos = limpo.replace(/\D/g, '');
-	// 10 ou 11 dígitos é número brasileiro com DDD. Com o 55 do país na frente
-	// (12 ou 13), é o MESMO número — e precisa virar a mesma chave: antes,
-	// "+55 11 98765-4321" e "(11) 98765-4321" eram contas diferentes para o
-	// login (varredura de 11/10/2026).
-	const nacional =
-		(digitos.length === 12 || digitos.length === 13) && digitos.startsWith('55')
-			? digitos.slice(2)
-			: digitos;
-	return nacional.length === 10 || nacional.length === 11
-		? { tipo: 'telefone', valor: nacional }
-		: null;
+	const telefone = telefoneNacional(limpo);
+	return telefone ? { tipo: 'telefone', valor: telefone } : null;
 }
 
 /**
- * Condição de busca do identificador. Telefone também casa com a forma antiga,
- * gravada com o 55 na frente antes da normalização acima.
+ * Telefone brasileiro com DDD, só dígitos, sem o 55 do país — a única forma
+ * gravada e procurada (o banco confere, migração 0012).
+ *
+ * Aceita como as pessoas escrevem: "(11) 98765-4321", "+55 11 98765-4321",
+ * "(011) 98765-4321" (o 0 da longa distância), "00 55 11 …" (discagem de
+ * fora). O DDD 55, de Santa Maria (RS), não se confunde com o país: o 55 só
+ * sai quando sobra número demais para um telefone nacional.
+ *
+ * Número de outro país não é aceito: com o formato livre, "+1 415 555 2671"
+ * virava um número de Bauru (revisão de 17/10/2026). Quem tem um, entra com
+ * o e-mail.
  */
+export function telefoneNacional(texto: string): string | null {
+	let digitos = texto.replace(/\D/g, '').replace(/^0+/, '');
+	if (digitos.length > 11 && digitos.startsWith('55')) {
+		digitos = digitos.slice(2).replace(/^0+/, '');
+	}
+	// DDD sem zero; celular com 9 na frente, fixo começando de 2 a 5 (Anatel).
+	return /^[1-9][1-9](9\d{8}|[2-5]\d{7})$/.test(digitos) ? digitos : null;
+}
+
+/** Condição de busca do identificador — telefone sempre na forma de `telefoneNacional`. */
 function condicaoDoIdentificador(id: Identificador) {
 	return id.tipo === 'email'
 		? sql`lower(${userAccount.email}) = ${id.valor}`
-		: inArray(userAccount.phone, [id.valor, `55${id.valor}`]);
+		: eq(userAccount.phone, id.valor);
 }
 
 /** Chave estável do identificador — a mesma para qualquer formatação. */
@@ -142,7 +151,8 @@ export async function aceitarConvite(
 		return {
 			ok: false,
 			campo: 'identificador',
-			mensagem: 'Informe um e-mail válido ou um telefone com DDD.'
+			mensagem:
+				'Informe um e-mail válido ou um telefone brasileiro com DDD. Número de outro país: use o e-mail.'
 		};
 	}
 

@@ -8,8 +8,11 @@ import {
 	horaNoFuso,
 	instanteLocal,
 	limitesDoMes,
+	periodoCurto,
+	periodoPorExtenso,
 	somarDias,
-	somarMeses
+	somarMeses,
+	terminaEmOutroDia
 } from '../../src/lib/shared/fuso';
 import { datasEntre, primeiraOcorrencia } from '../../src/lib/server/modules/eventos/recorrencia';
 
@@ -79,6 +82,44 @@ describe('data que não existe no calendário (varredura de 11/10/2026)', () => 
 	it('aceita o que existe, inclusive 29 de fevereiro de ano bissexto', () => {
 		expect(ehData('2024-02-29')).toBe(true);
 		expect(ehData('2026-12-31')).toBe(true);
+	});
+});
+
+describe('o período do evento, numa redação só (revisão de 17/10/2026)', () => {
+	const quinta = '2026-10-15';
+	const sexta = '2026-10-16';
+
+	it('sem fim, com fim no mesmo dia, e terminando em outro dia', () => {
+		expect(periodoPorExtenso({ data: quinta, hora: '20:00' })).toBe('às 20h');
+		expect(
+			periodoPorExtenso({ data: quinta, hora: '20:00', dataFim: quinta, horaFim: '22:30' })
+		).toBe('das 20h às 22h30');
+		expect(
+			periodoPorExtenso({ data: sexta, hora: '09:00', dataFim: '2026-10-18', horaFim: '17:00' })
+		).toBe('às 9h — até domingo, 18 de outubro, 17h');
+
+		expect(periodoCurto({ data: quinta, hora: '20:00' })).toBe('20h');
+		expect(periodoCurto({ data: quinta, hora: '20:00', dataFim: quinta, horaFim: '22:00' })).toBe(
+			'20h–22h'
+		);
+		expect(
+			periodoCurto({ data: sexta, hora: '09:00', dataFim: '2026-10-18', horaFim: '17:00' })
+		).toBe('9h · até Domingo, 18/10');
+	});
+
+	it('terminar à meia-noite é o fim do MESMO dia — não "até sábado"', () => {
+		const vigilia = { data: sexta, hora: '22:00', dataFim: '2026-10-17', horaFim: '00:00' };
+		expect(terminaEmOutroDia(vigilia)).toBe(false);
+		expect(periodoCurto(vigilia)).toBe('22h–0h');
+		expect(periodoPorExtenso(vigilia)).toBe('das 22h às 0h');
+	});
+
+	it('passar da meia-noite é outro dia, sim', () => {
+		const madrugada = { data: sexta, hora: '22:00', dataFim: '2026-10-17', horaFim: '02:00' };
+		expect(terminaEmOutroDia(madrugada)).toBe(true);
+		expect(periodoCurto(madrugada)).toBe('22h · até Sábado, 17/10');
+		// Meia-noite de DOIS dias depois também é outro dia.
+		expect(terminaEmOutroDia({ ...madrugada, dataFim: '2026-10-18', horaFim: '00:00' })).toBe(true);
 	});
 });
 

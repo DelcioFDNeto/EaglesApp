@@ -2,7 +2,7 @@ import { error, fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$server/db';
 import { team } from '$server/db/schema';
-import { checkRateLimit, RULES } from '$server/auth/ratelimit';
+import { chaveDeIp, checkRateLimit, RULES } from '$server/auth/ratelimit';
 import { funcionalidadeLigada } from '$server/settings/flags';
 import { autocadastrarVisitante } from '$server/modules/pessoas/pessoas';
 import { autocadastroSchema } from '$server/modules/pessoas/validacao';
@@ -68,7 +68,7 @@ export const actions: Actions = {
 
 		// Envios, válidos ou não: freio contra robô, folgado para gente.
 		const tentativas = checkRateLimit(
-			`autocadastro:tentativa:${ip}`,
+			`autocadastro:tentativa:${chaveDeIp(ip)}`,
 			RULES.autocadastroTentativasPorIp
 		);
 		if (!tentativas.allowed) return fail(429, muitos(tentativas.retryAfterSeconds));
@@ -104,7 +104,7 @@ export const actions: Actions = {
 
 		// A cota de CADASTROS só se gasta com cadastro válido — o erro de
 		// digitação de um não bloqueia quem está atrás no mesmo Wi-Fi.
-		const limite = checkRateLimit(`autocadastro:${ip}`, RULES.autocadastroPorIp);
+		const limite = checkRateLimit(`autocadastro:${chaveDeIp(ip)}`, RULES.autocadastroPorIp);
 		if (!limite.allowed) return fail(429, muitos(limite.retryAfterSeconds));
 
 		const { ehMenor: menor } = await autocadastrarVisitante(db(), equipe.id, parsed.data, {

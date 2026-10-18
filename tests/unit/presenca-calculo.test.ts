@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	agruparPorPessoa,
 	chaveDePresenca,
 	esperadoNo,
 	estavaNoGrupo,
@@ -134,6 +135,34 @@ describe('frequência', () => {
 		expect(frequenciaDe(pessoa('joao'), [...eventos].reverse(), ps, pr)).toEqual(
 			frequenciaDe(pessoa('joao'), eventos, ps, pr)
 		);
+	});
+});
+
+describe('passagens por pessoa, sem cache escondido (revisão de 17/10/2026)', () => {
+	it('agrupar não muda o resultado — só o custo', () => {
+		const todas = [
+			passagem('joao', AZUL, semana(0)),
+			passagem('maria', VERDE, semana(0)),
+			passagem('joao', VERDE, semana(5))
+		];
+		const porPessoa = agruparPorPessoa(todas);
+		expect(porPessoa.get('joao')).toHaveLength(2);
+		expect(porPessoa.get('maria')).toHaveLength(1);
+
+		const eventos = [1, 2, 3, 6].map(encontroAzul);
+		const pr = presencas(['azul-1', 'joao']);
+		expect(frequenciaDe(pessoa('joao'), eventos, porPessoa.get('joao')!, pr)).toEqual(
+			frequenciaDe(pessoa('joao'), eventos, todas, pr)
+		);
+	});
+
+	it('a lista alterada depois de usada vale do jeito novo', () => {
+		// Com o índice antigo (WeakMap pela identidade da lista), a segunda
+		// pergunta reaproveitava o índice vazio da primeira — e errava calada.
+		const ps: Passagem[] = [];
+		expect(estavaNoGrupo(ps, 'joao', AZUL, semana(1))).toBe(false);
+		ps.push(passagem('joao', AZUL, semana(0)));
+		expect(estavaNoGrupo(ps, 'joao', AZUL, semana(1))).toBe(true);
 	});
 });
 

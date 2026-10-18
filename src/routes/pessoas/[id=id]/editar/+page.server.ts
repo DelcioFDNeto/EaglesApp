@@ -1,7 +1,12 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { db } from '$server/db';
-import { can } from '$server/policy/policy';
-import { atualizarPessoa, RegimeRestrito, verPessoa } from '$server/modules/pessoas/pessoas';
+import { can, PolicyDenied } from '$server/policy/policy';
+import {
+	atualizarPessoa,
+	PessoaNaoEncontrada,
+	RegimeRestrito,
+	verPessoa
+} from '$server/modules/pessoas/pessoas';
 import { contextoDaPessoa } from '$server/modules/grupos/contexto';
 import { atualizarPessoaSchema } from '$server/modules/pessoas/validacao';
 import type { FalhaDeFormulario } from '$shared/formulario';
@@ -71,6 +76,16 @@ export const actions: Actions = {
 				};
 				return fail(422, falha);
 			}
+			// Nascimento ou contato enviados por quem não os vê (o formulário
+			// nem os mostra): recusa na tela, não página de erro 500.
+			if (erro instanceof PolicyDenied) {
+				const falha: Falha = {
+					valores: bruto,
+					erro: 'Você não pode alterar o nascimento nem o contato desta pessoa.'
+				};
+				return fail(403, falha);
+			}
+			if (erro instanceof PessoaNaoEncontrada) error(404, erro.message);
 			throw erro;
 		}
 

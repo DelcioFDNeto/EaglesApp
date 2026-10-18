@@ -6,7 +6,13 @@ import { userAccount } from '$server/db/schema';
 import { chaveDoIdentificador, encontrarContaPorIdentificador } from '$server/auth/conta';
 import { verifyPassword, hashPassword, needsRehash } from '$server/auth/password';
 import { createSession, setSessionCookie } from '$server/auth/session';
-import { checkRateLimit, clearRateLimit, regraLoginPorIp, RULES } from '$server/auth/ratelimit';
+import {
+	chaveDeIp,
+	checkRateLimit,
+	clearRateLimit,
+	regraLoginPorIp,
+	RULES
+} from '$server/auth/ratelimit';
 import { audit } from '$server/audit/log';
 import { env } from '$server/env';
 import { destinoInterno } from '$shared/redirecionamento';
@@ -48,7 +54,7 @@ export const actions: Actions = {
 		const userAgent = request.headers.get('user-agent');
 
 		// 1. Limite por IP — barra varredura em muitas contas.
-		const porIp = checkRateLimit(`login:ip:${ip}`, regraLoginPorIp());
+		const porIp = checkRateLimit(`login:ip:${chaveDeIp(ip)}`, regraLoginPorIp());
 		if (!porIp.allowed) {
 			return fail(429, {
 				erro: `Muitas tentativas deste dispositivo. Tente de novo em ${Math.ceil(porIp.retryAfterSeconds / 60)} minutos.`

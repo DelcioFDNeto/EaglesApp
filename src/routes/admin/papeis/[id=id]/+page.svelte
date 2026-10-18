@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { FUSO_PADRAO } from '$shared/fuso';
 	import { enhance } from '$app/forms';
 	import BarraDeTopo from '$ui/BarraDeTopo.svelte';
 	import Botao from '$ui/Botao.svelte';
@@ -32,10 +31,12 @@
 			: data.grupos
 	);
 
-	const dataCurta = new Intl.DateTimeFormat('pt-BR', {
-		timeZone: FUSO_PADRAO,
-		dateStyle: 'short'
-	});
+	const dataCurta = $derived(
+		new Intl.DateTimeFormat('pt-BR', {
+			timeZone: data.fuso,
+			dateStyle: 'short'
+		})
+	);
 </script>
 
 <svelte:head>

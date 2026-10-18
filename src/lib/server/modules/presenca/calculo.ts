@@ -25,26 +25,27 @@ export const PRESENCAS_DE_VISITANTE = 3;
 export const JANELA_DE_VISITANTE_DIAS = 60;
 export const JANELA_DE_FREQUENCIA_SEMANAS = 8;
 
-/**
- * Índice das passagens por pessoa, montado uma vez por lista. Sem ele, cada
- * "estava no grupo?" varria as passagens da equipe inteira — pessoas ×
- * eventos × passagens num relatório de um ano (varredura de 11/10/2026).
- * A lista é tratada como imutável: quem a monta não a altera depois.
- */
-const indices = new WeakMap<readonly Passagem[], Map<string, Passagem[]>>();
+/** Passagens agrupadas por pessoa. */
+export type PassagensPorPessoa = ReadonlyMap<string, readonly Passagem[]>;
 
-function passagensDe(passagens: readonly Passagem[], personId: string): Passagem[] {
-	let indice = indices.get(passagens);
-	if (!indice) {
-		indice = new Map();
-		for (const p of passagens) {
-			const daPessoa = indice.get(p.personId);
-			if (daPessoa) daPessoa.push(p);
-			else indice.set(p.personId, [p]);
-		}
-		indices.set(passagens, indice);
+/**
+ * Agrupa as passagens por pessoa — uma vez por relatório. Cada cálculo recebe
+ * só as passagens da pessoa: com as da equipe inteira o resultado é o mesmo,
+ * mas cada "estava no grupo?" varreria todas — pessoas × eventos × passagens
+ * num relatório de um ano (varredura de 11/10/2026).
+ *
+ * Explícito, de propósito: antes era um cache escondido (`WeakMap` pela
+ * identidade da lista), num módulo que se diz puro, e que errava em silêncio
+ * se alguém alterasse a lista depois de usá-la (revisão de 17/10/2026).
+ */
+export function agruparPorPessoa(passagens: readonly Passagem[]): PassagensPorPessoa {
+	const mapa = new Map<string, Passagem[]>();
+	for (const p of passagens) {
+		const daPessoa = mapa.get(p.personId);
+		if (daPessoa) daPessoa.push(p);
+		else mapa.set(p.personId, [p]);
 	}
-	return indice.get(personId) ?? [];
+	return mapa;
 }
 
 export function estavaNoGrupo(
@@ -53,8 +54,12 @@ export function estavaNoGrupo(
 	groupId: string,
 	quando: Date
 ): boolean {
-	return passagensDe(passagens, personId).some(
-		(p) => p.groupId === groupId && p.entrada <= quando && (p.saida === null || p.saida > quando)
+	return passagens.some(
+		(p) =>
+			p.personId === personId &&
+			p.groupId === groupId &&
+			p.entrada <= quando &&
+			(p.saida === null || p.saida > quando)
 	);
 }
 
@@ -62,7 +67,7 @@ export function estavaNoGrupo(
 export function esperadoNo(
 	evento: EventoComLista,
 	pessoa: PessoaParaCalculo,
-	passagens: Passagem[]
+	passagens: readonly Passagem[]
 ): boolean {
 	// Quem ainda não estava no cadastro não podia ser esperado.
 	if (pessoa.cadastradaEm > evento.inicio) return false;
@@ -98,7 +103,7 @@ export type Frequencia = {
 export function frequenciaDe(
 	pessoa: PessoaParaCalculo,
 	eventos: EventoComLista[],
-	passagens: Passagem[],
+	passagens: readonly Passagem[],
 	presencas: ReadonlySet<string>,
 	opcoes: { recentesDesde?: Date } = {}
 ): Frequencia {

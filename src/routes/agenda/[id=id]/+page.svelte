@@ -6,19 +6,13 @@
 	import Campo from '$ui/Campo.svelte';
 	import Etiqueta from '$ui/Etiqueta.svelte';
 	import VoceVai from '$ui/VoceVai.svelte';
-	import { dataPorExtenso, horaCurta, terminaEmOutroDia } from '$shared/fuso';
+	import { dataPorExtenso, periodoPorExtenso } from '$shared/fuso';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	const e = $derived(data.evento);
-	const quando = $derived(
-		terminaEmOutroDia(e)
-			? `às ${horaCurta(e.hora)} — até ${dataPorExtenso(e.dataFim!)}${e.horaFim ? `, ${horaCurta(e.horaFim)}` : ''}`
-			: e.horaFim
-				? `${horaCurta(e.hora)} às ${horaCurta(e.horaFim)}`
-				: `às ${horaCurta(e.hora)}`
-	);
+	const quando = $derived(periodoPorExtenso(e));
 
 	let enviando = $state<string | null>(null);
 	function comCarregamento(nome: string) {

@@ -19,6 +19,7 @@ responsabilidades, participação e recursos financeiros — o ano inteiro.
 | [`docs/01-modulo-01-fundacao.md`](docs/01-modulo-01-fundacao.md)               | O que o M01 entrega e seus critérios de aceitação                     |
 | `docs/02-…` a [`docs/06-modulo-06-presenca.md`](docs/06-modulo-06-presenca.md) | Um documento por módulo: decisões, o que foi construído e a evidência |
 | [`docs/varredura-2026-10-11.md`](docs/varredura-2026-10-11.md)                 | A revisão de todos os módulos e da infra antes do deploy              |
+| [`docs/revisao-2026-10-17.md`](docs/revisao-2026-10-17.md)                     | A revisão hostil da varredura: o que ela deixou passar                |
 | [`docs/hospedagem-de-baixo-custo.md`](docs/hospedagem-de-baixo-custo.md)       | Onde e por quanto rodar — inclusive de graça                          |
 | [`infra/README.md`](infra/README.md)                                           | Subir em produção, backup e restauração                               |
 | [`docs/adr/`](docs/adr/)                                                       | Por que cada decisão importante foi tomada                            |

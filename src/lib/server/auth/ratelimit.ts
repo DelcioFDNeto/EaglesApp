@@ -7,14 +7,14 @@ import { env } from '../env';
  * custa ~610 ms de CPU, então deixar um atacante chegar até ele é entregar o
  * servidor. Limite primeiro, hash depois.
  *
- * Em memória é suficiente porque a aplicação roda em uma VPS. Com as duas
- * réplicas do deploy sem queda, cada uma tem seu próprio contador — na prática
- * dobra o limite efetivo por alguns segundos durante a troca, o que é
- * aceitável. Se um dia houver mais réplicas, mover para o Postgres (a fila
- * pg-boss já está lá) é uma troca local a este arquivo.
+ * Em memória é suficiente porque a aplicação roda em uma VPS, com uma réplica
+ * por padrão. Com `APP_REPLICAS=2`, cada uma tem seu próprio contador — dobra
+ * o limite efetivo, o que é aceitável. Se um dia houver mais réplicas, mover
+ * para o Postgres (a fila pg-boss já está lá) é uma troca local a este arquivo.
  *
- * O Caddy aplica um limite global mais grosso na borda; este aqui é o limite
- * fino, por conta e por rota.
+ * Não há outro limite antes deste: o `rate_limit` do Caddy é plugin e saiu na
+ * varredura de 11/10/2026. Este é o único — por isso as chaves por IP passam
+ * por `chaveDeIp`.
  */
 
 type Bucket = {
@@ -35,6 +35,28 @@ const buckets = new Map<string, Bucket>();
  */
 const INTERVALO_DE_PODA_MS = 10 * 60_000;
 let ultimaPoda = 0;
+
+/**
+ * A chave de limite de um endereço IP.
+ *
+ * IPv6 conta pelo prefixo /64: é o bloco que a operadora entrega a UM cliente,
+ * e dentro dele o aparelho troca de endereço à vontade — por endereço, o
+ * limite por IP não limitaria nada (revisão de 17/10/2026). IPv4 mapeado em
+ * IPv6 (`::ffff:a.b.c.d`) é o próprio IPv4.
+ */
+export function chaveDeIp(ip: string): string {
+	const mapeado = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+	if (mapeado) return mapeado[1]!;
+	if (!ip.includes(':')) return ip;
+
+	const [cabeca = '', cauda] = ip.split('%')[0]!.toLowerCase().split('::');
+	const inicio = cabeca ? cabeca.split(':') : [];
+	const fim = cauda ? cauda.split(':') : [];
+	const zeros =
+		cauda === undefined ? [] : Array(Math.max(0, 8 - inicio.length - fim.length)).fill('0');
+	const grupos = [...inicio, ...zeros, ...fim].slice(0, 4);
+	return `${grupos.map((g) => g.replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
 
 export type RateLimitRule = {
 	/** Tentativas permitidas dentro da janela. */

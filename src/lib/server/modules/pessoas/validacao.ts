@@ -58,15 +58,22 @@ export const emailSchema = opcional().refine(
 	'E-mail inválido. Confira ou deixe em branco.'
 );
 
-export const dataDeNascimentoSchema = opcional()
-	.refine((v) => v === null || ehData(v), 'Data inválida.')
-	.refine((v) => {
-		if (v === null) return true;
-		const data = new Date(`${v}T00:00:00Z`);
-		if (Number.isNaN(data.getTime())) return false;
-		const hoje = new Date();
-		return data <= hoje && data >= new Date('1900-01-02T00:00:00Z');
-	}, 'Data de nascimento fora do intervalo possível.');
+/** Data passada, de 1900 para cá — nascimento, entrada na comunidade. */
+function dataPassadaSchema(mensagem: string) {
+	return opcional()
+		.refine((v) => v === null || ehData(v), 'Data inválida.')
+		.refine((v) => {
+			if (v === null) return true;
+			const data = new Date(`${v}T00:00:00Z`);
+			if (Number.isNaN(data.getTime())) return false;
+			const hoje = new Date();
+			return data <= hoje && data >= new Date('1900-01-02T00:00:00Z');
+		}, mensagem);
+}
+
+export const dataDeNascimentoSchema = dataPassadaSchema(
+	'Data de nascimento fora do intervalo possível.'
+);
 
 export const situacaoDeRelacionamentoSchema = opcional().refine(
 	(v) => v === null || SITUACOES_DE_RELACIONAMENTO.some((s) => s.valor === v),
@@ -81,7 +88,9 @@ export const criarPessoaSchema = z.object({
 	whatsapp: telefoneSchema,
 	email: emailSchema,
 	relationshipStatus: situacaoDeRelacionamentoSchema,
-	joinedAt: dataDeNascimentoSchema,
+	// Antes reaproveitava o schema do nascimento — e o erro falava em "data de
+	// nascimento" no campo da data de entrada (revisão de 17/10/2026).
+	joinedAt: dataPassadaSchema('A data de entrada não pode ser no futuro nem antes de 1900.'),
 	notes: opcional(),
 	statusId: opcional()
 });

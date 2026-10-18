@@ -46,6 +46,7 @@ import {
 	diaDaSemana,
 	hojeNoFuso,
 	horaNoFuso,
+	instanteLocal,
 	somarDias
 } from '../../src/lib/shared/fuso';
 
@@ -625,6 +626,65 @@ describe('evento de vários dias (varredura de 11/10/2026)', () => {
 		const [e] = await ctx.db.select().from(event).where(eq(event.id, id));
 		expect(dataNoFuso(e!.endsAt!, FUSO)).toBe(somarDias(sabado, 1));
 	});
+
+	it('continua em "próximos" enquanto acontece — não some no segundo dia (revisão)', async () => {
+		const sexta = proxima(5, 10);
+		const id = await novo(
+			lider,
+			{
+				titulo: 'Retiro em andamento',
+				data: sexta,
+				dataFim: somarDias(sexta, 2),
+				horaInicio: '09:00',
+				horaFim: '17:00'
+			},
+			[{ tipo: 'equipe' }]
+		);
+		const ids = async (agora: Date) =>
+			(await proximosEventos(ctx.db, lider, { limite: 100, agora })).map((e) => e.id);
+
+		expect(await ids(instanteLocal(somarDias(sexta, 1), '12:00', FUSO))).toContain(id);
+		expect(await ids(instanteLocal(somarDias(sexta, 2), '16:00', FUSO))).toContain(id);
+		// Terminou no domingo às 17h: na segunda, já não é "próximo".
+		expect(await ids(instanteLocal(somarDias(sexta, 3), '12:00', FUSO))).not.toContain(id);
+	});
+
+	it('"das 22h à 0h" é aceito sem data de fim — e editar não o desloca (revisão)', async () => {
+		const sexta = proxima(5, 10);
+		const id = await novo(lider, { data: sexta, horaInicio: '22:00', horaFim: '00:00' }, [
+			{ tipo: 'equipe' }
+		]);
+		const fimEsperado = instanteLocal(somarDias(sexta, 1), '00:00', FUSO);
+		const [criado] = await ctx.db.select().from(event).where(eq(event.id, id));
+		expect(criado!.endsAt).toEqual(fimEsperado);
+
+		const v = await verEvento(ctx.db, lider, id);
+		await editarEvento(
+			ctx.db,
+			lider,
+			id,
+			ocorrenciaSchema.parse({
+				titulo: 'Noite de louvor',
+				data: sexta,
+				horaInicio: '22:00',
+				horaFim: v!.horaFim
+			}),
+			[{ tipo: 'equipe' }]
+		);
+		const [editado] = await ctx.db.select().from(event).where(eq(event.id, id));
+		expect(editado!.endsAt).toEqual(fimEsperado);
+	});
+
+	it('encontro semanal até a meia-noite também (revisão)', async () => {
+		const { id } = await criarEvento(
+			ctx.db,
+			lider,
+			dados({ recorrencia: 'semanal', data: proxima(3), horaInicio: '20:00', horaFim: '00:00' }),
+			[{ tipo: 'equipe' }]
+		);
+		const [serie] = await ctx.db.select().from(eventSeries).where(eq(eventSeries.id, id));
+		expect(serie!.durationMinutes).toBe(240);
+	});
 });
 
 describe('link público', () => {
@@ -674,6 +734,23 @@ describe('link público', () => {
 		expect(texto).toBe(
 			'*PG Azul*\nQuinta, 15/10 às 20h\n📍 Casa do Pedro\n\nMais informações: https://eagles.app/e/abcdefghij'
 		);
+	});
+
+	it('texto do WhatsApp com o fim: a mesma redação da página do evento (revisão)', () => {
+		const link = 'https://eagles.app/e/abcdefghij';
+		const base = { titulo: 'Retiro', local: null, cancelado: false };
+		expect(
+			textoDoEvento(
+				{ ...base, data: '2026-10-16', hora: '19:00', dataFim: '2026-10-18', horaFim: '17:00' },
+				link
+			)
+		).toContain('Sexta, 16/10 às 19h — até domingo, 18 de outubro, 17h');
+		expect(
+			textoDoEvento(
+				{ ...base, data: '2026-10-15', hora: '20:00', dataFim: '2026-10-15', horaFim: '22:00' },
+				link
+			)
+		).toContain('Quinta, 15/10 das 20h às 22h');
 	});
 
 	it('os códigos são todos diferentes', async () => {

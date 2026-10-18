@@ -12,12 +12,18 @@ import { criarBancoDeTeste, criarGrupo, type BancoDeTeste } from './helpers/banc
 import {
 	auditLog,
 	groupMembership,
+	invite,
 	person,
 	personRole,
 	rolePermission,
+	session,
+	smallGroup,
+	team,
 	userAccount
 } from '../../src/lib/server/db/schema';
 import { aceitarConvite } from '../../src/lib/server/auth/conta';
+import { issueInvite, lookupInvite } from '../../src/lib/server/auth/invite';
+import { createSession, validateSession } from '../../src/lib/server/auth/session';
 import { loadActor } from '../../src/lib/server/policy/actor';
 import { can, PolicyDenied, type Actor } from '../../src/lib/server/policy/policy';
 import { hashPassword } from '../../src/lib/server/auth/password';
@@ -34,8 +40,12 @@ import {
 	atribuirPapel,
 	removerAtribuicao
 } from '../../src/lib/server/modules/rbac/atribuicoes';
-import { emitirConvite } from '../../src/lib/server/modules/rbac/convites';
-import { removerPessoa } from '../../src/lib/server/modules/pessoas/pessoas';
+import {
+	abrirConvite,
+	aceitarConviteDeAcesso,
+	emitirConvite
+} from '../../src/lib/server/modules/rbac/convites';
+import { PessoaNaoEncontrada, removerPessoa } from '../../src/lib/server/modules/pessoas/pessoas';
 import { contarAdministradoresAtivos } from '../../src/lib/server/modules/rbac/administradores';
 import { AcessoRecusado } from '../../src/lib/server/modules/rbac/regras';
 import { ROLE_SEEDS } from '../../src/lib/server/policy/roles';
@@ -494,6 +504,105 @@ describe('remover pessoa (varredura de 11/10/2026)', () => {
 		expect(await atribuicoesDe(ctx.db, outroLider)).toEqual([]);
 	});
 
+	it('quem sai do cadastro sai do app: sessões encerradas, convite cancelado (revisão)', async () => {
+		const alvo = await pessoa('membro');
+		const [conta] = await ctx.db.select().from(userAccount).where(eq(userAccount.personId, alvo));
+		const { token: cookie } = await createSession(ctx.db, conta!.id);
+		const { token: link } = await issueInvite(ctx.db, {
+			teamId: ctx.teamId,
+			personId: alvo,
+			createdByPersonId: lider.personId
+		});
+
+		await removerPessoa(ctx.db, lider, alvo);
+
+		expect(await validateSession(ctx.db, cookie)).toBeNull();
+		const sessoes = await ctx.db.select().from(session).where(eq(session.accountId, conta!.id));
+		expect(sessoes.every((s) => s.revokedAt !== null)).toBe(true);
+		expect(await lookupInvite(ctx.db, link)).toEqual({ ok: false, reason: 'revogado' });
+
+		const [registro] = await ctx.db
+			.select()
+			.from(auditLog)
+			.where(and(eq(auditLog.action, 'person.removida'), eq(auditLog.entityId, alvo)));
+		expect(registro?.after).toMatchObject({ sessoesEncerradas: 1, convitesCancelados: 1 });
+	});
+
+	it('a sessão de quem já não está no cadastro não vale, mesmo sem ter sido encerrada', async () => {
+		const alvo = await pessoa('membro');
+		const [conta] = await ctx.db.select().from(userAccount).where(eq(userAccount.personId, alvo));
+		const { token } = await createSession(ctx.db, conta!.id);
+		await ctx.db.update(person).set({ deletedAt: new Date() }).where(eq(person.id, alvo));
+
+		expect(await validateSession(ctx.db, token)).toBeNull();
+		// E o convite emitido por fora do serviço também não abre.
+		const { token: link } = await issueInvite(ctx.db, {
+			teamId: ctx.teamId,
+			personId: alvo,
+			createdByPersonId: lider.personId
+		});
+		expect(await lookupInvite(ctx.db, link)).toEqual({ ok: false, reason: 'revogado' });
+	});
+
+	it('remover duas vezes não reescreve a data da remoção nem duplica a auditoria', async () => {
+		const alvo = await pessoa('membro');
+		await removerPessoa(ctx.db, lider, alvo);
+		const [primeira] = await ctx.db.select().from(person).where(eq(person.id, alvo));
+
+		await expect(removerPessoa(ctx.db, lider, alvo)).rejects.toBeInstanceOf(PessoaNaoEncontrada);
+
+		const [depois] = await ctx.db.select().from(person).where(eq(person.id, alvo));
+		expect(depois!.deletedAt).toEqual(primeira!.deletedAt);
+		const registros = await ctx.db
+			.select()
+			.from(auditLog)
+			.where(and(eq(auditLog.action, 'person.removida'), eq(auditLog.entityId, alvo)));
+		expect(registros).toHaveLength(1);
+	});
+
+	it('pessoa de OUTRA equipe: nada muda lá — nem grupo, nem papel', async () => {
+		const [outra] = await ctx.db
+			.insert(team)
+			.values({ slug: 'outra-equipe', name: 'Outra Equipe' })
+			.returning({ id: team.id });
+		const [deLa] = await ctx.db
+			.insert(person)
+			.values({ teamId: outra!.id, fullName: 'Pessoa De Outra Equipe' })
+			.returning({ id: person.id });
+		const [grupoDeLa] = await ctx.db
+			.insert(smallGroup)
+			.values({ teamId: outra!.id, name: 'PG de Lá' })
+			.returning({ id: smallGroup.id });
+		await ctx.db.insert(groupMembership).values({ groupId: grupoDeLa!.id, personId: deLa!.id });
+		await ctx.db
+			.insert(personRole)
+			.values({ personId: deLa!.id, roleId: ctx.papeis.membro!, scopeType: 'self' });
+
+		await expect(removerPessoa(ctx.db, lider, deLa!.id)).rejects.toBeInstanceOf(
+			PessoaNaoEncontrada
+		);
+
+		const [vinculo] = await ctx.db
+			.select()
+			.from(groupMembership)
+			.where(eq(groupMembership.personId, deLa!.id));
+		expect(vinculo!.leftAt, 'o grupo da outra equipe continua').toBeNull();
+		expect(
+			await ctx.db.select().from(personRole).where(eq(personRole.personId, deLa!.id))
+		).toHaveLength(1);
+	});
+
+	it('remover o próprio cadastro é recusado com explicação, não erro genérico', async () => {
+		const r = await recusa(removerPessoa(ctx.db, lider, lider.personId));
+		expect(r.motivo).toBe('propria_conta');
+	});
+
+	it('id malformado não chega ao banco', async () => {
+		await expect(removerPessoa(ctx.db, lider, 'nao-e-um-id')).rejects.toBeInstanceOf(
+			PessoaNaoEncontrada
+		);
+	});
+
 	it('papel com person.delete não remove o único administrador ativo', async () => {
 		// Banco próprio: o principal tem vários líderes de outros testes.
 		const isolado = await criarBancoDeTeste();
@@ -627,5 +736,111 @@ describe('trava 5: convite não é atalho para poder (varredura de 11/10/2026)',
 			identificador: 'desativada@eagles.test'
 		});
 		expect(aceite.ok).toBe(false);
+	});
+});
+
+describe('trava 5 no aceite: o link vale enquanto quem emitiu ainda poderia emitir (revisão de 17/10/2026)', () => {
+	// O ataque: guardar o link de um membro comum e esperar a promoção dele.
+	let grupo: string;
+	let conselheiro: Actor;
+
+	beforeAll(async () => {
+		grupo = await criarGrupo(ctx, 'PG do Aceite');
+		conselheiro = await ator(await pessoa('conselheiro', { escopoGrupo: grupo }));
+	});
+
+	async function membroDoPg(opcoes: { conta?: boolean } = {}) {
+		const id = await pessoa('membro', opcoes);
+		await ctx.db.insert(groupMembership).values({ groupId: grupo, personId: id });
+		return id;
+	}
+
+	const tokenDe = (c: { url: string }) => c.url.split('/').pop()!;
+
+	async function promoverALider(personId: string) {
+		await ctx.db
+			.insert(personRole)
+			.values({ personId, roleId: ctx.papeis.lider!, scopeType: 'global' });
+	}
+
+	const aceitar = (token: string, identificador: string) =>
+		aceitarConviteDeAcesso(ctx.db, {
+			token,
+			senha: 'uma senha nova bem comprida',
+			identificador
+		});
+
+	it('o caso de todo dia continua: o convite do conselheiro abre e é aceito', async () => {
+		const alvo = await membroDoPg({ conta: false });
+		const token = tokenDe(await emitirConvite(ctx.db, conselheiro, alvo, SEM_REAUTH));
+
+		expect(await abrirConvite(ctx.db, token)).toMatchObject({ ok: true, personId: alvo });
+		expect(await aceitar(token, 'aceite.normal@eagles.test')).toMatchObject({ ok: true });
+	});
+
+	it('primeiro acesso guardado até a promoção: não abre, não cria conta, e é cancelado', async () => {
+		const alvo = await membroDoPg({ conta: false });
+		const token = tokenDe(await emitirConvite(ctx.db, conselheiro, alvo, SEM_REAUTH));
+		await promoverALider(alvo);
+
+		expect(await abrirConvite(ctx.db, token)).toEqual({ ok: false, reason: 'revogado' });
+		expect(await aceitar(token, 'tomada.de.conta@eagles.test')).toMatchObject({ ok: false });
+
+		const contas = await ctx.db.select().from(userAccount).where(eq(userAccount.personId, alvo));
+		expect(contas, 'nenhuma conta nasceu do link velho').toHaveLength(0);
+		const [convite] = await ctx.db.select().from(invite).where(eq(invite.personId, alvo));
+		expect(convite!.revokedAt, 'o link morreu de vez').not.toBeNull();
+		expect(convite!.usedAt).toBeNull();
+
+		const [registro] = await ctx.db
+			.select()
+			.from(auditLog)
+			.where(and(eq(auditLog.action, 'invite.revogado'), eq(auditLog.entityId, alvo)));
+		expect(registro?.after).toMatchObject({ motivo: 'emissor_sem_alcance' });
+
+		// Quem administra os acessos emite um novo, e ele vale.
+		const novo = tokenDe(await emitirConvite(ctx.db, lider, alvo, COM_REAUTH));
+		expect(await aceitar(novo, 'promovido@eagles.test')).toMatchObject({ ok: true });
+	});
+
+	it('recuperação guardada até a promoção: a senha do agora líder não muda', async () => {
+		const alvo = await membroDoPg();
+		const token = tokenDe(await emitirConvite(ctx.db, conselheiro, alvo, COM_REAUTH));
+		const [antes] = await ctx.db.select().from(userAccount).where(eq(userAccount.personId, alvo));
+		await promoverALider(alvo);
+
+		expect(await aceitar(token, 'outro.dono@eagles.test')).toMatchObject({ ok: false });
+		const [depois] = await ctx.db.select().from(userAccount).where(eq(userAccount.personId, alvo));
+		expect(depois!.passwordHash).toBe(antes!.passwordHash);
+		expect(depois!.email).toBe(antes!.email);
+	});
+
+	it('quem perdeu o papel não deixa link vivo', async () => {
+		const exConselheiroId = await pessoa('conselheiro', { escopoGrupo: grupo });
+		const alvo = await membroDoPg({ conta: false });
+		const token = tokenDe(
+			await emitirConvite(ctx.db, await ator(exConselheiroId), alvo, SEM_REAUTH)
+		);
+		await ctx.db.delete(personRole).where(eq(personRole.personId, exConselheiroId));
+
+		expect(await abrirConvite(ctx.db, token)).toEqual({ ok: false, reason: 'revogado' });
+	});
+
+	it('nem quem saiu do cadastro', async () => {
+		const emissorId = await pessoa('conselheiro', { escopoGrupo: grupo });
+		const alvo = await membroDoPg({ conta: false });
+		const token = tokenDe(await emitirConvite(ctx.db, await ator(emissorId), alvo, SEM_REAUTH));
+		await removerPessoa(ctx.db, lider, emissorId);
+
+		expect(await abrirConvite(ctx.db, token)).toEqual({ ok: false, reason: 'revogado' });
+	});
+
+	it('menor de idade descoberto depois do convite não recebe conta (ADR 0004)', async () => {
+		const alvo = await pessoa('membro', { conta: false });
+		const token = tokenDe(await emitirConvite(ctx.db, lider, alvo, SEM_REAUTH));
+		const quinzeAnos = `${new Date().getFullYear() - 15}-01-01`;
+		await ctx.db.update(person).set({ birthDate: quinzeAnos }).where(eq(person.id, alvo));
+
+		expect(await abrirConvite(ctx.db, token)).toEqual({ ok: false, reason: 'revogado' });
 	});
 });

@@ -1,7 +1,7 @@
-import { and, eq, gt, isNull, lt, ne, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, lt, ne, or } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
 import type { Database } from '../db';
-import { session, userAccount } from '../db/schema';
+import { person, session, userAccount } from '../db/schema';
 import { env } from '../env';
 import { generateToken, hashToken } from './token';
 import { REAUTH_WINDOW_MINUTES } from '$shared/sessao';
@@ -54,6 +54,11 @@ export async function createSession(
  * Resolve o token do cookie numa sessão válida.
  * Devolve `null` para token inexistente, expirado ou revogado — sem distinguir
  * os casos, para não informar um atacante sobre qual token já existiu.
+ *
+ * Conta desativada e pessoa removida também não têm sessão. Antes, a sessão
+ * de quem saiu do cadastro continuava "válida" e só não autorizava nada
+ * porque `loadActor` devolvia nulo — por acaso, não por regra (revisão de
+ * 17/10/2026).
  */
 export async function validateSession(
 	db: Database,
@@ -65,12 +70,14 @@ export async function validateSession(
 		.select({ sessao: session, conta: userAccount })
 		.from(session)
 		.innerJoin(userAccount, eq(session.accountId, userAccount.id))
+		.innerJoin(person, eq(person.id, userAccount.personId))
 		.where(
 			and(
 				eq(session.tokenHash, hashToken(token)),
 				isNull(session.revokedAt),
 				gt(session.expiresAt, new Date()),
-				isNull(userAccount.disabledAt)
+				isNull(userAccount.disabledAt),
+				isNull(person.deletedAt)
 			)
 		)
 		.limit(1);
@@ -90,6 +97,27 @@ export async function revokeSession(db: Database, sessionId: string): Promise<vo
 		.update(session)
 		.set({ revokedAt: new Date() })
 		.where(and(eq(session.id, sessionId), isNull(session.revokedAt)));
+}
+
+/** Encerra todas as sessões abertas da pessoa, em qualquer aparelho. Devolve quantas. */
+export async function revogarSessoesDaPessoa(db: Database, personId: string): Promise<number> {
+	const revogadas = await db
+		.update(session)
+		.set({ revokedAt: new Date() })
+		.where(
+			and(
+				isNull(session.revokedAt),
+				inArray(
+					session.accountId,
+					db
+						.select({ id: userAccount.id })
+						.from(userAccount)
+						.where(eq(userAccount.personId, personId))
+				)
+			)
+		)
+		.returning({ id: session.id });
+	return revogadas.length;
 }
 
 /** Encerra todas as outras sessões da conta. Mantém a atual. */

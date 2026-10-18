@@ -3,6 +3,7 @@
 - **Data:** 11/10/2026, depois do fechamento do MVP
 - **Escopo:** todo o código de `src/`, a semente e `infra/` (deploy, backup, restauração)
 - **Resultado:** 32 defeitos corrigidos — 1 crítico de segurança, 1 crítico de deploy —, cada um com teste que o reproduz
+- **Revisada em 17/10/2026:** [`revisao-2026-10-17.md`](revisao-2026-10-17.md) — o que esta varredura deixou passar. As linhas abaixo ficam como estavam; o que mudou desde então está no fim
 
 ---
 
@@ -79,3 +80,14 @@ Uma regra para formato de id (eram quatro cópias), uma para idade (duas), uma p
 Pilha de produção, rodando: Caddy válido → Postgres → 12 migrações → app saudável; login por HTTPS com cookie `Secure; HttpOnly; SameSite=Lax`; POST de outra origem recusado; **~105 MB de memória em repouso** (app ~50, Postgres ~42, Caddy ~15). Backup cifrado, retenção, ensaio, recusa de sobrescrever e limpeza do ensaio com falha — todos exercitados.
 
 Não validados aqui, por limite do ambiente de teste: o build da imagem de backup (repositório do Alpine bloqueado pelo proxy do ambiente), o certificado real do Let's Encrypt e o envio ao B2 — os três primeiros itens a conferir na VPS. Ver `infra/README.md`.
+
+---
+
+## O que a revisão de 17/10/2026 mudou aqui
+
+- **S1:** a trava 5 também vale no **aceite** — conferida só na emissão, bastava guardar o link até a promoção de quem foi convidado.
+- **S5:** **desfazer** o vínculo também confere os dois lados.
+- **S6:** remover a pessoa também encerra as sessões e cancela os convites dela, e não toca em nada fora da equipe.
+- **D1:** o evento de vários dias continua no início enquanto acontece; "das 22h às 0h" é aceito e exibido como fim do mesmo dia.
+- **D6:** a busca do "formato antigo" (com o 55) saiu — era ambígua e nunca houve deploy. O telefone de entrada tem uma forma só, conferida pelo banco (migração 0012).
+- **I1:** sem o `rate_limit`, os cabeçalhos do Caddy passaram a ser só o padrão: antes, sobrescreviam os do app.
