@@ -27,8 +27,7 @@ export const PUT = async ({ request, params, locals }) => {
 	}
 
 	const podeGerenciar =
-		can(actor, 'announcement.create') ||
-		groupsWhere(actor, 'announcement.create').length > 0;
+		can(actor, 'announcement.create') || groupsWhere(actor, 'announcement.create').length > 0;
 	if (!podeGerenciar) {
 		return json({ erro: 'Sem permissão para editar modelos.' }, { status: 403 });
 	}
@@ -88,8 +87,7 @@ export const DELETE = async ({ request, params, locals }) => {
 	}
 
 	const podeGerenciar =
-		can(actor, 'announcement.create') ||
-		groupsWhere(actor, 'announcement.create').length > 0;
+		can(actor, 'announcement.create') || groupsWhere(actor, 'announcement.create').length > 0;
 	if (!podeGerenciar) {
 		return json({ erro: 'Sem permissão para desativar modelos.' }, { status: 403 });
 	}

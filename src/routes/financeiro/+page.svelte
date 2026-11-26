@@ -99,7 +99,10 @@
 	}
 
 	function parseReaisParaCentavos(texto: string): number | null {
-		const limpo = texto.trim().replace(/^R\$\s*/i, '').replace(/\s+/g, '');
+		const limpo = texto
+			.trim()
+			.replace(/^R\$\s*/i, '')
+			.replace(/\s+/g, '');
 		if (!limpo) return null;
 		const norm = limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : limpo;
 		if (!/^\d+(\.\d{1,2})?$/.test(norm)) return null;
@@ -452,7 +455,11 @@
 			</div>
 
 			<div class="filtros">
-				<select aria-label="Filtrar por tipo" bind:value={filtroTipo} onchange={carregarMovimentacoes}>
+				<select
+					aria-label="Filtrar por tipo"
+					bind:value={filtroTipo}
+					onchange={carregarMovimentacoes}
+				>
 					<option value="">Entradas e saídas</option>
 					<option value="entrada">Somente entradas</option>
 					<option value="saida">Somente saídas</option>
@@ -515,13 +522,19 @@
 									<strong>{m.description}</strong>
 									<span class="meta">
 										{new Date(m.occurredAt).toLocaleDateString('pt-BR')} ·
-										{METODO_ROTULO[m.paymentMethod] ?? m.paymentMethod} ·
-										Resp.: {m.responsibleName}
-										{#if m.groupName} · {m.groupName}{/if}
-										{#if m.eventTitle} · {m.eventTitle}{/if}
+										{METODO_ROTULO[m.paymentMethod] ?? m.paymentMethod} · Resp.: {m.responsibleName}
+										{#if m.groupName}
+											· {m.groupName}{/if}
+										{#if m.eventTitle}
+											· {m.eventTitle}{/if}
 									</span>
 									{#if m.receiptUrl}
-										<a href={m.receiptUrl} target="_blank" rel="noopener noreferrer" class="link-comp">
+										<a
+											href={m.receiptUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="link-comp"
+										>
 											Ver comprovante
 										</a>
 									{/if}
@@ -564,7 +577,8 @@
 									}}
 								>
 									<p class="aviso-imutavel">
-										O lançamento original permanece no histórico e um estorno equivalente será criado.
+										O lançamento original permanece no histórico e um estorno equivalente será
+										criado.
 									</p>
 									<Campo
 										id={`motivo-${m.id}`}
@@ -576,9 +590,7 @@
 										<Botao tipo="submit" variante="destrutivo" carregando={salvandoEstorno}>
 											Confirmar estorno
 										</Botao>
-										<Botao variante="texto" onclick={() => (estornandoId = null)}>
-											Cancelar
-										</Botao>
+										<Botao variante="texto" onclick={() => (estornandoId = null)}>Cancelar</Botao>
 									</div>
 								</form>
 							{/if}
@@ -693,7 +705,8 @@
 									<strong>{c.name}</strong>
 									<span class="meta">
 										{c.kind === 'entrada' ? 'Entrada' : 'Saída'} · #{c.slug}
-										{#if c.isDonation} · Doação (sem mínimo){/if}
+										{#if c.isDonation}
+											· Doação (sem mínimo){/if}
 									</span>
 								</div>
 							</div>
@@ -711,7 +724,12 @@
 						}}
 					>
 						<Campo id="cat-nome" rotulo="Nome" bind:valor={novaCatNome} obrigatorio />
-						<Campo id="cat-slug" rotulo="Identificador (slug)" bind:valor={novaCatSlug} obrigatorio />
+						<Campo
+							id="cat-slug"
+							rotulo="Identificador (slug)"
+							bind:valor={novaCatSlug}
+							obrigatorio
+						/>
 						<div class="campo-select">
 							<label for="cat-kind">Tipo</label>
 							<select id="cat-kind" bind:value={novaCatKind}>
@@ -725,9 +743,7 @@
 								<span>É doação (nunca exige valor mínimo)</span>
 							</label>
 						{/if}
-						<Botao tipo="submit" largura="cheia" carregando={salvandoCat}>
-							Criar categoria
-						</Botao>
+						<Botao tipo="submit" largura="cheia" carregando={salvandoCat}>Criar categoria</Botao>
 					</form>
 				</section>
 
@@ -741,7 +757,8 @@
 										<strong>{r.categoryName}</strong>
 										<span class="meta">
 											Mínimo: {formatarCentavos(r.minAmountCents)} ({r.period})
-											{#if r.roleKey} · Papel: {r.roleKey}{/if}
+											{#if r.roleKey}
+												· Papel: {r.roleKey}{/if}
 										</span>
 									</li>
 								{/each}
@@ -779,9 +796,7 @@
 									obrigatorio
 								/>
 							</div>
-							<Botao tipo="submit" largura="cheia" carregando={salvandoRegra}>
-								Salvar regra
-							</Botao>
+							<Botao tipo="submit" largura="cheia" carregando={salvandoRegra}>Salvar regra</Botao>
 						</form>
 					</section>
 				{/if}

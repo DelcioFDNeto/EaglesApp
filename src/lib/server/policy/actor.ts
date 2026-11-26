@@ -1,8 +1,9 @@
 import { and, eq, gt, isNull, or } from 'drizzle-orm';
 import type { Database } from '../db';
 import { person, personRole, role, rolePermission } from '../db/schema';
-import { isPermission, type Permission, type ScopeType } from './permissions';
+import { ALL_PERMISSIONS, isPermission, type Permission, type ScopeType } from './permissions';
 import type { Actor, RoleAssignment } from './policy';
+import { PAPEL_MASTER } from './roles';
 
 /**
  * Monta o Actor a partir do banco: papéis da pessoa, cada um com seu escopo e
@@ -63,6 +64,14 @@ export async function loadActor(db: Database, personId: string): Promise<Actor |
 		// o banco pode ter uma linha antiga de uma permissão já removida do código.
 		if (linha.permissionKey && isPermission(linha.permissionKey)) {
 			(atribuicao.permissions as Set<Permission>).add(linha.permissionKey);
+		}
+	}
+
+	// Master tem o catálogo inteiro, sempre — inclusive permissões criadas
+	// depois da semeadura. Não depende das linhas de role_permission.
+	for (const atribuicao of porAtribuicao.values()) {
+		if (atribuicao.roleKey === PAPEL_MASTER && atribuicao.scopeType === 'global') {
+			atribuicao.permissions = new Set<Permission>(ALL_PERMISSIONS);
 		}
 	}
 

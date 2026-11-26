@@ -53,11 +53,17 @@ export const POST = async ({ request, params, locals }) => {
 	}
 
 	if (!can(actor, 'finance.reverse', { groupId: original.groupId })) {
-		return json({ erro: 'Apenas pessoas autorizadas podem estornar lançamentos.' }, { status: 403 });
+		return json(
+			{ erro: 'Apenas pessoas autorizadas podem estornar lançamentos.' },
+			{ status: 403 }
+		);
 	}
 
 	if (original.status !== 'confirmada') {
-		return json({ erro: 'Apenas movimentações confirmadas podem ser estornadas.' }, { status: 400 });
+		return json(
+			{ erro: 'Apenas movimentações confirmadas podem ser estornadas.' },
+			{ status: 400 }
+		);
 	}
 
 	if (original.reversesTransactionId) {

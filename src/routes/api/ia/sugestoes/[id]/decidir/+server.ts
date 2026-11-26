@@ -66,10 +66,7 @@ export const POST = async ({ request, params, locals }) => {
 	}
 
 	if (sugestao.expiresAt && sugestao.expiresAt < new Date()) {
-		await banco
-			.update(aiSuggestion)
-			.set({ status: 'expirada' })
-			.where(eq(aiSuggestion.id, id));
+		await banco.update(aiSuggestion).set({ status: 'expirada' }).where(eq(aiSuggestion.id, id));
 		return json({ erro: 'Esta sugestão expirou. Gere uma nova proposta.' }, { status: 400 });
 	}
 
@@ -91,10 +88,7 @@ export const POST = async ({ request, params, locals }) => {
 		if (!can(actor, 'ai.use_analytics') && groupsWhere(actor, 'ai.use_analytics').length === 0) {
 			return json({ erro: 'Sem permissão para esta análise.' }, { status: 403 });
 		}
-	} else if (
-		sugestao.requestedByPersonId !== actor.personId &&
-		!can(actor, 'ai.use_analytics')
-	) {
+	} else if (sugestao.requestedByPersonId !== actor.personId && !can(actor, 'ai.use_analytics')) {
 		return json({ erro: 'Sem permissão para decidir esta sugestão.' }, { status: 403 });
 	}
 
@@ -162,9 +156,6 @@ export const POST = async ({ request, params, locals }) => {
 	return json({
 		ok: true,
 		sugestao: atualizada,
-		mensagem:
-			decisao === 'aceitar'
-				? 'Sugestão confirmada com sucesso.'
-				: 'Sugestão descartada.'
+		mensagem: decisao === 'aceitar' ? 'Sugestão confirmada com sucesso.' : 'Sugestão descartada.'
 	});
 };

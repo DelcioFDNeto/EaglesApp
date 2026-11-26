@@ -9,6 +9,7 @@ import { createSession } from '$server/auth/session';
 import { checkRateLimit, RULES } from '$server/auth/ratelimit';
 import { audit } from '$server/audit/log';
 import { gerarToken } from '$lib/server/auth/jwt';
+import { formatarTelefone } from '$shared/telefone';
 
 /**
  * Aceite de convite — a porta de entrada de todo usuário (ADR 0004).
@@ -42,13 +43,28 @@ export const GET = async ({ params, getClientAddress }) => {
 		return json({ estado: 'bloqueado', mensagem: MENSAGEM_BLOQUEIO }, { status: 429 });
 	}
 
-	const resultado = await lookupInvite(db(), params.token);
+	const banco = db();
+	const resultado = await lookupInvite(banco, params.token);
 
 	if (!resultado.ok) {
 		return json({ estado: 'invalido', mensagem: INVITE_REASON_MESSAGE[resultado.reason] });
 	}
 
-	return json({ estado: 'valido', nome: resultado.fullName });
+	// Com o que a pessoa vai entrar depois de criar a senha. É o contato dela
+	// mesma, e quem tem o link é ela: mostrar evita o "e agora, qual é meu login?".
+	const [conta] = await banco
+		.select({ email: userAccount.email, telefone: userAccount.phone })
+		.from(userAccount)
+		.where(eq(userAccount.personId, resultado.personId))
+		.limit(1);
+
+	const login = conta?.telefone
+		? { tipo: 'telefone', valor: formatarTelefone(conta.telefone) }
+		: conta?.email
+			? { tipo: 'email', valor: conta.email }
+			: null;
+
+	return json({ estado: 'valido', nome: resultado.fullName, login });
 };
 
 export const POST = async ({ params, request, getClientAddress }) => {
@@ -150,11 +166,10 @@ export const POST = async ({ params, request, getClientAddress }) => {
 		userAgent
 	});
 
-	const token = gerarToken({
-		personId: convite.personId,
-		email: email ?? undefined,
-		sessionId: record.id
-	});
+	const token = gerarToken(
+		{ personId: convite.personId, email: email ?? undefined, sessionId: record.id },
+		record.expiresAt
+	);
 
 	return json({ token, pessoa: { id: convite.personId, email } }, { status: 201 });
 };

@@ -13,6 +13,12 @@ import {
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 import { isPermission, PERMISSIONS } from '$server/policy/permissions';
+import {
+	PAPEIS_RESERVADOS,
+	PAPEL_MASTER,
+	PERMISSAO_RESERVADA_A_LIDERES
+} from '$server/policy/roles';
+import { ehMaster, naoEhMaster } from '$server/lideranca/regras';
 
 const criarPapelSchema = z.object({
 	key: z
@@ -42,11 +48,12 @@ export const GET = async ({ request, locals }) => {
 		return json({ erro: 'Sem permissão para gerenciar papéis e permissões.' }, { status: 403 });
 	}
 
-	const papeis = await banco
-		.select()
-		.from(role)
-		.where(eq(role.teamId, actor.teamId))
-		.orderBy(asc(role.name));
+	// O Master é invisível para a equipe: nem o papel nem quem o tem aparecem.
+	const veMaster = ehMaster(actor);
+
+	const papeis = (
+		await banco.select().from(role).where(eq(role.teamId, actor.teamId)).orderBy(asc(role.name))
+	).filter((r) => veMaster || r.key !== PAPEL_MASTER);
 
 	const permsLinhas = await banco
 		.select({
@@ -81,7 +88,7 @@ export const GET = async ({ request, locals }) => {
 		.innerJoin(personTable, eq(personTable.id, personRole.personId))
 		.innerJoin(role, eq(role.id, personRole.roleId))
 		.leftJoin(groupTable, eq(groupTable.id, personRole.scopeId))
-		.where(eq(role.teamId, actor.teamId))
+		.where(and(eq(role.teamId, actor.teamId), veMaster ? undefined : naoEhMaster(personTable.id)))
 		.orderBy(asc(personTable.fullName), asc(role.name));
 
 	return json({
@@ -95,6 +102,8 @@ export const GET = async ({ request, locals }) => {
 			name: r.name,
 			description: r.description,
 			isSystem: r.isSystem,
+			// Líder e Master não são atribuídos nem editados pela gestão comum.
+			reservado: PAPEIS_RESERVADOS.includes(r.key),
 			permissions: (mapaPerms.get(r.id) ?? []).sort()
 		})),
 		atribuicoes
@@ -135,6 +144,20 @@ export const POST = async ({ request, locals }) => {
 	const invalidas = dados.permissions.filter((p) => !isPermission(p));
 	if (invalidas.length > 0) {
 		return json({ erro: `Permissões inválidas: ${invalidas.join(', ')}` }, { status: 400 });
+	}
+
+	if (dados.permissions.includes(PERMISSAO_RESERVADA_A_LIDERES)) {
+		return json(
+			{
+				erro: 'Gerenciar papéis e permissões é exclusivo dos líderes.',
+				codigo: 'permissao_reservada'
+			},
+			{ status: 400 }
+		);
+	}
+
+	if (PAPEIS_RESERVADOS.includes(dados.key)) {
+		return json({ erro: 'Já existe um papel com esta chave.' }, { status: 400 });
 	}
 
 	const [existe] = await banco

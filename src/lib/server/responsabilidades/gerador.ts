@@ -108,8 +108,7 @@ export function gerarPropostaDeEscala(params: {
 			const ultResp = ultimaPorResp.get(chave) ?? null;
 			const diasDesdeResp =
 				ultResp === null ? Infinity : Math.floor((dataEvento.getTime() - ultResp) / MS_POR_DIA);
-			const respeitaIntervalo =
-				ultResp === null || dataEvento.getTime() - ultResp >= intervaloMs;
+			const respeitaIntervalo = ultResp === null || dataEvento.getTime() - ultResp >= intervaloMs;
 			const carga = carga90Dias.get(c.personId) ?? 0;
 			const ultQualquer = ultimaGeral.get(c.personId) ?? -Infinity;
 

@@ -8,11 +8,14 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { criarBancoDeTeste, type BancoDeTeste } from './helpers/banco';
 import { setTestDatabase } from '../../src/lib/server/db';
+import { minutosDeBloqueio } from '../../src/lib/server/auth/bloqueio';
 import {
+	auditLog,
 	cadastroPendente,
+	session as sessionTable,
 	person as personTable,
 	personRole as personRoleTable,
 	senhaReset,
@@ -163,6 +166,100 @@ describe('M01 — autenticação via API (JWT + sessão no banco)', () => {
 			// Logout sem token é idempotente.
 			expect((await logoutRoute.POST(evento('POST', '/api/auth/logout'))).status).toBe(200);
 		});
+
+		it('o token vale o mesmo que a sessão: 30 dias, não 7', async () => {
+			const { corpo } = await entrar('ana@eagles.test', SENHA);
+			const payload = JSON.parse(Buffer.from(corpo.token.split('.')[1], 'base64url').toString());
+
+			const [sessao] = await ctx.db
+				.select({ expiraEm: sessionTable.expiresAt })
+				.from(sessionTable)
+				.where(eq(sessionTable.id, payload.sessionId));
+
+			expect(Math.abs(payload.exp * 1000 - sessao!.expiraEm.getTime())).toBeLessThan(2000);
+			const dias = (payload.exp - payload.iat) / 86_400;
+			expect(dias).toBeGreaterThan(29.9);
+		});
+
+		it('login e logout ficam na auditoria', async () => {
+			const { corpo } = await entrar('ana@eagles.test', SENHA);
+			await logoutRoute.POST(evento('POST', '/api/auth/logout', { token: corpo.token }));
+
+			const registros = await ctx.db
+				.select({ acao: auditLog.action })
+				.from(auditLog)
+				.where(eq(auditLog.actorPersonId, liderId))
+				.orderBy(desc(auditLog.at))
+				.limit(2);
+			expect(registros.map((r) => r.acao).sort()).toEqual(['auth.login', 'auth.logout']);
+		});
+	});
+
+	describe('bloqueio progressivo de conta (gravado no banco)', () => {
+		it('a cada 5 erros o bloqueio dobra: 15 min, 30 min, 1 h… até 24 h', () => {
+			expect([1, 4, 6, 9].map((n) => minutosDeBloqueio(n, 5))).toEqual([0, 0, 0, 0]);
+			expect([5, 10, 15, 20].map((n) => minutosDeBloqueio(n, 5))).toEqual([15, 30, 60, 120]);
+			expect(minutosDeBloqueio(100, 5)).toBe(24 * 60);
+		});
+
+		it('5 erros bloqueiam a conta, sobrevivendo ao reinício, e tudo vai para a auditoria', async () => {
+			const alvoId = await criarPessoa('Bruno Alvo', 'bruno@eagles.test', SENHA);
+			const conta = async () =>
+				(
+					await ctx.db
+						.select({
+							tentativas: userAccountTable.failedAttempts,
+							ate: userAccountTable.lockedUntil
+						})
+						.from(userAccountTable)
+						.where(eq(userAccountTable.personId, alvoId))
+				)[0]!;
+
+			for (let i = 0; i < 5; i++) {
+				expect((await entrar('bruno@eagles.test', 'senha errada', `198.51.100.${i}`)).status).toBe(
+					401
+				);
+			}
+			const bloqueio = await conta();
+			expect(bloqueio.tentativas).toBe(5);
+			const minutos = (bloqueio.ate!.getTime() - Date.now()) / 60_000;
+			expect(minutos).toBeGreaterThan(14);
+			expect(minutos).toBeLessThanOrEqual(15);
+
+			// "Reinício da API": a memória do rate limit zera, o bloqueio continua.
+			resetRateLimits();
+			const comSenhaCerta = await entrar('bruno@eagles.test', SENHA, '198.51.100.50');
+			expect(comSenhaCerta.status).toBe(429);
+
+			const acoes = await ctx.db
+				.select({ acao: auditLog.action })
+				.from(auditLog)
+				.where(and(eq(auditLog.actorPersonId, alvoId)));
+			expect(acoes.filter((a) => a.acao === 'auth.login_falhou')).toHaveLength(5);
+			expect(acoes.filter((a) => a.acao === 'auth.conta_bloqueada')).toHaveLength(1);
+
+			// Passado o bloqueio, mais 5 erros: agora são 30 minutos.
+			await ctx.db
+				.update(userAccountTable)
+				.set({ lockedUntil: new Date(Date.now() - 1000) })
+				.where(eq(userAccountTable.personId, alvoId));
+			for (let i = 0; i < 5; i++) {
+				resetRateLimits();
+				await entrar('bruno@eagles.test', 'errada de novo', `198.51.100.${60 + i}`);
+			}
+			const segundo = await conta();
+			expect(segundo.tentativas).toBe(10);
+			expect((segundo.ate!.getTime() - Date.now()) / 60_000).toBeGreaterThan(29);
+
+			// Senha certa depois do bloqueio zera a contagem.
+			await ctx.db
+				.update(userAccountTable)
+				.set({ lockedUntil: new Date(Date.now() - 1000) })
+				.where(eq(userAccountTable.personId, alvoId));
+			resetRateLimits();
+			expect((await entrar('bruno@eagles.test', SENHA)).status).toBe(200);
+			expect(await conta()).toEqual({ tentativas: 0, ate: null });
+		});
 	});
 
 	describe('sessões', () => {
@@ -207,7 +304,8 @@ describe('M01 — autenticação via API (JWT + sessão no banco)', () => {
 			const params = { token: conviteToken };
 
 			const ver = await conviteRoute.GET(evento('GET', caminho, { params }));
-			expect(await ver.json()).toEqual({ estado: 'valido', nome: 'Bruno Convidado' });
+			// Sem conta ainda: não há login a mostrar.
+			expect(await ver.json()).toEqual({ estado: 'valido', nome: 'Bruno Convidado', login: null });
 
 			const diferentes = await conviteRoute.POST(
 				evento('POST', caminho, { params, body: { senha: SENHA, confirmacao: 'outra coisa' } })

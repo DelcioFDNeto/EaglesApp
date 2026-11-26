@@ -28,7 +28,10 @@ export const GET = async ({ request, params, locals }) => {
 	}
 
 	if (!(await flagAtiva(banco, actor.teamId, 'checkin_qrcode'))) {
-		return json({ erro: 'Check-in por QR Code está desativado nas configurações.' }, { status: 403 });
+		return json(
+			{ erro: 'Check-in por QR Code está desativado nas configurações.' },
+			{ status: 403 }
+		);
 	}
 
 	const [evento] = await banco
@@ -42,7 +45,10 @@ export const GET = async ({ request, params, locals }) => {
 	}
 
 	if (!can(actor, 'attendance.record', { groupId: evento.groupId })) {
-		return json({ erro: 'Apenas líderes e conselheiros podem acessar o QR Code do evento.' }, { status: 403 });
+		return json(
+			{ erro: 'Apenas líderes e conselheiros podem acessar o QR Code do evento.' },
+			{ status: 403 }
+		);
 	}
 
 	const [qrCode] = await banco
@@ -82,7 +88,10 @@ export const POST = async ({ request, params, locals }) => {
 	}
 
 	if (!(await flagAtiva(banco, actor.teamId, 'checkin_qrcode'))) {
-		return json({ erro: 'Check-in por QR Code está desativado nas configurações.' }, { status: 403 });
+		return json(
+			{ erro: 'Check-in por QR Code está desativado nas configurações.' },
+			{ status: 403 }
+		);
 	}
 
 	const [evento] = await banco

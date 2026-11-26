@@ -1,0 +1,31 @@
+# Postgres para DESENVOLVIMENTO local. Só o banco: a aplicação roda com
+# `npm run dev`. As credenciais batem com o `.env.example` da raiz.
+#
+#   docker compose -f deploy/docker-compose.dev.yml up -d
+#
+# Produção é outro arquivo (deploy/docker-compose.yml) — ver DEPLOY.md.
+
+name: eagles-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: eagles
+      POSTGRES_PASSWORD: troque-esta-senha
+      POSTGRES_DB: eagles
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=pt-BR'
+    ports:
+      # Só na própria máquina: nada de banco exposto na rede.
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - eagles_dev_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U eagles -d eagles']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  eagles_dev_db:

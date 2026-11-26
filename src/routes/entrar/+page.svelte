@@ -71,9 +71,7 @@
 				obrigatorio
 			/>
 
-			<Botao tipo="submit" largura="cheia" carregando={enviando}>
-				Entrar
-			</Botao>
+			<Botao tipo="submit" largura="cheia" carregando={enviando}>Entrar</Botao>
 		</form>
 
 		<footer>
@@ -81,9 +79,7 @@
 				<Botao variante="texto" href="/esqueci-senha">Esqueci minha senha</Botao>
 				<Botao variante="texto" href="/solicitar-cadastro">Solicitar acesso</Botao>
 			</p>
-			<p>
-				O acesso aos Eagles é feito por convite do seu conselheiro ou líder.
-			</p>
+			<p>O acesso aos Eagles é feito por convite do seu conselheiro ou líder.</p>
 		</footer>
 	</div>
 </main>

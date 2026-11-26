@@ -78,7 +78,13 @@ describe('M10 — Motor assistivo de IA (puro)', () => {
 			pessoas: [
 				{ id: 'p1', nome: 'Ana', birthDate: '1998-01-01', frequencia: 10, grupoAtualId: 'g1' },
 				{ id: 'p2', nome: 'Bia', birthDate: '1999-01-01', frequencia: 8, grupoAtualId: 'g1' },
-				{ id: 'p3', nome: 'Caio Menor', birthDate: '2012-06-10', frequencia: 6, grupoAtualId: 'g1' },
+				{
+					id: 'p3',
+					nome: 'Caio Menor',
+					birthDate: '2012-06-10',
+					frequencia: 6,
+					grupoAtualId: 'g1'
+				},
 				{ id: 'p4', nome: 'Davi', birthDate: '2000-01-01', frequencia: 2, grupoAtualId: null }
 			]
 		});

@@ -124,7 +124,8 @@
 										<p class="descricao">{g.description}</p>
 									{/if}
 									<p class="contagem">
-										{g.membroCount} {g.membroCount === 1 ? 'membro' : 'membros'}
+										{g.membroCount}
+										{g.membroCount === 1 ? 'membro' : 'membros'}
 									</p>
 								</div>
 								<span class="seta" aria-hidden="true">›</span>
@@ -152,9 +153,7 @@
 							obrigatorio
 						/>
 						<Campo id="descricao" rotulo="Descrição" bind:valor={novaDescricao} />
-						<Botao tipo="submit" largura="cheia" carregando={criando}>
-							Criar grupo
-						</Botao>
+						<Botao tipo="submit" largura="cheia" carregando={criando}>Criar grupo</Botao>
 					</form>
 				</section>
 			{/if}
@@ -209,7 +208,9 @@
 		border-radius: var(--raio);
 		text-decoration: none;
 		color: var(--cor-texto);
-		transition: border-color var(--transicao), background-color var(--transicao);
+		transition:
+			border-color var(--transicao),
+			background-color var(--transicao);
 	}
 
 	@media (hover: hover) {

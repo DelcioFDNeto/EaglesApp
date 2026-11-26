@@ -16,7 +16,10 @@ const criarTipoSchema = z.object({
 		.max(50)
 		.regex(/^[a-z0-9-]+$/),
 	description: z.string().trim().max(300).optional(),
-	color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#A91825')
+	color: z
+		.string()
+		.regex(/^#[0-9a-fA-F]{6}$/)
+		.default('#A91825')
 });
 
 /**
@@ -30,7 +33,10 @@ export const GET = async ({ request, locals }) => {
 	}
 
 	const { actor } = auth;
-	if (!can(actor, 'event.view', { personId: actor.personId }) && groupsWhere(actor, 'event.view').length === 0) {
+	if (
+		!can(actor, 'event.view', { personId: actor.personId }) &&
+		groupsWhere(actor, 'event.view').length === 0
+	) {
 		return json({ erro: 'Sem permissão para ver tipos de evento.' }, { status: 403 });
 	}
 
@@ -55,7 +61,10 @@ export const POST = async ({ request, locals }) => {
 
 	const { actor } = auth;
 	if (!can(actor, 'event.manage') && groupsWhere(actor, 'event.manage').length === 0) {
-		return json({ erro: 'Apenas líderes e conselheiros podem criar tipos de evento.' }, { status: 403 });
+		return json(
+			{ erro: 'Apenas líderes e conselheiros podem criar tipos de evento.' },
+			{ status: 403 }
+		);
 	}
 
 	let corpo: unknown;

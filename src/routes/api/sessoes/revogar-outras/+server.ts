@@ -5,11 +5,12 @@ import { session, userAccount } from '$server/db/schema';
 import { revokeOtherSessions } from '$server/auth/session';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
+import { audit } from '$server/audit/log';
 
 /**
  * Revoga todas as sessões ativas da conta autenticada, preservando a atual.
  */
-export const POST = async ({ request, locals }) => {
+export const POST = async ({ request, locals, getClientAddress }) => {
 	const banco = db();
 	const auth = await autenticarAtor(request, banco, locals?.actor);
 	if (!auth) {
@@ -44,6 +45,17 @@ export const POST = async ({ request, locals }) => {
 			.returning({ id: session.id });
 		revogadas = linhas.length;
 	}
+
+	await audit(banco, {
+		teamId: actor.teamId,
+		actorPersonId: actor.personId,
+		action: 'auth.sessoes_revogadas',
+		entity: 'user_account',
+		entityId: conta.id,
+		after: { revogadas },
+		ip: getClientAddress(),
+		userAgent: request.headers.get('user-agent')
+	});
 
 	return json({
 		ok: true,

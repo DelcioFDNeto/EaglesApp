@@ -6,6 +6,8 @@ import { auditLog, role, rolePermission } from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 import { isPermission } from '$server/policy/permissions';
+import { PAPEL_LIDER, PAPEL_MASTER, PERMISSAO_RESERVADA_A_LIDERES } from '$server/policy/roles';
+import { ehMaster } from '$server/lideranca/regras';
 
 const atualizarPapelSchema = z.object({
 	name: z.string().trim().min(2).max(80).optional(),
@@ -55,11 +57,37 @@ export const PUT = async ({ request, params, locals }) => {
 		.where(and(eq(role.id, id), eq(role.teamId, actor.teamId)))
 		.limit(1);
 
+	// O papel Master não existe para a equipe, e nem o Master o edita: as
+	// permissões dele vêm do catálogo inteiro, não destas linhas.
+	if (atual?.key === PAPEL_MASTER) {
+		return json({ erro: 'Papel não encontrado.' }, { status: 404 });
+	}
 	if (!atual) {
 		return json({ erro: 'Papel não encontrado.' }, { status: 404 });
 	}
 
+	// O papel de líder define o topo da equipe: só o Master o ajusta. Um líder
+	// não amplia nem reduz o próprio nível.
+	if (atual.key === PAPEL_LIDER && !ehMaster(actor)) {
+		return json(
+			{ erro: 'Só o Master altera o papel de líder.', codigo: 'papel_reservado' },
+			{ status: 403 }
+		);
+	}
+
 	const dados = resultado.data;
+
+	// Quem distribui permissões tem, na prática, o nível de líder.
+	if (atual.key !== PAPEL_LIDER && dados.permissions?.includes(PERMISSAO_RESERVADA_A_LIDERES)) {
+		return json(
+			{
+				erro: 'Gerenciar papéis e permissões é exclusivo dos líderes.',
+				codigo: 'permissao_reservada'
+			},
+			{ status: 400 }
+		);
+	}
+
 	const permsAntes = (
 		await banco
 			.select({ key: rolePermission.permissionKey })
@@ -84,9 +112,7 @@ export const PUT = async ({ request, params, locals }) => {
 		if (removeRbac) {
 			const outroPapelComRbac = actor.assignments.some(
 				(a) =>
-					a.scopeType === 'global' &&
-					a.roleKey !== atual.key &&
-					a.permissions.has('rbac.manage')
+					a.scopeType === 'global' && a.roleKey !== atual.key && a.permissions.has('rbac.manage')
 			);
 			const atorUsaEstePapel = actor.assignments.some(
 				(a) => a.scopeType === 'global' && a.roleKey === atual.key
@@ -168,7 +194,9 @@ export const DELETE = async ({ request, params, locals }) => {
 
 	if (atual.isSystem) {
 		return json(
-			{ erro: 'Papéis básicos do sistema não podem ser excluídos — apenas suas permissões podem ser ajustadas.' },
+			{
+				erro: 'Papéis básicos do sistema não podem ser excluídos — apenas suas permissões podem ser ajustadas.'
+			},
 			{ status: 400 }
 		);
 	}

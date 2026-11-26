@@ -12,7 +12,10 @@
 import { formatarCentavos, type ResumoFinanceiro } from '$server/financeiro/calculos';
 
 /** Calcula se uma data de nascimento (YYYY-MM-DD) corresponde a menor de 18 anos. */
-export function ehMenorDeIdade(birthDate: string | null | undefined, referencia = new Date()): boolean {
+export function ehMenorDeIdade(
+	birthDate: string | null | undefined,
+	referencia = new Date()
+): boolean {
 	if (!birthDate) return false;
 	const partes = birthDate.split('-').map((n) => Number.parseInt(n, 10));
 	if (partes.length !== 3 || partes.some((n) => Number.isNaN(n))) return false;
@@ -102,7 +105,9 @@ export function resumirAtaComTarefas(textoAta: string): {
 		}
 		if (reTarefa.test(linha)) {
 			// Tenta detectar padrão "Nome: tarefa" ou "(Nome)"
-			const matchPrefixo = linha.match(/^([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)\s*[:—-]\s*(.+)$/);
+			const matchPrefixo = linha.match(
+				/^([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)\s*[:—-]\s*(.+)$/
+			);
 			if (matchPrefixo) {
 				tarefas.push({
 					responsavelSugerido: matchPrefixo[1]!.trim(),
@@ -112,9 +117,7 @@ export function resumirAtaComTarefas(textoAta: string): {
 				const matchParenteses = linha.match(/\(([^)]{2,40})\)\s*$/);
 				tarefas.push({
 					responsavelSugerido: matchParenteses ? matchParenteses[1]!.trim() : null,
-					descricao: matchParenteses
-						? linha.replace(/\([^)]+\)\s*$/, '').trim()
-						: linha
+					descricao: matchParenteses ? linha.replace(/\([^)]+\)\s*$/, '').trim() : linha
 				});
 			}
 		}
@@ -267,11 +270,7 @@ export function resumirFinanceiroEmTexto(params: {
 }): { resumo: string; destaques: string[] } {
 	const { resumo, topCategoriasSaida } = params;
 	const situacao =
-		resumo.saldoCents > 0
-			? 'positivo'
-			: resumo.saldoCents === 0
-				? 'zerado'
-				: 'negativo (atenção)';
+		resumo.saldoCents > 0 ? 'positivo' : resumo.saldoCents === 0 ? 'zerado' : 'negativo (atenção)';
 
 	const destaques = [
 		`Arrecadado: ${formatarCentavos(resumo.arrecadadoCents)}`,

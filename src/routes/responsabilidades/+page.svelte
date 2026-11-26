@@ -51,17 +51,11 @@
 		cumprida: 'Cumprida'
 	};
 
-	const propostasPendentes = $derived(
-		escalaEvento.filter((item) => item.status === 'proposta')
-	);
+	const propostasPendentes = $derived(escalaEvento.filter((item) => item.status === 'proposta'));
 
-	const escalaAtiva = $derived(
-		escalaEvento.filter((item) => item.status !== 'trocada')
-	);
+	const escalaAtiva = $derived(escalaEvento.filter((item) => item.status !== 'trocada'));
 
-	const eventoAtual = $derived(
-		eventos.find((e) => e.id === eventoSelecionadoId) ?? null
-	);
+	const eventoAtual = $derived(eventos.find((e) => e.id === eventoSelecionadoId) ?? null);
 
 	onMount(async () => {
 		const eventoParam = page.url.searchParams.get('eventoId');
@@ -374,7 +368,8 @@
 		<header>
 			<h1>Responsabilidades</h1>
 			<p class="sub">
-				Acompanhe suas escalas, organize funções de cada encontro e revise sugestões antes de confirmar.
+				Acompanhe suas escalas, organize funções de cada encontro e revise sugestões antes de
+				confirmar.
 			</p>
 		</header>
 
@@ -442,7 +437,8 @@
 									</a>
 									<span class="meta">
 										{formatarData(item.eventoInicio)}
-										{#if item.eventoLocal} · {item.eventoLocal}{/if}
+										{#if item.eventoLocal}
+											· {item.eventoLocal}{/if}
 									</span>
 									{#if item.observacoes}
 										<span class="meta">{item.observacoes}</span>
@@ -481,11 +477,7 @@
 
 					{#if podeGerenciar}
 						<div class="acoes-linha">
-							<Botao
-								variante="secundario"
-								carregando={gerandoProposta}
-								onclick={gerarProposta}
-							>
+							<Botao variante="secundario" carregando={gerandoProposta} onclick={gerarProposta}>
 								Gerar sugestão de escala
 							</Botao>
 							{#if escalaAtiva.length > 0}
@@ -507,8 +499,8 @@
 						<div class="caixa-revisao" role="region" aria-label="Revisão de proposta de escala">
 							<strong>Proposta aguardando revisão ({propostasPendentes.length})</strong>
 							<p>
-								Escalas geradas nunca viram oficiais sozinhas. Revise os nomes abaixo e
-								confirme ou descarte.
+								Escalas geradas nunca viram oficiais sozinhas. Revise os nomes abaixo e confirme ou
+								descarte.
 							</p>
 							{#if propostaId}
 								<div class="acoes-linha">
@@ -571,17 +563,13 @@
 												variante="texto"
 												onclick={() => {
 													trocandoId = trocandoId === item.id ? null : item.id;
-													substitutoId =
-														pessoas.find((p) => p.id !== item.personId)?.id ?? '';
+													substitutoId = pessoas.find((p) => p.id !== item.personId)?.id ?? '';
 													motivoTroca = '';
 												}}
 											>
 												Trocar
 											</Botao>
-											<Botao
-												variante="destrutivo"
-												onclick={() => removerItemEscala(item.id)}
-											>
+											<Botao variante="destrutivo" onclick={() => removerItemEscala(item.id)}>
 												Remover
 											</Botao>
 										</div>
@@ -608,9 +596,7 @@
 													bind:valor={motivoTroca}
 												/>
 												<div class="acoes-linha">
-													<Botao tipo="submit" carregando={salvandoTroca}>
-														Salvar troca
-													</Botao>
+													<Botao tipo="submit" carregando={salvandoTroca}>Salvar troca</Botao>
 													<Botao variante="texto" onclick={() => (trocandoId = null)}>
 														Cancelar
 													</Botao>
@@ -683,9 +669,7 @@
 									</span>
 								</div>
 								{#if podeGerenciar}
-									<Botao variante="destrutivo" onclick={() => desativarTipo(t.id)}>
-										Desativar
-									</Botao>
+									<Botao variante="destrutivo" onclick={() => desativarTipo(t.id)}>Desativar</Botao>
 								{/if}
 							</li>
 						{/each}
@@ -702,12 +686,7 @@
 								criarTipo();
 							}}
 						>
-							<Campo
-								id="novo-tipo-nome"
-								rotulo="Nome"
-								bind:valor={novoTipoNome}
-								obrigatorio
-							/>
+							<Campo id="novo-tipo-nome" rotulo="Nome" bind:valor={novoTipoNome} obrigatorio />
 							<Campo
 								id="novo-tipo-desc"
 								rotulo="Descrição (opcional)"

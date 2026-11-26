@@ -379,10 +379,7 @@ describe('M09 — Financeiro (RN-20 a RN-25, RN-28, RN-29)', () => {
 		expect(resAprovar.status).toBe(200);
 		expect((await resAprovar.json()).movimentacao.status).toBe('confirmada');
 
-		const logs = await ctx.db
-			.select()
-			.from(auditLog)
-			.where(eq(auditLog.entityId, pendTx.id));
+		const logs = await ctx.db.select().from(auditLog).where(eq(auditLog.entityId, pendTx.id));
 		expect(logs.some((l) => l.action === 'finance.transaction_approved')).toBe(true);
 	});
 });

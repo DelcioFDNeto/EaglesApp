@@ -2,9 +2,17 @@ import { json } from '@sveltejs/kit';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { auditLog, group as groupTable, person as personTable, personRole, role } from '$server/db/schema';
+import {
+	auditLog,
+	group as groupTable,
+	person as personTable,
+	personRole,
+	role
+} from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
+import { PAPEIS_RESERVADOS, PAPEL_LIDER } from '$server/policy/roles';
+import { ehMaster, naoEhMaster } from '$server/lideranca/regras';
 
 const atribuirPapelSchema = z.object({
 	personId: z.string().uuid(),
@@ -45,7 +53,10 @@ export const POST = async ({ request, locals }) => {
 
 	const dados = resultado.data;
 	if (dados.scopeType === 'group' && !dados.scopeId) {
-		return json({ erro: 'Selecione o grupo para atribuição com escopo de grupo.' }, { status: 400 });
+		return json(
+			{ erro: 'Selecione o grupo para atribuição com escopo de grupo.' },
+			{ status: 400 }
+		);
 	}
 
 	const scopeIdFinal = dados.scopeType === 'group' ? dados.scopeId! : null;
@@ -53,7 +64,14 @@ export const POST = async ({ request, locals }) => {
 	const [pessoaAlvo] = await banco
 		.select({ id: personTable.id })
 		.from(personTable)
-		.where(and(eq(personTable.id, dados.personId), eq(personTable.teamId, actor.teamId)))
+		.where(
+			and(
+				eq(personTable.id, dados.personId),
+				eq(personTable.teamId, actor.teamId),
+				// O Master é invisível para a equipe: para ela, ele não existe.
+				ehMaster(actor) ? undefined : naoEhMaster(personTable.id)
+			)
+		)
 		.limit(1);
 	if (!pessoaAlvo) {
 		return json({ erro: 'Pessoa não encontrada.' }, { status: 404 });
@@ -66,6 +84,21 @@ export const POST = async ({ request, locals }) => {
 		.limit(1);
 	if (!papelAlvo) {
 		return json({ erro: 'Papel não encontrado.' }, { status: 404 });
+	}
+
+	// Líder só entra por mandato (máximo 2, a cada 2 anos); Master só pelo
+	// script de primeiro acesso. Por aqui, nenhum dos dois.
+	if (PAPEIS_RESERVADOS.includes(papelAlvo.key)) {
+		return json(
+			{
+				erro:
+					papelAlvo.key === PAPEL_LIDER
+						? 'Líderes são nomeados na tela de Liderança, com mandato.'
+						: 'Este papel não pode ser atribuído.',
+				codigo: 'papel_reservado'
+			},
+			{ status: 400 }
+		);
 	}
 
 	if (scopeIdFinal) {
@@ -93,7 +126,10 @@ export const POST = async ({ request, locals }) => {
 		.limit(1);
 
 	if (jaExiste) {
-		return json({ erro: 'Esta pessoa já possui exatamente este papel neste escopo.' }, { status: 400 });
+		return json(
+			{ erro: 'Esta pessoa já possui exatamente este papel neste escopo.' },
+			{ status: 400 }
+		);
 	}
 
 	const [criada] = await banco

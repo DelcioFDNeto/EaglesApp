@@ -1,62 +1,103 @@
+# API do Eagles + Postgres, para rodar como serviço "Compose" no Easypanel.
+#
+# O HTTPS fica com o Easypanel (Traefik + Let's Encrypt): no painel, o domínio
+# do serviço aponta para `api`, porta 3000. Por isso NÃO há `ports:` aqui —
+# a API não fica exposta em HTTP na internet — nem `container_name:`, que o
+# Easypanel acusa como conflito entre projetos. Passo a passo em DEPLOY.md.
+#
+# Variáveis: aba "Environment" do serviço no Easypanel (modelo em
+# deploy/.env.example). As marcadas com `:?` são obrigatórias: sem elas o
+# compose nem sobe, em vez de subir quebrado.
+
 services:
   db:
     image: postgres:16-alpine
-    container_name: eagles-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-eagles}
+      # Locale pt-BR para ordenar nomes com acento corretamente.
+      POSTGRES_INITDB_ARGS: '--locale-provider=icu --icu-locale=pt-BR'
     volumes:
       - eagles_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-eagles}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-eagles}']
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - eagles_net
 
   api:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    container_name: eagles-api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-eagles}?sslmode=disable
-      # Obrigatório: sem ele a API recusa emitir e aceitar tokens. Gere com: openssl rand -hex 32
-      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
-      FRONTEND_URL: ${FRONTEND_URL:?defina FRONTEND_URL no .env}
-      # Usado nos links de convite e de redefinição de senha (env.ts exige).
+      # Mínimo 32 caracteres. Gere com: openssl rand -hex 32
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
+      # Endereço principal do frontend: links de convite e de redefinição.
+      FRONTEND_URL: ${FRONTEND_URL:?defina FRONTEND_URL}
       PUBLIC_ORIGIN: ${FRONTEND_URL}
-      PUBLIC_API_URL: ${PUBLIC_API_URL}
-      # adapter-node: origem pública da própria API (protocolo e host corretos em event.url).
-      ORIGIN: ${PUBLIC_API_URL}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_SECURE: ${SMTP_SECURE}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASS: ${SMTP_PASS}
-      WHATSAPP_CONSELHEIRO: ${WHATSAPP_CONSELHEIRO}
+      # Outros endereços do mesmo frontend (firebaseapp.com, APK do Capacitor).
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # adapter-node: endereço público da própria API.
+      ORIGIN: ${PUBLIC_API_URL:?defina PUBLIC_API_URL}
+      # Atrás do Traefik do Easypanel, o IP real do cliente vem no
+      # X-Forwarded-For (a última entrada é a que o Traefik acrescentou).
+      # Sem isto, o rate limit veria todo mundo com o IP do proxy.
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: ${XFF_DEPTH:-1}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      WHATSAPP_CONSELHEIRO: ${WHATSAPP_CONSELHEIRO:-}
       NODE_ENV: production
       PORT: 3000
-    ports:
-      - "3001:3000"
-    networks:
-      - eagles_net
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test:
+        ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/api/health']
       interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 30s
+
+  # Backup diário: dump → restauração de verificação → criptografia → cópia
+  # fora da VPS. Fica "unhealthy" se passar 26 h sem um backup completo.
+  # Detalhes e restauração: DEPLOY.md, seção "Backup".
+  backup:
+    build:
+      context: ..
+      dockerfile: deploy/backup/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-eagles}
+      TZ: America/Sao_Paulo
+      # Sem ela os backups ficariam legíveis por quem obtiver o arquivo.
+      # GUARDE fora da VPS: sem a senha, nenhum backup abre.
+      BACKUP_SENHA: ${BACKUP_SENHA:?defina BACKUP_SENHA (mínimo 16 caracteres)}
+      BACKUP_HORA: ${BACKUP_HORA:-3}
+      # Cópia externa — Backblaze B2 (mais simples)…
+      BACKUP_B2_CONTA: ${BACKUP_B2_CONTA:-}
+      BACKUP_B2_CHAVE: ${BACKUP_B2_CHAVE:-}
+      BACKUP_B2_BUCKET: ${BACKUP_B2_BUCKET:-}
+      # …ou qualquer provedor do rclone: rclone.conf em base64 + destino.
+      BACKUP_RCLONE_CONF: ${BACKUP_RCLONE_CONF:-}
+      BACKUP_DESTINO: ${BACKUP_DESTINO:-}
+    volumes:
+      - eagles_backups:/backups
 
 volumes:
   eagles_db_data:
-
-networks:
-  eagles_net:
-    driver: bridge
+  eagles_backups:

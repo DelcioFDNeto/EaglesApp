@@ -10,15 +10,19 @@ const atualizarPerfilSchema = z.object({
 	nome: z.string().trim().min(1).max(200).optional(),
 	telefone: z.string().trim().max(40).optional().nullable(),
 	whatsapp: z.string().trim().max(40).optional().nullable(),
-	email: z.union([z.string().trim().email(), z.literal('')]).optional().nullable(),
+	email: z
+		.union([z.string().trim().email(), z.literal('')])
+		.optional()
+		.nullable(),
 	dataNascimento: z.string().trim().optional().nullable(),
-	fotoUrl: z.union([z.string().trim().url(), z.literal('')]).optional().nullable(),
+	fotoUrl: z
+		.union([z.string().trim().url(), z.literal('')])
+		.optional()
+		.nullable(),
 	relacionamento: z.string().trim().max(80).optional().nullable(),
 	irmaos: z.string().trim().max(250).optional().nullable(),
 	vinculosFamiliares: z.string().trim().max(500).optional().nullable(),
-	status: z
-		.enum(['visitante', 'recorrente', 'membro', 'conselheiro', 'lider'])
-		.optional(),
+	status: z.enum(['visitante', 'recorrente', 'membro', 'conselheiro', 'lider']).optional(),
 	observacoes: z.string().trim().max(1000).optional().nullable()
 });
 
@@ -154,29 +158,44 @@ export const PUT = async ({ request, locals }) => {
 
 	const podeAlterarStatus = can(actor, 'person.update');
 	const statusAtual = perfilExistente?.status ?? 'visitante';
-	const novoStatus =
-		dados.status !== undefined && podeAlterarStatus ? dados.status : statusAtual;
+	const novoStatus = dados.status !== undefined && podeAlterarStatus ? dados.status : statusAtual;
 
 	const perfilParaSalvar = {
 		personId: actor.personId,
-		phone: dados.telefone !== undefined ? vazioParaNull(dados.telefone) : (perfilExistente?.phone ?? null),
-		whatsapp: dados.whatsapp !== undefined ? vazioParaNull(dados.whatsapp) : (perfilExistente?.whatsapp ?? null),
-		email: dados.email !== undefined ? vazioParaNull(dados.email) : (perfilExistente?.email ?? null),
+		phone:
+			dados.telefone !== undefined
+				? vazioParaNull(dados.telefone)
+				: (perfilExistente?.phone ?? null),
+		whatsapp:
+			dados.whatsapp !== undefined
+				? vazioParaNull(dados.whatsapp)
+				: (perfilExistente?.whatsapp ?? null),
+		email:
+			dados.email !== undefined ? vazioParaNull(dados.email) : (perfilExistente?.email ?? null),
 		birthDate:
 			dados.dataNascimento !== undefined
 				? vazioParaNull(dados.dataNascimento)
 				: (perfilExistente?.birthDate ?? null),
-		photoUrl: dados.fotoUrl !== undefined ? vazioParaNull(dados.fotoUrl) : (perfilExistente?.photoUrl ?? null),
+		photoUrl:
+			dados.fotoUrl !== undefined
+				? vazioParaNull(dados.fotoUrl)
+				: (perfilExistente?.photoUrl ?? null),
 		relationshipStatus:
 			dados.relacionamento !== undefined
 				? vazioParaNull(dados.relacionamento)
 				: (perfilExistente?.relationshipStatus ?? null),
-		siblings: dados.irmaos !== undefined ? vazioParaNull(dados.irmaos) : (perfilExistente?.siblings ?? null),
+		siblings:
+			dados.irmaos !== undefined
+				? vazioParaNull(dados.irmaos)
+				: (perfilExistente?.siblings ?? null),
 		familyTies:
 			dados.vinculosFamiliares !== undefined
 				? vazioParaNull(dados.vinculosFamiliares)
 				: (perfilExistente?.familyTies ?? null),
-		notes: dados.observacoes !== undefined ? vazioParaNull(dados.observacoes) : (perfilExistente?.notes ?? null),
+		notes:
+			dados.observacoes !== undefined
+				? vazioParaNull(dados.observacoes)
+				: (perfilExistente?.notes ?? null),
 		status: novoStatus,
 		updatedAt: new Date()
 	};

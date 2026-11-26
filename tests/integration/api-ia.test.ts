@@ -417,9 +417,9 @@ describe('M10 — Assistente de IA (RN-26, RN-27, RN-29 e LGPD)', () => {
 			.select()
 			.from(auditLog)
 			.where(eq(auditLog.entity, 'ai_suggestion'));
-		expect(logsAud.some((l) => l.action === 'ai.suggestion_accepted' && l.entityId === sugestao.id)).toBe(
-			true
-		);
+		expect(
+			logsAud.some((l) => l.action === 'ai.suggestion_accepted' && l.entityId === sugestao.id)
+		).toBe(true);
 
 		// Não permite decidir duas vezes a mesma sugestão
 		expect(

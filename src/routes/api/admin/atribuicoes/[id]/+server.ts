@@ -4,6 +4,8 @@ import { db } from '$server/db';
 import { auditLog, personRole, role } from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
+import { PAPEIS_RESERVADOS, PAPEL_LIDER } from '$server/policy/roles';
+import { ehMaster, naoEhMaster } from '$server/lideranca/regras';
 
 /**
  * Revoga uma atribuição de papel, impedindo auto-revogação do próprio papel global de administração.
@@ -36,11 +38,32 @@ export const DELETE = async ({ request, params, locals }) => {
 		})
 		.from(personRole)
 		.innerJoin(role, eq(role.id, personRole.roleId))
-		.where(and(eq(personRole.id, id), eq(role.teamId, actor.teamId)))
+		.where(
+			and(
+				eq(personRole.id, id),
+				eq(role.teamId, actor.teamId),
+				ehMaster(actor) ? undefined : naoEhMaster(personRole.personId)
+			)
+		)
 		.limit(1);
 
 	if (!atribuicao) {
 		return json({ erro: 'Atribuição não encontrada.' }, { status: 404 });
+	}
+
+	// Líder sai encerrando o mandato (com as regras de sucessão); o Master não
+	// sai por aqui. Para quem não é Master, a atribuição dele nem existe.
+	if (PAPEIS_RESERVADOS.includes(atribuicao.roleKey)) {
+		if (atribuicao.roleKey !== PAPEL_LIDER) {
+			return json({ erro: 'Atribuição não encontrada.' }, { status: 404 });
+		}
+		return json(
+			{
+				erro: 'Para tirar um líder, encerre o mandato na tela de Liderança.',
+				codigo: 'papel_reservado'
+			},
+			{ status: 400 }
+		);
 	}
 
 	if (atribuicao.personId === actor.personId && atribuicao.scopeType === 'global') {

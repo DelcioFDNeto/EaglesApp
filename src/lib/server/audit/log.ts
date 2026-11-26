@@ -29,6 +29,10 @@ export type AuditAction =
 	| 'person.criada'
 	| 'person.atualizada'
 	| 'person.removida'
+	// Liderança (mandatos de 2 anos)
+	| 'lideranca.nomeado'
+	| 'lideranca.renovado'
+	| 'lideranca.encerrado'
 	// RBAC
 	| 'rbac.papel_atribuido'
 	| 'rbac.papel_removido'

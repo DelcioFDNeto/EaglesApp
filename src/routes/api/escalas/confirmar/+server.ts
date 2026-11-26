@@ -2,12 +2,7 @@ import { json } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import {
-	auditLog,
-	escala,
-	escalaHistorico,
-	event as eventTable
-} from '$server/db/schema';
+import { auditLog, escala, escalaHistorico, event as eventTable } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 
@@ -64,7 +59,10 @@ export const POST = async ({ request, locals }) => {
 		);
 
 	if (itensProposta.length === 0) {
-		return json({ erro: 'Nenhuma proposta pendente encontrada com este identificador.' }, { status: 404 });
+		return json(
+			{ erro: 'Nenhuma proposta pendente encontrada com este identificador.' },
+			{ status: 404 }
+		);
 	}
 
 	const groupId = itensProposta[0]?.groupId ?? null;

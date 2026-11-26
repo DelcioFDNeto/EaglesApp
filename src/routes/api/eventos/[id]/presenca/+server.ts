@@ -218,7 +218,10 @@ export const POST = async ({ request, params, locals }) => {
 	}
 
 	if (!can(actor, 'attendance.record', { groupId: evento.groupId })) {
-		return json({ erro: 'Apenas líderes e conselheiros podem registrar presença.' }, { status: 403 });
+		return json(
+			{ erro: 'Apenas líderes e conselheiros podem registrar presença.' },
+			{ status: 403 }
+		);
 	}
 
 	const { personId, status, registrationMethod } = resultado.data;

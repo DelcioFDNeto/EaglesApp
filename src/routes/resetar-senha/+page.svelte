@@ -59,7 +59,9 @@
 		</header>
 
 		{#if !token}
-			<Aviso tom="erro">Link de redefinição inválido. Solicite um novo em "Esqueci minha senha".</Aviso>
+			<Aviso tom="erro"
+				>Link de redefinição inválido. Solicite um novo em "Esqueci minha senha".</Aviso
+			>
 		{/if}
 
 		{#if erro}
@@ -87,9 +89,7 @@
 					obrigatorio
 				/>
 
-				<Botao tipo="submit" largura="cheia" carregando={enviando}>
-					Redefinir senha
-				</Botao>
+				<Botao tipo="submit" largura="cheia" carregando={enviando}>Redefinir senha</Botao>
 			</form>
 		{/if}
 

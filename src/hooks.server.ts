@@ -1,5 +1,7 @@
-import type { Handle, HandleServerError } from '@sveltejs/kit';
+import type { Handle, HandleServerError, ServerInit } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
+import { building } from '$app/environment';
+import { iniciarManutencao } from '$server/manutencao';
 import { randomUUID } from 'node:crypto';
 import { db } from '$server/db';
 import { person } from '$server/db/schema';
@@ -75,38 +77,64 @@ const handleSeguranca: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
+/**
+ * Origens que podem chamar a API pelo navegador.
+ *
+ * `CORS_ORIGINS` (lista separada por vírgula) cobre os endereços do mesmo
+ * frontend: `<projeto>.web.app`, `<projeto>.firebaseapp.com` e o APK do
+ * Capacitor (`https://localhost`). `FRONTEND_URL` entra sempre.
+ * Fora de produção, o Vite local também é aceito.
+ */
+function origensPermitidas(): Set<string> {
+	const lista = [process.env.FRONTEND_URL, ...(process.env.CORS_ORIGINS ?? '').split(',')]
+		.map((o) => o?.trim().replace(/\/+$/, ''))
+		.filter((o): o is string => Boolean(o));
+
+	if (process.env.NODE_ENV !== 'production') {
+		lista.push('http://localhost:5173', 'http://127.0.0.1:5173');
+	}
+	return new Set(lista);
+}
+
+const ORIGENS = origensPermitidas();
+
+function cabecalhosCors(headers: Headers, origin: string | null) {
+	// A resposta muda conforme a origem: sem Vary, um cache intermediário
+	// poderia servir a resposta de uma origem para outra.
+	headers.append('Vary', 'Origin');
+	if (origin && ORIGENS.has(origin)) {
+		headers.set('Access-Control-Allow-Origin', origin);
+		headers.set('Access-Control-Allow-Credentials', 'true');
+		headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+		headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+		headers.set('Access-Control-Max-Age', '600');
+	}
+}
+
 const handleCors: Handle = async ({ event, resolve }) => {
 	const origin = event.request.headers.get('origin');
-	const allowedOrigins = [
-		process.env.FRONTEND_URL,
-		'http://localhost:5173',
-		'http://127.0.0.1:5173'
-	].filter(Boolean) as string[];
 
 	if (event.request.method === 'OPTIONS') {
 		const headers = new Headers();
-		if (origin && allowedOrigins.includes(origin)) {
-			headers.set('Access-Control-Allow-Origin', origin);
-			headers.set('Access-Control-Allow-Credentials', 'true');
-		}
-		headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-		headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+		cabecalhosCors(headers, origin);
 		return new Response(null, { status: 204, headers });
 	}
 
 	const response = await resolve(event);
-
-	if (origin && allowedOrigins.includes(origin)) {
-		response.headers.set('Access-Control-Allow-Origin', origin);
-		response.headers.set('Access-Control-Allow-Credentials', 'true');
-	}
-	response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-	response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+	cabecalhosCors(response.headers, origin);
 	return response;
 };
 
 export const handle: Handle = sequence(handleCors, handleSessao, handleSeguranca);
+
+/**
+ * Roda uma vez quando o servidor sobe. Durante o `vite build` (análise e
+ * geração do SPA) não há servidor de verdade, então nada é agendado.
+ */
+export const init: ServerInit = () => {
+	if (building) return;
+	iniciarManutencao(db);
+};
 
 /**
  * Erros que escapam viram uma resposta sem detalhe interno.

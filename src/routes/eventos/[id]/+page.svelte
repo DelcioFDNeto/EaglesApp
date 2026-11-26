@@ -245,17 +245,45 @@
 				<div class="metas">
 					<p class="meta">
 						<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-							<rect x="2" y="3" width="12" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" />
-							<path d="M5 1.5v3M11 1.5v3M2 6.5h12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+							<rect
+								x="2"
+								y="3"
+								width="12"
+								height="11"
+								rx="1.5"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.3"
+							/>
+							<path
+								d="M5 1.5v3M11 1.5v3M2 6.5h12"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.3"
+								stroke-linecap="round"
+							/>
 						</svg>
 						{formatarData(evento.startsAt)}
-						{#if evento.endsAt} — {formatarData(evento.endsAt)}{/if}
+						{#if evento.endsAt}
+							— {formatarData(evento.endsAt)}{/if}
 					</p>
 					{#if evento.location}
 						<p class="meta">
 							<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-								<path d="M8 14s4.5-4.1 4.5-7.5a4.5 4.5 0 1 0-9 0C3.5 9.9 8 14 8 14z" fill="none" stroke="currentColor" stroke-width="1.3" />
-								<circle cx="8" cy="6.5" r="1.4" fill="none" stroke="currentColor" stroke-width="1.3" />
+								<path
+									d="M8 14s4.5-4.1 4.5-7.5a4.5 4.5 0 1 0-9 0C3.5 9.9 8 14 8 14z"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.3"
+								/>
+								<circle
+									cx="8"
+									cy="6.5"
+									r="1.4"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.3"
+								/>
 							</svg>
 							{evento.location}
 						</p>
@@ -278,13 +306,12 @@
 								<strong>{rotuloOpcao(minhaInscricao.option)}</strong>
 								{#if minhaInscricao.guests > 0}
 									<span class="detalhe-rsvp">
-										+{minhaInscricao.guests} {minhaInscricao.guests === 1 ? 'convidado' : 'convidados'}
+										+{minhaInscricao.guests}
+										{minhaInscricao.guests === 1 ? 'convidado' : 'convidados'}
 									</span>
 								{/if}
 							</div>
-							<Botao variante="texto" onclick={() => (editandoRsvp = true)}>
-								Alterar resposta
-							</Botao>
+							<Botao variante="texto" onclick={() => (editandoRsvp = true)}>Alterar resposta</Botao>
 						</div>
 					{:else}
 						<h2>Sua participação</h2>
@@ -383,7 +410,8 @@
 				<div class="cabecalho-secao">
 					<h2>Quem respondeu</h2>
 					<span class="contador">
-						{inscricoes.length} {inscricoes.length === 1 ? 'resposta' : 'respostas'}
+						{inscricoes.length}
+						{inscricoes.length === 1 ? 'resposta' : 'respostas'}
 					</span>
 				</div>
 
@@ -400,7 +428,8 @@
 									{/if}
 									{#if i.guests > 0}
 										<span class="convidados">
-											+{i.guests} {i.guests === 1 ? 'convidado' : 'convidados'}
+											+{i.guests}
+											{i.guests === 1 ? 'convidado' : 'convidados'}
 										</span>
 									{/if}
 								</div>

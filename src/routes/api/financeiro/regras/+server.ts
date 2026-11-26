@@ -65,10 +65,7 @@ export const POST = async ({ request, locals }) => {
 
 	const { actor } = auth;
 	if (!can(actor, 'finance.approve') && !can(actor, 'settings.manage')) {
-		return json(
-			{ erro: 'Apenas líderes podem definir regras de valor mínimo.' },
-			{ status: 403 }
-		);
+		return json({ erro: 'Apenas líderes podem definir regras de valor mínimo.' }, { status: 403 });
 	}
 
 	let corpo: unknown;
@@ -90,9 +87,7 @@ export const POST = async ({ request, locals }) => {
 	const [categoria] = await banco
 		.select()
 		.from(financeCategory)
-		.where(
-			and(eq(financeCategory.id, dados.categoryId), eq(financeCategory.teamId, actor.teamId))
-		)
+		.where(and(eq(financeCategory.id, dados.categoryId), eq(financeCategory.teamId, actor.teamId)))
 		.limit(1);
 
 	if (!categoria) {
@@ -107,10 +102,7 @@ export const POST = async ({ request, locals }) => {
 	}
 
 	if (categoria.isDonation) {
-		return json(
-			{ erro: 'Doação nunca pode ter valor mínimo (RN-22).' },
-			{ status: 400 }
-		);
+		return json({ erro: 'Doação nunca pode ter valor mínimo (RN-22).' }, { status: 400 });
 	}
 
 	const [criada] = await banco

@@ -29,7 +29,10 @@ const criarMovimentacaoSchema = z.object({
 	personId: z.string().uuid().optional().nullable(),
 	eventId: z.string().uuid().optional().nullable(),
 	groupId: z.string().uuid().optional().nullable(),
-	receiptUrl: z.union([z.string().trim().url(), z.literal('')]).optional().nullable()
+	receiptUrl: z
+		.union([z.string().trim().url(), z.literal('')])
+		.optional()
+		.nullable()
 });
 
 /**
@@ -131,8 +134,7 @@ export const GET = async ({ request, url, locals }) => {
 		if (podeVerTudo || podeVerGrupoGlobal) return true;
 		if (gruposVisiveis.length > 0) {
 			return (
-				(m.groupId !== null && gruposVisiveis.includes(m.groupId)) ||
-				m.personId === actor.personId
+				(m.groupId !== null && gruposVisiveis.includes(m.groupId)) || m.personId === actor.personId
 			);
 		}
 		// Apenas `finance.view_own`
@@ -162,8 +164,7 @@ export const GET = async ({ request, url, locals }) => {
 	return json({
 		escopoVisibilidade,
 		permissoesFinanceiro: {
-			podeLancar:
-				can(actor, 'finance.create') || groupsWhere(actor, 'finance.create').length > 0,
+			podeLancar: can(actor, 'finance.create') || groupsWhere(actor, 'finance.create').length > 0,
 			podeAprovar: can(actor, 'finance.approve'),
 			podeEstornar: can(actor, 'finance.reverse'),
 			podeGerenciarCategorias: can(actor, 'finance.approve') || can(actor, 'settings.manage'),

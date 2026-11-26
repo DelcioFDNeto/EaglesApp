@@ -17,7 +17,9 @@ const criarEventoSchema = z.object({
 	groupId: z.string().uuid().optional(),
 	rsvpEnabled: z.boolean().default(true),
 	rsvpOptions: z
-		.array(z.object({ key: z.string().trim().min(1).max(50), label: z.string().trim().min(1).max(80) }))
+		.array(
+			z.object({ key: z.string().trim().min(1).max(50), label: z.string().trim().min(1).max(80) })
+		)
 		.min(1)
 		.optional()
 });
@@ -123,7 +125,10 @@ export const POST = async ({ request, locals }) => {
 	const { groupId, eventTypeId, startsAt, endsAt } = resultado.data;
 
 	if (!can(actor, 'event.manage', { groupId: groupId ?? null })) {
-		return json({ erro: 'Apenas líderes e conselheiros autorizados podem criar eventos.' }, { status: 403 });
+		return json(
+			{ erro: 'Apenas líderes e conselheiros autorizados podem criar eventos.' },
+			{ status: 403 }
+		);
 	}
 
 	const inicio = new Date(startsAt);

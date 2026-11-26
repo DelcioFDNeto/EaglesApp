@@ -41,7 +41,12 @@ function req(method: string, path: string, token: string, body?: unknown): Reque
 	});
 }
 
-async function criarPessoa(nome: string, email: string, roleId: string, scopeType: 'global' | 'self') {
+async function criarPessoa(
+	nome: string,
+	email: string,
+	roleId: string,
+	scopeType: 'global' | 'self'
+) {
 	const [p] = await ctx.db
 		.insert(personTable)
 		.values({ teamId: ctx.teamId, fullName: nome })
@@ -159,7 +164,7 @@ describe('M11 — Administração (feature flags, RBAC e auditoria imutável)', 
 		} as any);
 		expect(resDelSys.status).toBe(400);
 
-		// Impede o único líder global de remover `rbac.manage` do próprio papel
+		// O líder não mexe no papel de líder (nem para se trancar fora): só o Master.
 		const resLockout = await papelIdRoute.PUT({
 			request: req('PUT', `/api/admin/papeis/${ctx.papeis.lider}`, tokenLider, {
 				permissions: ['event.view']
@@ -167,7 +172,7 @@ describe('M11 — Administração (feature flags, RBAC e auditoria imutável)', 
 			params: { id: ctx.papeis.lider! },
 			locals: {}
 		} as any);
-		expect(resLockout.status).toBe(400);
+		expect(resLockout.status).toBe(403);
 
 		// Cria papel personalizado (RF-03.4)
 		const resCriar = await papeisRoute.POST({

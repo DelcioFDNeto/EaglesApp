@@ -71,10 +71,7 @@ export const POST = async ({ request, locals }) => {
 			.select({ content: messageTemplate.content })
 			.from(messageTemplate)
 			.where(
-				and(
-					eq(messageTemplate.id, dados.templateId),
-					eq(messageTemplate.teamId, actor.teamId)
-				)
+				and(eq(messageTemplate.id, dados.templateId), eq(messageTemplate.teamId, actor.teamId))
 			)
 			.limit(1);
 

@@ -14,6 +14,7 @@ import {
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 import { gerarPropostaDeEscala } from '$server/responsabilidades/gerador';
+import { naoEhMaster } from '$server/lideranca/regras';
 
 const gerarEscalaSchema = z.object({
 	eventoId: z.string().uuid(),
@@ -95,7 +96,10 @@ export const POST = async ({ request, locals }) => {
 		.orderBy(asc(responsabilidadeTable.ordem), asc(responsabilidadeTable.nome));
 
 	if (responsabilidades.length === 0) {
-		return json({ erro: 'Nenhuma responsabilidade ativa disponível para gerar escala.' }, { status: 400 });
+		return json(
+			{ erro: 'Nenhuma responsabilidade ativa disponível para gerar escala.' },
+			{ status: 400 }
+		);
 	}
 
 	// Pool de candidatos
@@ -108,6 +112,7 @@ export const POST = async ({ request, locals }) => {
 				and(
 					eq(personTable.teamId, actor.teamId),
 					isNull(personTable.deletedAt),
+					naoEhMaster(personTable.id),
 					inArray(personTable.id, candidatosIds)
 				)
 			);
@@ -121,7 +126,8 @@ export const POST = async ({ request, locals }) => {
 				and(
 					eq(groupMember.groupId, evento.groupId),
 					eq(personTable.teamId, actor.teamId),
-					isNull(personTable.deletedAt)
+					isNull(personTable.deletedAt),
+					naoEhMaster(personTable.id)
 				)
 			);
 		candidatos = membros;
@@ -132,7 +138,13 @@ export const POST = async ({ request, locals }) => {
 		candidatos = await banco
 			.select({ personId: personTable.id, nome: personTable.fullName })
 			.from(personTable)
-			.where(and(eq(personTable.teamId, actor.teamId), isNull(personTable.deletedAt)));
+			.where(
+				and(
+					eq(personTable.teamId, actor.teamId),
+					isNull(personTable.deletedAt),
+					naoEhMaster(personTable.id)
+				)
+			);
 	}
 
 	if (candidatos.length === 0) {
@@ -149,7 +161,9 @@ export const POST = async ({ request, locals }) => {
 		.where(and(eq(escala.eventId, eventoId), ne(escala.status, 'trocada')));
 
 	const jaEscaladosNoEvento = new Set(existentesNoEvento.map((e) => e.personId));
-	const responsabilidadesJaPreenchidas = new Set(existentesNoEvento.map((e) => e.responsabilidadeId));
+	const responsabilidadesJaPreenchidas = new Set(
+		existentesNoEvento.map((e) => e.responsabilidadeId)
+	);
 
 	// Histórico oficial (confirmadas ou cumpridas) para evitar repetição (RN-19)
 	const historico = await banco
@@ -161,10 +175,7 @@ export const POST = async ({ request, locals }) => {
 		.from(escala)
 		.innerJoin(eventTable, eq(eventTable.id, escala.eventId))
 		.where(
-			and(
-				eq(eventTable.teamId, actor.teamId),
-				inArray(escala.status, ['confirmada', 'cumprida'])
-			)
+			and(eq(eventTable.teamId, actor.teamId), inArray(escala.status, ['confirmada', 'cumprida']))
 		);
 
 	const itensPropostos = gerarPropostaDeEscala({

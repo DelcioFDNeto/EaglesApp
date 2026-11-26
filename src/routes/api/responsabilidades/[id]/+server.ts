@@ -31,8 +31,7 @@ export const PUT = async ({ request, params, locals }) => {
 	}
 
 	const podeGerenciar =
-		can(actor, 'responsibility.manage') ||
-		groupsWhere(actor, 'responsibility.manage').length > 0;
+		can(actor, 'responsibility.manage') || groupsWhere(actor, 'responsibility.manage').length > 0;
 	if (!podeGerenciar) {
 		return json(
 			{ erro: 'Apenas líderes e conselheiros podem editar responsabilidades.' },
@@ -99,8 +98,7 @@ export const DELETE = async ({ request, params, locals }) => {
 	}
 
 	const podeGerenciar =
-		can(actor, 'responsibility.manage') ||
-		groupsWhere(actor, 'responsibility.manage').length > 0;
+		can(actor, 'responsibility.manage') || groupsWhere(actor, 'responsibility.manage').length > 0;
 	if (!podeGerenciar) {
 		return json(
 			{ erro: 'Apenas líderes e conselheiros podem desativar responsabilidades.' },

@@ -28,7 +28,10 @@ export const POST = async ({ request, params, locals }) => {
 	}
 
 	if (!(await flagAtiva(banco, actor.teamId, 'checkin_qrcode'))) {
-		return json({ erro: 'Check-in por QR Code está desativado nas configurações.' }, { status: 403 });
+		return json(
+			{ erro: 'Check-in por QR Code está desativado nas configurações.' },
+			{ status: 403 }
+		);
 	}
 
 	let corpo: unknown;

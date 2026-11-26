@@ -54,17 +54,9 @@
 		{/if}
 
 		<form onsubmit={handleSubmit}>
-			<Campo
-				id="email"
-				rotulo="E-mail"
-				tipo="email"
-				autocomplete="email"
-				obrigatorio
-			/>
+			<Campo id="email" rotulo="E-mail" tipo="email" autocomplete="email" obrigatorio />
 
-			<Botao tipo="submit" largura="cheia" carregando={enviando}>
-				Enviar instruções
-			</Botao>
+			<Botao tipo="submit" largura="cheia" carregando={enviando}>Enviar instruções</Botao>
 		</form>
 
 		<footer>

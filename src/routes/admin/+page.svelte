@@ -20,6 +20,8 @@
 	// RBAC
 	let catalogoPermissoes = $state<Array<{ key: string; descricao: string }>>([]);
 	let papeis = $state<any[]>([]);
+	// Líder (e Master) não saem da atribuição comum: têm mandato e limite de 2.
+	const papeisAtribuiveis = $derived(papeis.filter((r) => !r.reservado));
 	let atribuicoes = $state<any[]>([]);
 	let pessoas = $state<any[]>([]);
 	let grupos = $state<any[]>([]);
@@ -88,7 +90,8 @@
 				catalogoPermissoes = d.catalogoPermissoes ?? [];
 				papeis = d.papeis ?? [];
 				atribuicoes = d.atribuicoes ?? [];
-				if (!atribRoleId && papeis.length > 0) atribRoleId = papeis[0].id;
+				const primeiro = papeis.find((r) => !r.reservado);
+				if (!atribRoleId && primeiro) atribRoleId = primeiro.id;
 			}
 			if (resPessoas.ok) {
 				const d = await resPessoas.json();
@@ -286,9 +289,7 @@
 
 		<header>
 			<h1>Administração</h1>
-			<p class="sub">
-				Chaves de funcionalidade, papéis com escopo e trilha de auditoria imutável.
-			</p>
+			<p class="sub">Chaves de funcionalidade, papéis com escopo e trilha de auditoria imutável.</p>
 		</header>
 
 		<div class="abas" role="tablist" aria-label="Seções de administração">
@@ -339,8 +340,8 @@
 		{:else if aba === 'flags'}
 			<section class="painel" aria-label="Chaves de funcionalidade">
 				<p class="nota">
-					Toda funcionalidade de controle nasce desligada. Ligar qualquer item abaixo é
-					registrado na auditoria.
+					Toda funcionalidade de controle nasce desligada. Ligar qualquer item abaixo é registrado
+					na auditoria.
 				</p>
 
 				<ul class="lista">
@@ -354,7 +355,8 @@
 									{#if flag.updatedAt}
 										<span class="meta">
 											Atualizado em {formatarDataHora(flag.updatedAt)}
-											{#if flag.updatedByName} por {flag.updatedByName}{/if}
+											{#if flag.updatedByName}
+												por {flag.updatedByName}{/if}
 										</span>
 									{/if}
 								</div>
@@ -387,7 +389,7 @@
 									<div class="badges">
 										<strong>{papel.name}</strong>
 										<span class="chip {papel.isSystem ? 'chip-sistema' : 'chip-neutro'}">
-											{papel.isSystem ? 'Sistema' : 'Personalizado'}
+											{papel.reservado ? 'Liderança' : papel.isSystem ? 'Sistema' : 'Personalizado'}
 										</span>
 									</div>
 									{#if papel.description}
@@ -399,9 +401,14 @@
 									</span>
 								</div>
 								<div class="acoes-linha">
-									<Botao variante="texto" onclick={() => abrirEdicaoPapel(papel)}>
-										{editandoPapelId === papel.id ? 'Fechar' : 'Permissões'}
-									</Botao>
+									{#if papel.reservado}
+										<!-- Líder e Master têm regra própria: mandato de 2 anos, máximo 2. -->
+										<Botao variante="texto" href="/lideranca">Ver liderança</Botao>
+									{:else}
+										<Botao variante="texto" onclick={() => abrirEdicaoPapel(papel)}>
+											{editandoPapelId === papel.id ? 'Fechar' : 'Permissões'}
+										</Botao>
+									{/if}
 									{#if !papel.isSystem}
 										<Botao variante="destrutivo" onclick={() => excluirPapel(papel.id)}>
 											Excluir
@@ -419,6 +426,8 @@
 													type="checkbox"
 													checked={permsEditando.includes(perm.key)}
 													onchange={() => togglePermissao(perm.key)}
+													disabled={perm.key === 'rbac.manage'}
+													title={perm.key === 'rbac.manage' ? 'Exclusivo dos líderes' : undefined}
 												/>
 												<span>
 													<strong>{perm.key}</strong>
@@ -427,10 +436,7 @@
 											</label>
 										{/each}
 									</div>
-									<Botao
-										carregando={salvandoPapel}
-										onclick={() => salvarPermissoesPapel(papel.id)}
-									>
+									<Botao carregando={salvandoPapel} onclick={() => salvarPermissoesPapel(papel.id)}>
 										Salvar permissões
 									</Botao>
 								</div>
@@ -452,19 +458,24 @@
 											<strong>{a.personName}</strong>
 											<span class="meta">
 												{a.roleName} · Escopo: {ESCOPO_LABEL[a.scopeType] ?? a.scopeType}
-												{#if a.groupName} ({a.groupName}){/if}
+												{#if a.groupName}
+													({a.groupName}){/if}
 											</span>
 										</div>
-										<Botao variante="destrutivo" onclick={() => revogarAtribuicao(a.id)}>
-											Revogar
-										</Botao>
+										{#if a.roleKey === 'lider'}
+											<Botao variante="texto" href="/lideranca">Mandato</Botao>
+										{:else}
+											<Botao variante="destrutivo" onclick={() => revogarAtribuicao(a.id)}>
+												Revogar
+											</Botao>
+										{/if}
 									</div>
 								</li>
 							{/each}
 						</ul>
 					{/if}
 
-					{#if pessoas.length > 0 && papeis.length > 0}
+					{#if pessoas.length > 0 && papeisAtribuiveis.length > 0}
 						<form
 							class="form-bloco"
 							onsubmit={(e) => {
@@ -485,7 +496,7 @@
 								<div class="campo-select">
 									<label for="atrib-papel">Papel</label>
 									<select id="atrib-papel" bind:value={atribRoleId}>
-										{#each papeis as r (r.id)}
+										{#each papeisAtribuiveis as r (r.id)}
 											<option value={r.id}>{r.name}</option>
 										{/each}
 									</select>
@@ -513,9 +524,7 @@
 									</div>
 								{/if}
 							</div>
-							<Botao tipo="submit" largura="cheia" carregando={salvandoAtrib}>
-								Atribuir papel
-							</Botao>
+							<Botao tipo="submit" largura="cheia" carregando={salvandoAtrib}>Atribuir papel</Botao>
 						</form>
 					{/if}
 				</section>
@@ -531,12 +540,15 @@
 					>
 						<div class="grade-2">
 							<Campo id="papel-nome" rotulo="Nome" bind:valor={novoPapelNome} obrigatorio />
-							<Campo id="papel-key" rotulo="Chave (ex.: tesoureiro)" bind:valor={novoPapelKey} obrigatorio />
+							<Campo
+								id="papel-key"
+								rotulo="Chave (ex.: tesoureiro)"
+								bind:valor={novoPapelKey}
+								obrigatorio
+							/>
 						</div>
 						<Campo id="papel-desc" rotulo="Descrição (opcional)" bind:valor={novoPapelDesc} />
-						<Botao tipo="submit" largura="cheia" carregando={criandoPapel}>
-							Criar papel
-						</Botao>
+						<Botao tipo="submit" largura="cheia" carregando={criandoPapel}>Criar papel</Botao>
 					</form>
 				</section>
 			</section>
@@ -559,7 +571,10 @@
 				{#if registrosAuditoria.length === 0}
 					<div class="vazio">
 						<h2>Nenhum registro encontrado</h2>
-						<p>Alterações em finanças, papéis, permissões e chaves aparecem aqui em ordem cronológica.</p>
+						<p>
+							Alterações em finanças, papéis, permissões e chaves aparecem aqui em ordem
+							cronológica.
+						</p>
 					</div>
 				{:else}
 					<ul class="lista">

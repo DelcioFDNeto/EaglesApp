@@ -8,14 +8,27 @@
  * funcionar offline ou em rede fraca.
  */
 
+import * as envPublico from '$env/static/public';
 import { buscarComCache } from '$lib/cache/sync';
 
-const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://164.152.195.199:3001';
+/**
+ * Endereço da API, fixado no build a partir de `PUBLIC_API_URL`
+ * (`.env.production` para o Firebase/APK; ver DEPLOY.md).
+ *
+ * Sem a variável, usa a mesma origem: é o caso do `npm run dev`, em que os
+ * `+server.ts` rodam no próprio servidor do Vite. O build de produção do SPA
+ * se recusa a sair sem ela (svelte.config.js), então este padrão nunca chega
+ * ao Firebase.
+ *
+ * Import por namespace porque a variável pode não existir: um import nomeado
+ * de `$env/static/public` quebraria o build quando ela falta.
+ */
+const API_URL = ((envPublico as Record<string, string | undefined>).PUBLIC_API_URL ?? '').replace(
+	/\/+$/,
+	''
+);
 
-export async function apiFetch(
-	path: string,
-	opts: RequestInit = {}
-): Promise<Response> {
+export async function apiFetch(path: string, opts: RequestInit = {}): Promise<Response> {
 	const token = typeof localStorage !== 'undefined' ? localStorage.getItem('eagles_token') : null;
 
 	const res = await fetch(`${API_URL}${path}`, {
@@ -58,8 +71,7 @@ export const api = {
 			method: 'PATCH',
 			body: body !== undefined ? JSON.stringify(body) : undefined
 		}),
-	delete: (path: string, opts?: RequestInit) =>
-		apiFetch(path, { ...opts, method: 'DELETE' })
+	delete: (path: string, opts?: RequestInit) => apiFetch(path, { ...opts, method: 'DELETE' })
 };
 
 export type Perfil = {
@@ -122,6 +134,8 @@ export type Inicio = {
 		body: string;
 		publishedAt: string | null;
 	} | null;
+	/** Só para Master e líderes: mandato vencendo/vencido ou vaga aberta. */
+	avisoLideranca?: string | null;
 };
 
 export const apiCache = {

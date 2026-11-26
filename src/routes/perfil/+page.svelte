@@ -23,7 +23,9 @@
 	let formRelacionamento = $state('');
 	let formIrmaos = $state('');
 	let formVinculosFamiliares = $state('');
-	let formStatus = $state<'visitante' | 'recorrente' | 'membro' | 'conselheiro' | 'lider'>('visitante');
+	let formStatus = $state<'visitante' | 'recorrente' | 'membro' | 'conselheiro' | 'lider'>(
+		'visitante'
+	);
 	let formObservacoes = $state('');
 
 	const STATUS_ROTULO: Record<string, string> = {
@@ -122,9 +124,7 @@
 
 		<header>
 			<h1>{editando ? 'Editar perfil' : 'Meu perfil'}</h1>
-			<p class="sub">
-				Preencha apenas o que fizer sentido agora. Seu cadastro evolui aos poucos.
-			</p>
+			<p class="sub">Preencha apenas o que fizer sentido agora. Seu cadastro evolui aos poucos.</p>
 		</header>
 
 		{#if erro}
@@ -151,11 +151,24 @@
 					<Campo id="telefone" rotulo="Telefone" tipo="tel" bind:valor={formTelefone} />
 					<Campo id="whatsapp" rotulo="WhatsApp" tipo="tel" bind:valor={formWhatsapp} />
 					<Campo id="email" rotulo="E-mail" tipo="email" bind:valor={formEmail} />
-					<Campo id="dataNascimento" rotulo="Data de nascimento" tipo="date" bind:valor={formDataNascimento} />
+					<Campo
+						id="dataNascimento"
+						rotulo="Data de nascimento"
+						tipo="date"
+						bind:valor={formDataNascimento}
+					/>
 					<Campo id="fotoUrl" rotulo="URL da foto" tipo="text" bind:valor={formFotoUrl} />
-					<Campo id="relacionamento" rotulo="Estado civil / relacionamento" bind:valor={formRelacionamento} />
+					<Campo
+						id="relacionamento"
+						rotulo="Estado civil / relacionamento"
+						bind:valor={formRelacionamento}
+					/>
 					<Campo id="irmaos" rotulo="Irmãos na comunidade" bind:valor={formIrmaos} />
-					<Campo id="vinculosFamiliares" rotulo="Vínculos familiares" bind:valor={formVinculosFamiliares} />
+					<Campo
+						id="vinculosFamiliares"
+						rotulo="Vínculos familiares"
+						bind:valor={formVinculosFamiliares}
+					/>
 
 					{#if perfil.podeAlterarStatus}
 						<div class="campo-select">
@@ -173,9 +186,7 @@
 					<Campo id="observacoes" rotulo="Observações" bind:valor={formObservacoes} />
 
 					<div class="acoes">
-						<Botao tipo="submit" largura="cheia" carregando={salvando}>
-							Salvar alterações
-						</Botao>
+						<Botao tipo="submit" largura="cheia" carregando={salvando}>Salvar alterações</Botao>
 						<Botao variante="texto" largura="cheia" onclick={() => (editando = false)}>
 							Cancelar
 						</Botao>
@@ -222,7 +233,9 @@
 						{#if perfil.perfil?.dataNascimento}
 							<div>
 								<dt>Nascimento</dt>
-								<dd>{new Date(`${perfil.perfil.dataNascimento}T12:00:00`).toLocaleDateString('pt-BR')}</dd>
+								<dd>
+									{new Date(`${perfil.perfil.dataNascimento}T12:00:00`).toLocaleDateString('pt-BR')}
+								</dd>
 							</div>
 						{/if}
 						{#if perfil.perfil?.relacionamento}

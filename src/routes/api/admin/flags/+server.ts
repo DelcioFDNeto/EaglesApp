@@ -159,6 +159,8 @@ export const PUT = async ({ request, locals }) => {
 		ok: true,
 		key,
 		enabled,
-		mensagem: enabled ? `Funcionalidade "${def?.nome ?? key}" ligada.` : `Funcionalidade "${def?.nome ?? key}" desligada.`
+		mensagem: enabled
+			? `Funcionalidade "${def?.nome ?? key}" ligada.`
+			: `Funcionalidade "${def?.nome ?? key}" desligada.`
 	});
 };

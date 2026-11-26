@@ -26,7 +26,10 @@ export type MovimentacaoParaCalculo = {
  * Retorna `null` se inválido ou <= 0.
  */
 export function reaisParaCentavos(valorTexto: string): number | null {
-	const limpo = valorTexto.trim().replace(/^R\$\s*/i, '').replace(/\s+/g, '');
+	const limpo = valorTexto
+		.trim()
+		.replace(/^R\$\s*/i, '')
+		.replace(/\s+/g, '');
 	if (!limpo) return null;
 
 	// Aceita formato pt-BR (1.234,56) ou ponto decimal (1234.56)

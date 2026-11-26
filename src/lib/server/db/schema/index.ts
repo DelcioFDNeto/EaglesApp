@@ -544,13 +544,15 @@ export const event = pgTable(
 		groupId: uuid('group_id').references(() => group.id),
 		status: text('status').notNull().default('scheduled'), // scheduled, ongoing, completed, cancelled
 		rsvpEnabled: boolean('rsvp_enabled').notNull().default(true),
-		rsvpOptions: jsonb('rsvp_options').notNull().default([
-			{ key: 'confirmado', label: 'Confirmado' },
-			{ key: 'talvez', label: 'Talvez' },
-			{ key: 'nao_vou', label: 'Não vou' },
-			{ key: 'atrasado', label: 'Chegarei atrasado' },
-			{ key: 'convidado', label: 'Vou levar convidado' }
-		]),
+		rsvpOptions: jsonb('rsvp_options')
+			.notNull()
+			.default([
+				{ key: 'confirmado', label: 'Confirmado' },
+				{ key: 'talvez', label: 'Talvez' },
+				{ key: 'nao_vou', label: 'Não vou' },
+				{ key: 'atrasado', label: 'Chegarei atrasado' },
+				{ key: 'convidado', label: 'Vou levar convidado' }
+			]),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
@@ -1260,3 +1262,46 @@ export const aiInteractionLogRelations = relations(aiInteractionLog, ({ one }) =
 	team: one(team, { fields: [aiInteractionLog.teamId], references: [team.id] }),
 	actor: one(person, { fields: [aiInteractionLog.actorPersonId], references: [person.id] })
 }));
+
+// ---------------------------------------------------------------------------
+// Liderança — os 2 líderes e seus mandatos de 2 anos
+// ---------------------------------------------------------------------------
+
+/**
+ * Mandato de líder. A equipe tem no máximo 2 mandatos ABERTOS (sem
+ * `encerrado_em`) — garantido por gatilho no banco (migração 0007), não só na
+ * aplicação. O acesso em si continua sendo o papel `lider` global em
+ * `person_role`; esta tabela é o registro do mandato e o histórico de quem
+ * liderou e quando.
+ *
+ * Mandato vencido (`fim` no passado) e não encerrado CONTINUA dando acesso:
+ * decisão da liderança — a equipe não fica sem líder por esquecimento. A
+ * tela avisa até alguém renovar ou substituir.
+ */
+export const mandatoLider = pgTable(
+	'mandato_lider',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id, { onDelete: 'cascade' }),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		inicio: date('inicio').notNull(),
+		fim: date('fim').notNull(),
+		nomeadoPorPersonId: uuid('nomeado_por_person_id').references(() => person.id),
+		encerradoEm: timestamp('encerrado_em', { withTimezone: true }),
+		encerradoPorPersonId: uuid('encerrado_por_person_id').references(() => person.id),
+		/** renovado | substituido | renuncia | encerrado */
+		motivoEncerramento: text('motivo_encerramento'),
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('mandato_lider_team_idx').on(t.teamId),
+		// Uma pessoa não tem dois mandatos abertos ao mesmo tempo.
+		uniqueIndex('mandato_lider_aberto_pessoa_idx')
+			.on(t.teamId, t.personId)
+			.where(sql`${t.encerradoEm} is null`)
+	]
+);

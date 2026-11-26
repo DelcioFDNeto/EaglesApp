@@ -24,10 +24,10 @@ Sucesso significa conselheiros fechando a semana do PG em poucos minutos, membro
 
 ## Positioning
 
-- **Ferramenta de apoio à liderança, nunca substituta de decisão humana:** toda automação relevante (divisão de grupos, escalas, alertas de participação) segue obrigatoriamente o fluxo *sugerir → revisar → confirmar → aplicar*, com cálculo determinístico primeiro e explicação auditável; nada é aplicado nem comunicado automaticamente.
+- **Ferramenta de apoio à liderança, nunca substituta de decisão humana:** toda automação relevante (divisão de grupos, escalas, alertas de participação) segue obrigatoriamente o fluxo _sugerir → revisar → confirmar → aplicar_, com cálculo determinístico primeiro e explicação auditável; nada é aplicado nem comunicado automaticamente.
 - **Convivência nativa com o WhatsApp, sem competir com ele:** a conversa diária permanece no WhatsApp; o app estrutura a informação e gera mensagens formatadas prontas para compartilhamento (`wa.me` / Web Share) com links diretos, descartando chat interno, mural social ou gamificação.
 - **Anti-burocracia por padrão:** todas as funcionalidades de controle (`checkin_qrcode`, `aprovacao_despesas`, `notificacoes_push`, `ia_assistente`, `campos_personalizados`) nascem desligadas (`false`) na instalação, e o app nunca é condição para alguém participar de um encontro.
-- **Fronteira clara de escopo:** gere a rotina anual da equipe Eagles; registra a participação dos Eagles em compromissos externos do calendário (como o *Outside*), mas não organiza o *Outside* nem decide a alocação em outras equipes do contexto maior (*Bears*, *Tigers*, *Sheeps*).
+- **Fronteira clara de escopo:** gere a rotina anual da equipe Eagles; registra a participação dos Eagles em compromissos externos do calendário (como o _Outside_), mas não organiza o _Outside_ nem decide a alocação em outras equipes do contexto maior (_Bears_, _Tigers_, _Sheeps_).
 
 ## Operating Context
 
@@ -54,7 +54,7 @@ Sucesso significa conselheiros fechando a semana do PG em poucos minutos, membro
 - **Privacidade e dados de menores (LGPD art. 14 — ADR 0003):**
   - Não há menores nos Eagles hoje; o piso de idade daqui em diante é **16 anos** (sem regime de criança < 12).
   - `is_minor` é calculado em view (`person_view`) a partir de `birth_date`, tratando `NULL` sob regime restrito; estrutura de `consent` append-only pronta e inativa enquanto não houver menor cadastrado; fotos exigem consentimento explícito em qualquer idade; compartilhamentos no WhatsApp nunca incluem contato ou foto de menor.
-- **Terminologia confirmada (pt-BR):** *PG*, *Conselheiro*, *Líder*, *Membro*, *Visitante*, *Participante recorrente*, *Escala*, *Prestação de contas*, *Outside*.
+- **Terminologia confirmada (pt-BR):** _PG_, _Conselheiro_, _Líder_, _Membro_, _Visitante_, _Participante recorrente_, _Escala_, _Prestação de contas_, _Outside_.
 - **Decisões em aberto (não presumir nem inventar):**
   - `D-06`: domínio definitivo de produção (bloqueia HTTPS público, instalação PWA em produção e Web Push).
   - `D-07.1`: quantidade real atual de membros/visitantes e de PGs ativos (o teto arquitetural considera até 500 pessoas e 20 PGs como hipótese de escala, mas os números reais atuais seguem abertos).
@@ -65,7 +65,7 @@ Sucesso significa conselheiros fechando a semana do PG em poucos minutos, membro
 
 ## Brand Commitments
 
-- **Identificação atual:** *Eagles* na interface do produto e no manifesto PWA (`static/manifest.webmanifest`); *Eagles App* na documentação técnica e repositório (`D-07.5` permanece em aberto).
+- **Identificação atual:** _Eagles_ na interface do produto e no manifesto PWA (`static/manifest.webmanifest`); _Eagles App_ na documentação técnica e repositório (`D-07.5` permanece em aberto).
 - **Voz e tom (pt-BR):** linguagem humana, clara, acolhedora e direta — nunca jargão técnico, tom policialesco ou mensagens genéricas de sistema. Estados vazios explicam o contexto real e erros orientam sempre o que aconteceu e como resolver.
 - **Ativos de marca:** emblema oficial da águia em `Eagles.png` / `docs/brand/Eagles.png` e ícones de aplicativo em `static/` (`icone-192.png`, `icone-512.png`, `apple-touch-icon.png`, `favicon.png`), acompanhados da silhueta vetorial simplificada em `src/lib/ui/Marca.svelte` enquanto a arte vetorial/transparente oficial permanece pendente.
 

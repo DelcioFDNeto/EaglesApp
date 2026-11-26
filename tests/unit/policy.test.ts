@@ -243,8 +243,24 @@ describe('integridade da semente de papéis', () => {
 		for (const p of m) expect(c.has(p), `conselheiro não tem "${p}" que o membro tem`).toBe(true);
 	});
 
-	it('toda permissão do catálogo é usada por algum papel', () => {
-		const usadas = new Set(ROLE_SEEDS.flatMap((r) => r.permissions));
+	it('Master tem o catálogo inteiro, e portanto tudo que o líder tem', () => {
+		const master = permsOf('master');
+		expect(master.size).toBe(ALL_PERMISSIONS.length);
+		for (const p of permsOf('lider')) expect(master.has(p)).toBe(true);
+	});
+
+	it('só líder e Master distribuem permissões (rbac.manage)', () => {
+		const comRbac = ROLE_SEEDS.filter((r) => r.permissions.includes('rbac.manage')).map(
+			(r) => r.key
+		);
+		expect(comRbac.sort()).toEqual(['lider', 'master']);
+	});
+
+	it('toda permissão do catálogo é usada por algum papel da equipe (fora o Master)', () => {
+		// O Master tem tudo por definição; contar com ele esconderia permissão órfã.
+		const usadas = new Set(
+			ROLE_SEEDS.filter((r) => r.key !== 'master').flatMap((r) => r.permissions)
+		);
 		const orfas = ALL_PERMISSIONS.filter((p) => !usadas.has(p));
 		expect(orfas, `permissões que nenhum papel concede: ${orfas.join(', ')}`).toEqual([]);
 	});

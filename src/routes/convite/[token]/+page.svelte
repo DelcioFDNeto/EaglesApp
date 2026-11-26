@@ -11,7 +11,11 @@
 
 	type Estado =
 		| { estado: 'carregando' }
-		| { estado: 'valido'; nome: string }
+		| {
+				estado: 'valido';
+				nome: string;
+				login: { tipo: 'telefone' | 'email'; valor: string } | null;
+		  }
 		| { estado: 'invalido' | 'bloqueado'; mensagem: string };
 
 	const SEM_CONEXAO =
@@ -73,6 +77,12 @@
 			{#if data.estado === 'valido'}
 				<h1>Oi, {data.nome.split(' ')[0]}!</h1>
 				<p class="sub">Escolha uma senha para entrar no Eagles.</p>
+				{#if data.login}
+					<p class="login">
+						Depois, para entrar, use o {data.login.tipo === 'telefone' ? 'telefone' : 'e-mail'}
+						<strong>{data.login.valor}</strong> e esta senha.
+					</p>
+				{/if}
 			{:else}
 				<h1>Eagles</h1>
 			{/if}
@@ -160,6 +170,16 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--esp-4);
+	}
+
+	.login {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
+		background: var(--cor-superficie-2);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio);
+		padding: var(--esp-2) var(--esp-3);
+		text-wrap: pretty;
 	}
 
 	.rodape {

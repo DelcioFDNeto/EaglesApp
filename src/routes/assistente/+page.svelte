@@ -254,8 +254,8 @@
 		<header>
 			<h1>Assistente de IA</h1>
 			<p class="sub">
-				Apoio para redação, atas e análises dentro do seu escopo. Nenhuma mudança é aplicada sem
-				sua confirmação.
+				Apoio para redação, atas e análises dentro do seu escopo. Nenhuma mudança é aplicada sem sua
+				confirmação.
 			</p>
 		</header>
 
@@ -367,12 +367,7 @@
 								required
 							></textarea>
 						</div>
-						<Botao
-							tipo="submit"
-							largura="cheia"
-							carregando={gerandoAviso}
-							desabilitado={!iaAtiva}
-						>
+						<Botao tipo="submit" largura="cheia" carregando={gerandoAviso} desabilitado={!iaAtiva}>
 							Gerar rascunho de aviso
 						</Botao>
 
@@ -422,12 +417,7 @@
 								required
 							></textarea>
 						</div>
-						<Botao
-							tipo="submit"
-							largura="cheia"
-							carregando={gerandoAta}
-							desabilitado={!iaAtiva}
-						>
+						<Botao tipo="submit" largura="cheia" carregando={gerandoAta} desabilitado={!iaAtiva}>
 							Resumir ata
 						</Botao>
 
@@ -466,8 +456,8 @@
 			{:else if aba === 'analises' && podeVerAnalises}
 				<section class="painel" aria-label="Análises assistidas por escopo">
 					<p class="desc">
-						Menores de 18 anos são pseudonimizados automaticamente antes de qualquer análise
-						(LGPD). Toda proposta fica pendente até confirmação humana.
+						Menores de 18 anos são pseudonimizados automaticamente antes de qualquer análise (LGPD).
+						Toda proposta fica pendente até confirmação humana.
 					</p>
 
 					<ul class="lista">
@@ -540,9 +530,7 @@
 					{#if sugestoes.length === 0}
 						<div class="vazio">
 							<h2>Nenhuma sugestão registrada</h2>
-							<p>
-								Gere um rascunho ou análise nas outras abas para revisar e confirmar aqui.
-							</p>
+							<p>Gere um rascunho ou análise nas outras abas para revisar e confirmar aqui.</p>
 						</div>
 					{:else}
 						<ul class="lista">

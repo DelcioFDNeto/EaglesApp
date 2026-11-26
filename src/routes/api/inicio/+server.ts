@@ -13,6 +13,7 @@ import {
 } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
+import { avisoDeLideranca } from '$server/lideranca/mandatos';
 
 /**
  * Dados iniciais da tela /inicio para a pessoa autenticada.
@@ -26,7 +27,10 @@ export const GET = async ({ request, locals }) => {
 	}
 
 	const { actor } = auth;
-	if (!can(actor, 'event.view', { personId: actor.personId }) && !can(actor, 'person.view', { personId: actor.personId })) {
+	if (
+		!can(actor, 'event.view', { personId: actor.personId }) &&
+		!can(actor, 'person.view', { personId: actor.personId })
+	) {
 		return json({ erro: 'Sem permissão para acessar o início.' }, { status: 403 });
 	}
 
@@ -53,11 +57,7 @@ export const GET = async ({ request, locals }) => {
 		.from(event)
 		.leftJoin(eventType, eq(eventType.id, event.eventTypeId))
 		.where(
-			and(
-				eq(event.teamId, actor.teamId),
-				ne(event.status, 'cancelled'),
-				gte(event.startsAt, agora)
-			)
+			and(eq(event.teamId, actor.teamId), ne(event.status, 'cancelled'), gte(event.startsAt, agora))
 		)
 		.orderBy(asc(event.startsAt))
 		.limit(1);
@@ -159,6 +159,8 @@ export const GET = async ({ request, locals }) => {
 		permissoes,
 		proximoEvento: proximoEvento ?? null,
 		proximasResponsabilidades,
-		ultimoAviso
+		ultimoAviso,
+		// Só para Master e líderes: mandato vencendo/vencido ou vaga aberta.
+		avisoLideranca: await avisoDeLideranca(banco, actor)
 	});
 };

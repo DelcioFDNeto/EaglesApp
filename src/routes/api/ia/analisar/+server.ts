@@ -16,6 +16,7 @@ import {
 import { autenticarAtor, flagAtiva } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
 import { calcularResumoFinanceiro } from '$server/financeiro/calculos';
+import { naoEhMaster } from '$server/lideranca/regras';
 import {
 	detectarSinaisDeAtencao,
 	resumirFinanceiroEmTexto,
@@ -147,7 +148,13 @@ export const POST = async ({ request, locals }) => {
 		.from(personTable)
 		.leftJoin(personProfile, eq(personProfile.personId, personTable.id))
 		.leftJoin(groupMember, eq(groupMember.personId, personTable.id))
-		.where(and(eq(personTable.teamId, actor.teamId), isNull(personTable.deletedAt)))
+		.where(
+			and(
+				eq(personTable.teamId, actor.teamId),
+				isNull(personTable.deletedAt),
+				naoEhMaster(personTable.id)
+			)
+		)
 		.orderBy(asc(personTable.fullName));
 
 	// RN-26: conselheiro vê apenas pessoas dos próprios grupos

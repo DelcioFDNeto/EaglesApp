@@ -45,8 +45,7 @@ export const GET = async ({ request, url, locals }) => {
 		.orderBy(asc(responsabilidade.ordem), asc(responsabilidade.nome));
 
 	const podeGerenciar =
-		can(actor, 'responsibility.manage') ||
-		groupsWhere(actor, 'responsibility.manage').length > 0;
+		can(actor, 'responsibility.manage') || groupsWhere(actor, 'responsibility.manage').length > 0;
 
 	return json({
 		podeGerenciar,
@@ -66,8 +65,7 @@ export const POST = async ({ request, locals }) => {
 
 	const { actor } = auth;
 	const podeGerenciar =
-		can(actor, 'responsibility.manage') ||
-		groupsWhere(actor, 'responsibility.manage').length > 0;
+		can(actor, 'responsibility.manage') || groupsWhere(actor, 'responsibility.manage').length > 0;
 
 	if (!podeGerenciar) {
 		return json(
@@ -95,15 +93,15 @@ export const POST = async ({ request, locals }) => {
 		.select({ id: responsabilidade.id })
 		.from(responsabilidade)
 		.where(
-			and(
-				eq(responsabilidade.teamId, actor.teamId),
-				eq(responsabilidade.nome, resultado.data.nome)
-			)
+			and(eq(responsabilidade.teamId, actor.teamId), eq(responsabilidade.nome, resultado.data.nome))
 		)
 		.limit(1);
 
 	if (existe) {
-		return json({ erro: 'Já existe uma responsabilidade com este nome na equipe.' }, { status: 400 });
+		return json(
+			{ erro: 'Já existe uma responsabilidade com este nome na equipe.' },
+			{ status: 400 }
+		);
 	}
 
 	const [criada] = await banco

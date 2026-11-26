@@ -91,13 +91,13 @@ export async function cacheLer<T>(
 	chave: string
 ): Promise<{ dado: T; atualizadoEm: number } | null> {
 	const resultado = await transacao(store, 'readonly', (loja) => {
-		return new Promise<{ chave: string; dado: T; expiraEm: number; atualizadoEm: number } | undefined>(
-			(resolve, reject) => {
-				const requisicao = loja.get(chave);
-				requisicao.onsuccess = () => resolve(requisicao.result);
-				requisicao.onerror = () => reject(requisicao.error);
-			}
-		);
+		return new Promise<
+			{ chave: string; dado: T; expiraEm: number; atualizadoEm: number } | undefined
+		>((resolve, reject) => {
+			const requisicao = loja.get(chave);
+			requisicao.onsuccess = () => resolve(requisicao.result);
+			requisicao.onerror = () => reject(requisicao.error);
+		});
 	});
 
 	if (!resultado) return null;

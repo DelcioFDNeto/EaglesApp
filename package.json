@@ -8,6 +8,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"build:api": "node deploy/build-api.mjs",
+		"deploy:firebase": "npm run build && npx --yes firebase-tools deploy --only hosting",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"format": "prettier --write .",
@@ -16,8 +17,8 @@
 		"test:watch": "vitest",
 		"test:e2e": "playwright test",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "node --experimental-strip-types src/lib/server/db/migrate.ts",
-		"db:seed": "node --experimental-strip-types seed/seed.ts"
+		"db:migrate": "node --env-file-if-exists=.env --experimental-strip-types src/lib/server/db/migrate.ts",
+		"db:seed": "esbuild seed/seed.ts --bundle --platform=node --format=esm --packages=external --outfile=.svelte-kit/seed.mjs --log-level=warning && node --env-file-if-exists=.env .svelte-kit/seed.mjs"
 	},
 	"dependencies": {
 		"@capacitor/android": "^7.0.0",

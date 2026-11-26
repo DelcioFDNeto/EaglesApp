@@ -50,7 +50,12 @@ function req(method: string, path: string, token: string, body?: unknown): Reque
 	});
 }
 
-async function criarPessoa(nome: string, email: string, roleId: string, scopeType: 'global' | 'self') {
+async function criarPessoa(
+	nome: string,
+	email: string,
+	roleId: string,
+	scopeType: 'global' | 'self'
+) {
 	const [p] = await ctx.db
 		.insert(personTable)
 		.values({ teamId: ctx.teamId, fullName: nome })
@@ -187,7 +192,9 @@ describe('M07 — Responsabilidades e Escalas', () => {
 		const gerada = await resGerar.json();
 		expect(gerada.propostaId).toBeTruthy();
 		expect(gerada.itens.length).toBeGreaterThanOrEqual(2);
-		expect(gerada.itens.every((i: any) => i.status === 'proposta' && i.origem === 'gerada')).toBe(true);
+		expect(gerada.itens.every((i: any) => i.status === 'proposta' && i.origem === 'gerada')).toBe(
+			true
+		);
 
 		// Confirma proposta explicitamente
 		const resConfirmar = await confirmarEscalaRoute.POST({

@@ -92,6 +92,7 @@ export const POST = async ({ request, params, locals }) => {
 	return json({
 		ok: true,
 		movimentacao: atualizada,
-		mensagem: decisao === 'aprovar' ? 'Despesa aprovada e confirmada no saldo.' : 'Despesa rejeitada.'
+		mensagem:
+			decisao === 'aprovar' ? 'Despesa aprovada e confirmada no saldo.' : 'Despesa rejeitada.'
 	});
 };

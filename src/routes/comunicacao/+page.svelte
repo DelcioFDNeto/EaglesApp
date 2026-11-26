@@ -24,7 +24,9 @@
 	let novoCorpo = $state('');
 	let novoEscopo = $state<'all' | 'group' | 'status'>('all');
 	let novoGrupoId = $state('');
-	let novoStatusAlvo = $state<'visitante' | 'recorrente' | 'membro' | 'conselheiro' | 'lider'>('membro');
+	let novoStatusAlvo = $state<'visitante' | 'recorrente' | 'membro' | 'conselheiro' | 'lider'>(
+		'membro'
+	);
 	let novoEventoId = $state('');
 	let publicarAgora = $state(true);
 	let salvandoAnuncio = $state(false);
@@ -164,8 +166,7 @@
 			});
 			const d = await res.json().catch(() => ({}));
 			if (res.ok) {
-				mensagem =
-					podePublicar && publicarAgora ? 'Aviso publicado.' : 'Rascunho salvo.';
+				mensagem = podePublicar && publicarAgora ? 'Aviso publicado.' : 'Rascunho salvo.';
 				novoTitulo = '';
 				novoCorpo = '';
 				novoEventoId = '';
@@ -435,7 +436,8 @@
 										<strong>{a.title}</strong>
 										<span class="meta">
 											Por {a.authorName}
-											{#if a.publishedAt} · {formatarData(a.publishedAt)}{/if}
+											{#if a.publishedAt}
+												· {formatarData(a.publishedAt)}{/if}
 										</span>
 									</div>
 								</div>
@@ -449,25 +451,16 @@
 									>
 										WhatsApp
 									</Botao>
-									<Botao
-										variante="texto"
-										onclick={() => copiarTexto(`${a.title}\n\n${a.body}`)}
-									>
+									<Botao variante="texto" onclick={() => copiarTexto(`${a.title}\n\n${a.body}`)}>
 										Copiar
 									</Botao>
 									{#if podePublicar && a.status === 'draft'}
-										<Botao
-											variante="texto"
-											onclick={() => alterarStatusAnuncio(a.id, 'published')}
-										>
+										<Botao variante="texto" onclick={() => alterarStatusAnuncio(a.id, 'published')}>
 											Publicar
 										</Botao>
 									{/if}
 									{#if podeCriar && a.status === 'published'}
-										<Botao
-											variante="texto"
-											onclick={() => alterarStatusAnuncio(a.id, 'archived')}
-										>
+										<Botao variante="texto" onclick={() => alterarStatusAnuncio(a.id, 'archived')}>
 											Arquivar
 										</Botao>
 									{/if}
@@ -571,8 +564,8 @@
 				<div class="bloco-gerador">
 					<h2>Gerar texto pronto para WhatsApp</h2>
 					<p class="sub">
-						Preenche automaticamente data, local e escala — sem incluir telefone, e-mail ou
-						foto dos participantes.
+						Preenche automaticamente data, local e escala — sem incluir telefone, e-mail ou foto dos
+						participantes.
 					</p>
 
 					<div class="campo-select">
@@ -615,9 +608,7 @@
 							<label for="texto-pronto">Pré-visualização editável</label>
 							<textarea id="texto-pronto" rows="6" bind:value={textoGerado}></textarea>
 							<div class="acoes-linha">
-								<Botao onclick={() => abrirWhatsappTexto(textoGerado)}>
-									Abrir no WhatsApp
-								</Botao>
+								<Botao onclick={() => abrirWhatsappTexto(textoGerado)}>Abrir no WhatsApp</Botao>
 								<Botao variante="secundario" onclick={() => copiarTexto(textoGerado)}>
 									Copiar texto
 								</Botao>
@@ -662,7 +653,12 @@
 								criarModelo();
 							}}
 						>
-							<Campo id="nome-modelo" rotulo="Nome do modelo" bind:valor={novoModeloNome} obrigatorio />
+							<Campo
+								id="nome-modelo"
+								rotulo="Nome do modelo"
+								bind:valor={novoModeloNome}
+								obrigatorio
+							/>
 							<div class="campo-select">
 								<label for="cat-modelo">Categoria</label>
 								<select id="cat-modelo" bind:value={novoModeloCategoria}>
@@ -688,9 +684,7 @@
 									</p>
 								{/if}
 							</div>
-							<Botao tipo="submit" largura="cheia" carregando={salvandoModelo}>
-								Salvar modelo
-							</Botao>
+							<Botao tipo="submit" largura="cheia" carregando={salvandoModelo}>Salvar modelo</Botao>
 						</form>
 					</section>
 				{/if}
@@ -699,8 +693,8 @@
 			<section class="painel" aria-label="Preferências de notificação">
 				{#if !notificacoesAtivasNoSistema}
 					<Aviso tom="aviso">
-						Notificações automáticas estão desligadas nas configurações gerais dos Eagles.
-						Suas preferências abaixo já ficam salvas para quando forem ativadas.
+						Notificações automáticas estão desligadas nas configurações gerais dos Eagles. Suas
+						preferências abaixo já ficam salvas para quando forem ativadas.
 					</Aviso>
 				{/if}
 
@@ -733,9 +727,7 @@
 
 					<fieldset class="grupo-checks">
 						<legend>Janela de silêncio</legend>
-						<p class="sub">
-							Nenhuma notificação será enviada neste intervalo (padrão: 22h às 7h).
-						</p>
+						<p class="sub">Nenhuma notificação será enviada neste intervalo (padrão: 22h às 7h).</p>
 						<div class="grade-horas">
 							<div class="campo-select">
 								<label for="silencio-inicio">Das</label>
@@ -756,9 +748,7 @@
 						</div>
 					</fieldset>
 
-					<Botao tipo="submit" largura="cheia" carregando={salvandoPref}>
-						Salvar preferências
-					</Botao>
+					<Botao tipo="submit" largura="cheia" carregando={salvandoPref}>Salvar preferências</Botao>
 				</form>
 			</section>
 		{/if}

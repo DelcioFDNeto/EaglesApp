@@ -5,6 +5,8 @@ build-api/
 .env
 .env.*
 !.env.example
+# Só configuração pública do SPA (PUBLIC_API_URL); ver o próprio arquivo.
+!.env.production
 *.log
 .DS_Store
 Thumbs.db

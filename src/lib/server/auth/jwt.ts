@@ -13,7 +13,6 @@ import { randomBytes } from 'node:crypto';
  * terem efeito imediato (ADR 0004).
  */
 
-const EXPIRES_IN = '7d';
 const ALGORITMO = 'HS256' as const;
 const TAMANHO_MINIMO_SEGREDO = 32;
 
@@ -60,8 +59,16 @@ function segredo(): string {
 	throw new Error('JWT_SECRET não definida. Configure a variável de ambiente da API.');
 }
 
-export function gerarToken(payload: JwtPayload) {
-	return jwt.sign(payload, segredo(), { expiresIn: EXPIRES_IN, algorithm: ALGORITMO });
+/**
+ * O token vence junto com a sessão que ele representa (`session.expires_at`,
+ * 30 dias pelo ADR 0004). Antes ele tinha prazo próprio de 7 dias e derrubava
+ * todo mundo bem antes de a sessão acabar. Revogar continua sendo imediato:
+ * o middleware confere a sessão no banco a cada requisição.
+ */
+export function gerarToken(payload: JwtPayload, expiraEm: Date) {
+	const segundos = Math.floor((expiraEm.getTime() - Date.now()) / 1000);
+	if (segundos <= 0) throw new Error('sessão já expirada: não há token a emitir');
+	return jwt.sign(payload, segredo(), { expiresIn: segundos, algorithm: ALGORITMO });
 }
 
 export function gerarTokenReset() {

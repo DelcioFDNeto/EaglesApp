@@ -39,8 +39,7 @@ export const GET = async ({ request, locals }) => {
 		.orderBy(asc(messageTemplate.name));
 
 	const podeGerenciar =
-		can(actor, 'announcement.create') ||
-		groupsWhere(actor, 'announcement.create').length > 0;
+		can(actor, 'announcement.create') || groupsWhere(actor, 'announcement.create').length > 0;
 
 	return json({
 		podeGerenciar,
@@ -62,8 +61,7 @@ export const POST = async ({ request, locals }) => {
 
 	const { actor } = auth;
 	const podeGerenciar =
-		can(actor, 'announcement.create') ||
-		groupsWhere(actor, 'announcement.create').length > 0;
+		can(actor, 'announcement.create') || groupsWhere(actor, 'announcement.create').length > 0;
 	if (!podeGerenciar) {
 		return json(
 			{ erro: 'Apenas líderes e conselheiros podem criar modelos de mensagem.' },
@@ -90,10 +88,7 @@ export const POST = async ({ request, locals }) => {
 		.select({ id: messageTemplate.id })
 		.from(messageTemplate)
 		.where(
-			and(
-				eq(messageTemplate.teamId, actor.teamId),
-				eq(messageTemplate.name, resultado.data.name)
-			)
+			and(eq(messageTemplate.teamId, actor.teamId), eq(messageTemplate.name, resultado.data.name))
 		)
 		.limit(1);
 

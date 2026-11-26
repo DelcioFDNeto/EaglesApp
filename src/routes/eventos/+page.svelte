@@ -107,16 +107,43 @@
 								<div class="detalhes">
 									<span class="meta">
 										<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-											<rect x="2" y="3" width="12" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3" />
-											<path d="M5 1.5v3M11 1.5v3M2 6.5h12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+											<rect
+												x="2"
+												y="3"
+												width="12"
+												height="11"
+												rx="1.5"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="1.3"
+											/>
+											<path
+												d="M5 1.5v3M11 1.5v3M2 6.5h12"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="1.3"
+												stroke-linecap="round"
+											/>
 										</svg>
 										{formatarData(e.startsAt)}
 									</span>
 									{#if e.location}
 										<span class="meta">
 											<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-												<path d="M8 14s4.5-4.1 4.5-7.5a4.5 4.5 0 1 0-9 0C3.5 9.9 8 14 8 14z" fill="none" stroke="currentColor" stroke-width="1.3" />
-												<circle cx="8" cy="6.5" r="1.4" fill="none" stroke="currentColor" stroke-width="1.3" />
+												<path
+													d="M8 14s4.5-4.1 4.5-7.5a4.5 4.5 0 1 0-9 0C3.5 9.9 8 14 8 14z"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="1.3"
+												/>
+												<circle
+													cx="8"
+													cy="6.5"
+													r="1.4"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="1.3"
+												/>
 											</svg>
 											{e.location}
 										</span>
@@ -173,7 +200,9 @@
 		border-radius: var(--raio);
 		text-decoration: none;
 		color: var(--cor-texto);
-		transition: border-color var(--transicao), background-color var(--transicao);
+		transition:
+			border-color var(--transicao),
+			background-color var(--transicao);
 	}
 
 	@media (hover: hover) {

@@ -39,8 +39,13 @@ jobs:
       - name: Testes
         run: npm test
 
-      - name: Build
+      # Usa o .env.production versionado (PUBLIC_API_URL): sem ele o build falha.
+      - name: Build do SPA (Firebase)
         run: npm run build
+
+      # Mesmo código, alvo adapter-node: é o que a imagem Docker da VPS gera.
+      - name: Build da API (VPS)
+        run: npm run build:api
 
       - name: Peso do bundle
         run: |

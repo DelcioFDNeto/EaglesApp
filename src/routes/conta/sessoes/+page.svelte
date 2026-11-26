@@ -34,9 +34,10 @@
 		try {
 			sessoes = await apiCache.sessoes();
 		} catch (e: any) {
-			erro = e.message === 'sem_conexao'
-				? 'Você está offline. Os dispositivos conectados estão indisponíveis sem conexão.'
-				: 'Não foi possível carregar os dispositivos. Tente novamente.';
+			erro =
+				e.message === 'sem_conexao'
+					? 'Você está offline. Os dispositivos conectados estão indisponíveis sem conexão.'
+					: 'Não foi possível carregar os dispositivos. Tente novamente.';
 		} finally {
 			carregando = false;
 		}
@@ -111,10 +112,12 @@
 							Desconectar outros aparelhos
 						</Botao>
 					{:else}
-						<form onsubmit={(e) => {
-							e.preventDefault();
-							revogarOutras();
-						}}>
+						<form
+							onsubmit={(e) => {
+								e.preventDefault();
+								revogarOutras();
+							}}
+						>
 							<p class="confirmar" role="alert" aria-live="polite">
 								Tem certeza? {textoConfirmacao}
 							</p>

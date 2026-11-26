@@ -10,7 +10,27 @@
  * permissões: a liderança pode ajustá-las (seção 11.3).
  */
 
-import type { Permission, ScopeType } from './permissions';
+import { ALL_PERMISSIONS, type Permission, type ScopeType } from './permissions';
+
+/**
+ * Papéis com regra própria, fora da gestão comum de papéis:
+ *
+ * - `master`: o desenvolvedor. Acima de todos, invisível para a equipe, com o
+ *   catálogo inteiro de permissões (ver `loadActor`). Só nasce pelo script de
+ *   primeiro acesso; ninguém da equipe atribui, edita ou remove.
+ * - `lider`: o maior nível da equipe. No máximo 2, por mandato de 2 anos
+ *   (`mandato_lider`). Só entra e sai pela tela de Liderança, nunca pela
+ *   atribuição comum de papéis.
+ */
+export const PAPEL_MASTER = 'master';
+export const PAPEL_LIDER = 'lider';
+export const PAPEIS_RESERVADOS: readonly string[] = [PAPEL_MASTER, PAPEL_LIDER];
+
+/**
+ * Só líderes e Master podem ter esta permissão: quem distribui permissões
+ * teria, na prática, o mesmo nível dos líderes.
+ */
+export const PERMISSAO_RESERVADA_A_LIDERES: Permission = 'rbac.manage';
 
 export type RoleSeed = {
 	key: string;
@@ -52,6 +72,14 @@ const CONSELHEIRO_PERMISSIONS: Permission[] = [
 ];
 
 export const ROLE_SEEDS: RoleSeed[] = [
+	{
+		key: PAPEL_MASTER,
+		name: 'Master',
+		description: 'Acesso do desenvolvedor do sistema. Invisível para a equipe.',
+		isSystem: true,
+		defaultScope: 'global',
+		permissions: [...ALL_PERMISSIONS]
+	},
 	{
 		key: 'lider',
 		name: 'Líder',

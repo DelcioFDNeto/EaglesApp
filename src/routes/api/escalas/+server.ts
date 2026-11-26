@@ -102,7 +102,13 @@ export const POST = async ({ request, locals }) => {
 		);
 	}
 
-	const { eventoId, responsabilidadeId, personId: pessoaAlvoId, ordem, observacoes } = resultado.data;
+	const {
+		eventoId,
+		responsabilidadeId,
+		personId: pessoaAlvoId,
+		ordem,
+		observacoes
+	} = resultado.data;
 
 	const [evento] = await banco
 		.select({ id: eventTable.id, groupId: eventTable.groupId })

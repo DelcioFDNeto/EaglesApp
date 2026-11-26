@@ -47,8 +47,8 @@
 			<Marca tamanho={56} comNome />
 			<h1>Solicitar acesso</h1>
 			<p class="sub">
-				O acesso ao Eagles é feito por convite do conselheiro. Preencha seus dados para
-				solicitar um convite.
+				O acesso ao Eagles é feito por convite do conselheiro. Preencha seus dados para solicitar um
+				convite.
 			</p>
 		</header>
 
@@ -60,31 +60,13 @@
 		{/if}
 
 		<form onsubmit={handleSubmit}>
-			<Campo
-				id="nome"
-				rotulo="Nome completo"
-				autocomplete="name"
-				obrigatorio
-			/>
+			<Campo id="nome" rotulo="Nome completo" autocomplete="name" obrigatorio />
 
-			<Campo
-				id="email"
-				rotulo="E-mail"
-				tipo="email"
-				autocomplete="email"
-				obrigatorio
-			/>
+			<Campo id="email" rotulo="E-mail" tipo="email" autocomplete="email" obrigatorio />
 
-			<Campo
-				id="telefone"
-				rotulo="Telefone (opcional)"
-				tipo="tel"
-				autocomplete="tel"
-			/>
+			<Campo id="telefone" rotulo="Telefone (opcional)" tipo="tel" autocomplete="tel" />
 
-			<Botao tipo="submit" largura="cheia" carregando={enviando}>
-				Enviar solicitação
-			</Botao>
+			<Botao tipo="submit" largura="cheia" carregando={enviando}>Enviar solicitação</Botao>
 		</form>
 
 		<footer>

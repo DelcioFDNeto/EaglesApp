@@ -94,9 +94,7 @@ export const POST = async ({ request, locals }) => {
 	const [existe] = await banco
 		.select({ id: financeCategory.id })
 		.from(financeCategory)
-		.where(
-			and(eq(financeCategory.teamId, actor.teamId), eq(financeCategory.slug, dados.slug))
-		)
+		.where(and(eq(financeCategory.teamId, actor.teamId), eq(financeCategory.slug, dados.slug)))
 		.limit(1);
 
 	if (existe) {

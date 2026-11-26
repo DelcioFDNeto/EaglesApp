@@ -40,8 +40,8 @@ const transporter = nodemailer.createTransport({
 	secure: process.env.SMTP_SECURE === 'true',
 	auth: {
 		user: process.env.SMTP_USER,
-		pass: process.env.SMTP_PASS, // senha de app, não a senha normal
-	},
+		pass: process.env.SMTP_PASS // senha de app, não a senha normal
+	}
 });
 
 export async function enviarEmailReset(destinatario: string, linkReset: string) {
@@ -55,6 +55,6 @@ export async function enviarEmailReset(destinatario: string, linkReset: string) 
 			<p><a href="${linkReset}">Clique aqui para definir uma nova senha</a></p>
 			<p>Este link expira em 15 minutos.</p>
 			<p>Se não foi você, ignore este e-mail.</p>
-		`,
+		`
 	});
 }

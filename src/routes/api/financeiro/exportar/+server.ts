@@ -79,8 +79,7 @@ export const GET = async ({ request, url, locals }) => {
 		if (podeVerTudo || podeVerGrupoGlobal) return true;
 		if (gruposVisiveis.length > 0) {
 			return (
-				(m.groupId !== null && gruposVisiveis.includes(m.groupId)) ||
-				m.personId === actor.personId
+				(m.groupId !== null && gruposVisiveis.includes(m.groupId)) || m.personId === actor.personId
 			);
 		}
 		return m.personId === actor.personId;

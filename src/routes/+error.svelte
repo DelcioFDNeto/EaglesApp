@@ -5,9 +5,7 @@
 	import Marca from '$ui/Marca.svelte';
 
 	const status = $derived(page.status);
-	const mensagemErro = $derived(
-		page.error?.message ?? 'Não foi possível carregar esta página.'
-	);
+	const mensagemErro = $derived(page.error?.message ?? 'Não foi possível carregar esta página.');
 </script>
 
 <svelte:head>
@@ -26,12 +24,8 @@
 		</Aviso>
 
 		<div class="acoes">
-			<Botao largura="cheia" onclick={() => window.location.reload()}>
-				Tentar novamente
-			</Botao>
-			<Botao variante="texto" largura="cheia" href="/inicio">
-				Voltar ao início
-			</Botao>
+			<Botao largura="cheia" onclick={() => window.location.reload()}>Tentar novamente</Botao>
+			<Botao variante="texto" largura="cheia" href="/inicio">Voltar ao início</Botao>
 		</div>
 
 		<p class="ajuda">

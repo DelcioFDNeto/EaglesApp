@@ -43,7 +43,10 @@ export const POST = async ({ request, locals }) => {
 		can(actor, 'ai.use_basic', { personId: actor.personId }) ||
 		groupsWhere(actor, 'ai.use_basic').length > 0;
 	if (!podeUsar) {
-		return json({ erro: 'Você não tem permissão para usar recursos básicos de IA.' }, { status: 403 });
+		return json(
+			{ erro: 'Você não tem permissão para usar recursos básicos de IA.' },
+			{ status: 403 }
+		);
 	}
 
 	let corpo: unknown;

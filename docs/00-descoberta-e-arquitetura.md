@@ -4,12 +4,12 @@
 **Data:** 18/08/2026
 **Status:** **arquitetura aprovada** em 18/08/2026 — decisões D-01 a D-04 confirmadas pelo usuário e registradas em [`adr/`](adr/). D-05 a D-07 continuam pendentes (não bloqueiam o M01 local).
 
-| Decisão                   | Escolha aprovada                                                   |
-| ------------------------- | ------------------------------------------------------------------ |
-| **D-01** Stack            | SvelteKit 2 + TypeScript + PostgreSQL 16 + Drizzle                 |
-| **D-02** MVP              | 6 módulos, ~10 semanas — sem financeiro (V1.2) e sem IA (V2.0)     |
+| Decisão                   | Escolha aprovada                                                                                                                   |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **D-01** Stack            | SvelteKit 2 + TypeScript + PostgreSQL 16 + Drizzle                                                                                 |
+| **D-02** MVP              | 6 módulos, ~10 semanas — sem financeiro (V1.2) e sem IA (V2.0)                                                                     |
 | **D-03** Menores de idade | **Não há menores hoje; piso de 16 anos daqui em diante.** 16–17 ainda são menores na LGPD, então a estrutura fica pronta e inativa |
-| **D-04** Acesso           | Convite por link do WhatsApp + senha definida pela pessoa          |
+| **D-04** Acesso           | Convite por link do WhatsApp + senha definida pela pessoa                                                                          |
 
 > ⚠️ **D-03 alterou a arquitetura descrita neste documento.** O impacto está detalhado na seção 12.6 e em [`adr/0003-dados-de-menores.md`](adr/0003-dados-de-menores.md).
 

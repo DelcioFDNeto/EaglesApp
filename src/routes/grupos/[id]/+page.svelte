@@ -75,7 +75,8 @@
 		{:else if grupo}
 			<div class="grupo-resumo">
 				<p class="contagem">
-					{membros.length} {membros.length === 1 ? 'integrante' : 'integrantes'}
+					{membros.length}
+					{membros.length === 1 ? 'integrante' : 'integrantes'}
 				</p>
 			</div>
 
@@ -95,7 +96,13 @@
 								{#if m.whatsapp}
 									<span class="contato">
 										<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-											<path d="M3.5 2.5h2.2l1 2.8-1.4 1.1a8.5 8.5 0 0 0 4.3 4.3l1.1-1.4 2.8 1v2.2a1 1 0 0 1-1 1A10 10 0 0 1 2.5 3.5a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+											<path
+												d="M3.5 2.5h2.2l1 2.8-1.4 1.1a8.5 8.5 0 0 0 4.3 4.3l1.1-1.4 2.8 1v2.2a1 1 0 0 1-1 1A10 10 0 0 1 2.5 3.5a1 1 0 0 1 1-1z"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="1.3"
+												stroke-linejoin="round"
+											/>
 										</svg>
 										{m.whatsapp}
 									</span>

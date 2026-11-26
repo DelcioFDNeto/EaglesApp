@@ -72,8 +72,7 @@ export const PATCH = async ({ request, params, locals }) => {
 			title: dados.title ?? atual.title,
 			body: dados.body ?? atual.body,
 			status: novoStatus,
-			publishedAt:
-				novoStatus === 'published' && !atual.publishedAt ? agora : atual.publishedAt,
+			publishedAt: novoStatus === 'published' && !atual.publishedAt ? agora : atual.publishedAt,
 			updatedAt: agora
 		})
 		.where(eq(announcement.id, id))

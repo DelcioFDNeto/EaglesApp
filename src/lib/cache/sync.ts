@@ -115,9 +115,7 @@ export async function sincronizarEspecialidades(): Promise<void> {
 
 		await Promise.allSettled(
 			ESPECIALIDADES.map(async (store) => {
-				const endpoint = Object.entries(MAPA_STORE_POR_ENDPOINT).find(
-					([, s]) => s === store
-				)?.[0];
+				const endpoint = Object.entries(MAPA_STORE_POR_ENDPOINT).find(([, s]) => s === store)?.[0];
 				if (!endpoint) return;
 
 				try {

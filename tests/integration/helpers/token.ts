@@ -24,7 +24,10 @@ export async function emitirToken(
 	if (!conta) throw new Error(`pessoa ${personId} não tem conta de usuário`);
 
 	const { record } = await createSession(db, conta.id);
-	const token = gerarToken({ personId, email: conta.email ?? undefined, sessionId: record.id });
+	const token = gerarToken(
+		{ personId, email: conta.email ?? undefined, sessionId: record.id },
+		record.expiresAt
+	);
 	return { token, sessionId: record.id };
 }
 
