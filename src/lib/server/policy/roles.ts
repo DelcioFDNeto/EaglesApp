@@ -59,6 +59,7 @@ const CONSELHEIRO_PERMISSIONS: Permission[] = [
 	'person.view_sensitive',
 	'person.invite',
 	'group.assign_member',
+	'group.update',
 	'event.manage',
 	'event.publish',
 	'attendance.record',

@@ -34,6 +34,12 @@ export type AuditAction =
 	| 'lideranca.nomeado'
 	| 'lideranca.renovado'
 	| 'lideranca.encerrado'
+	// Grupos
+	| 'group.criado'
+	| 'group.atualizado'
+	| 'group.arquivado'
+	| 'group.reativado'
+	| 'group.membro_transferido'
 	// Eventos
 	| 'event.criado'
 	| 'event.atualizado'

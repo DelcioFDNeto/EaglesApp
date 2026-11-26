@@ -5,6 +5,7 @@ import { db } from '$server/db';
 import {
 	group,
 	groupMember,
+	groupMemberHistory,
 	invite,
 	person,
 	personProfile,
@@ -42,7 +43,13 @@ async function gruposParaCadastro(banco: ReturnType<typeof db>, actor: Actor) {
 	const grupos = await banco
 		.select({ id: group.id, nome: group.name })
 		.from(group)
-		.where(and(eq(group.teamId, actor.teamId), global ? undefined : inArray(group.id, permitidos)))
+		.where(
+			and(
+				eq(group.teamId, actor.teamId),
+				isNull(group.archivedAt),
+				global ? undefined : inArray(group.id, permitidos)
+			)
+		)
 		.orderBy(asc(group.name));
 
 	return { global, grupos };
@@ -212,9 +219,9 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 		const [grupo] = await banco
 			.select({ id: group.id })
 			.from(group)
-			.where(and(eq(group.id, grupoId), eq(group.teamId, actor.teamId)))
+			.where(and(eq(group.id, grupoId), eq(group.teamId, actor.teamId), isNull(group.archivedAt)))
 			.limit(1);
-		if (!grupo) return json({ erro: 'Grupo não encontrado.' }, { status: 404 });
+		if (!grupo) return json({ erro: 'PG não encontrado ou arquivado.' }, { status: 404 });
 	}
 
 	const emUso = await contatoEmUso(banco, { email, telefone });
@@ -273,6 +280,15 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 
 		if (grupoId) {
 			await tx.insert(groupMember).values({ groupId: grupoId, personId: p.id, roleKey: 'membro' });
+			await tx.insert(groupMemberHistory).values({
+				teamId: actor.teamId,
+				personId: p.id,
+				fromGroupId: null,
+				toGroupId: grupoId,
+				reason: 'Cadastro',
+				origin: 'cadastro',
+				changedByPersonId: actor.personId
+			});
 		}
 
 		return p;

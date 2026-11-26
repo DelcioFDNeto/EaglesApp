@@ -15,6 +15,7 @@
 	let novoNome = $state('');
 	let novoSlug = $state('');
 	let novaDescricao = $state('');
+	let mostrarArquivados = $state(false);
 
 	onMount(() => {
 		carregarGrupos();
@@ -24,7 +25,7 @@
 		carregando = true;
 		erro = undefined;
 		try {
-			const res = await api.get('/api/grupos');
+			const res = await api.get(`/api/grupos${mostrarArquivados ? '?arquivados=1' : ''}`);
 			if (res.ok) {
 				const data = await res.json();
 				grupos = data.grupos ?? [];
@@ -98,6 +99,13 @@
 			<Aviso tom="sucesso">{mensagem}</Aviso>
 		{/if}
 
+		{#if podeGerenciar}
+			<label class="alternar">
+				<input type="checkbox" bind:checked={mostrarArquivados} onchange={carregarGrupos} />
+				<span>Mostrar PGs arquivados</span>
+			</label>
+		{/if}
+
 		{#if carregando}
 			<div class="carregando">
 				<Marca tamanho={44} />
@@ -119,6 +127,7 @@
 									<div class="topo-grupo">
 										<strong>{g.name}</strong>
 										{#if g.slug}<span class="slug">#{g.slug}</span>{/if}
+										{#if g.archivedAt}<span class="arquivado">Arquivado</span>{/if}
 									</div>
 									{#if g.description}
 										<p class="descricao">{g.description}</p>
@@ -162,6 +171,33 @@
 </main>
 
 <style>
+	.alternar {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--esp-2);
+		min-height: var(--toque-min);
+		font-size: var(--texto-sm);
+		font-weight: 500;
+		align-self: flex-start;
+		cursor: pointer;
+	}
+
+	.alternar input {
+		width: 20px;
+		height: 20px;
+		accent-color: var(--cor-marca);
+	}
+
+	.arquivado {
+		font-size: var(--texto-xs);
+		font-weight: 700;
+		padding: 1px 8px;
+		border-radius: var(--raio-cheio);
+		background: var(--cor-superficie-2);
+		color: var(--cor-texto-2);
+		border: 1px solid var(--cor-linha);
+	}
+
 	.voltar {
 		font-size: var(--texto-sm);
 		font-weight: 600;

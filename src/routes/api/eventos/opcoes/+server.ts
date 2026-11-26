@@ -41,7 +41,11 @@ export const GET = async ({ request, locals }) => {
 			.select({ id: group.id, name: group.name })
 			.from(group)
 			.where(
-				and(eq(group.teamId, actor.teamId), global ? undefined : inArray(group.id, gruposDoEscopo))
+				and(
+					eq(group.teamId, actor.teamId),
+					isNull(group.archivedAt),
+					global ? undefined : inArray(group.id, gruposDoEscopo)
+				)
 			)
 			.orderBy(asc(group.name))
 	]);

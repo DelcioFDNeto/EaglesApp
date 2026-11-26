@@ -1,10 +1,11 @@
 import { json } from '@sveltejs/kit';
-import { and, asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
 import { group, groupMember } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
+import { audit } from '$server/audit/log';
 
 const criarGrupoSchema = z.object({
 	name: z.string().trim().min(1).max(100),
@@ -21,7 +22,7 @@ const criarGrupoSchema = z.object({
 /**
  * Lista grupos/PGs da equipe da pessoa autenticada com contagem de membros.
  */
-export const GET = async ({ request, locals }) => {
+export const GET = async ({ request, url, locals }) => {
 	const banco = db();
 	const auth = await autenticarAtor(request, banco, locals?.actor);
 	if (!auth) {
@@ -37,16 +38,22 @@ export const GET = async ({ request, locals }) => {
 		return json({ erro: 'Sem permissão para ver grupos.' }, { status: 403 });
 	}
 
+	// Arquivados só aparecem para quem pode reativá-los, e só se pedir.
+	const comArquivados = url?.searchParams.get('arquivados') === '1' && can(actor, 'group.manage');
+
 	const grupos = await banco
 		.select({
 			id: group.id,
 			name: group.name,
 			slug: group.slug,
 			description: group.description,
+			archivedAt: group.archivedAt,
 			createdAt: group.createdAt
 		})
 		.from(group)
-		.where(eq(group.teamId, actor.teamId))
+		.where(
+			and(eq(group.teamId, actor.teamId), comArquivados ? undefined : isNull(group.archivedAt))
+		)
 		.orderBy(asc(group.name));
 
 	const contagens = await banco
@@ -124,6 +131,15 @@ export const POST = async ({ request, locals }) => {
 	if (!novoGrupo) {
 		return json({ erro: 'Não foi possível criar o grupo.' }, { status: 500 });
 	}
+
+	await audit(banco, {
+		teamId: actor.teamId,
+		actorPersonId: actor.personId,
+		action: 'group.criado',
+		entity: 'group',
+		entityId: novoGrupo.id,
+		after: { name: novoGrupo.name, slug: novoGrupo.slug }
+	});
 
 	return json(
 		{

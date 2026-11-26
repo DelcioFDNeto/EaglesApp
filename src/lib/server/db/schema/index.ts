@@ -460,6 +460,13 @@ export const group = pgTable(
 		slug: text('slug').notNull(),
 		description: text('description'),
 		createdByPersonId: uuid('created_by_person_id').references(() => person.id),
+		/**
+		 * "Excluir" um PG é arquivá-lo: some das listas e não recebe ninguém,
+		 * mas eventos, escalas e o histórico de quem passou por ele continuam
+		 * apontando para um grupo que existe. Só arquiva PG vazio.
+		 */
+		archivedAt: timestamp('archived_at', { withTimezone: true }),
+		archivedByPersonId: uuid('archived_by_person_id').references(() => person.id),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
@@ -491,6 +498,41 @@ export const groupMember = pgTable(
 		index('group_member_group_idx').on(t.groupId),
 		index('group_member_person_idx').on(t.personId),
 		uniqueIndex('group_member_person_unique_idx').on(t.personId) // uma pessoa, um grupo por vez
+	]
+);
+
+/**
+ * Histórico de PG: cada entrada, saída e transferência (seção 5: os grupos
+ * são reorganizados ao longo do ano, e isso precisa ficar contado).
+ *
+ * `group_member` guarda só o PG ATUAL; aqui fica o caminho. Append-only,
+ * garantido por gatilho no banco, como a auditoria.
+ *
+ * `fromGroupId` nulo = entrou sem vir de PG nenhum; `toGroupId` nulo = saiu
+ * de todos os PGs.
+ */
+export const groupMemberHistory = pgTable(
+	'group_member_history',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id, { onDelete: 'cascade' }),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		fromGroupId: uuid('from_group_id').references(() => group.id),
+		toGroupId: uuid('to_group_id').references(() => group.id),
+		reason: text('reason'),
+		/** 'cadastro' | 'manual' | 'ia' (sugestão da IA aceita por alguém). */
+		origin: text('origin').notNull().default('manual'),
+		changedByPersonId: uuid('changed_by_person_id').references(() => person.id),
+		occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [
+		index('group_member_history_person_idx').on(t.personId, t.occurredAt),
+		index('group_member_history_to_idx').on(t.toGroupId, t.occurredAt),
+		index('group_member_history_from_idx').on(t.fromGroupId, t.occurredAt)
 	]
 );
 

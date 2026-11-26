@@ -23,7 +23,8 @@ import {
 	personProfile,
 	personRole as personRoleTable,
 	presence,
-	userAccount as userAccountTable
+	userAccount as userAccountTable,
+	groupMemberHistory
 } from '../../src/lib/server/db/schema';
 import { hashPassword } from '../../src/lib/server/auth/password';
 import { tokenPara } from './helpers/token';
@@ -409,6 +410,16 @@ describe('M10 — Assistente de IA (RN-26, RN-27, RN-29 e LGPD)', () => {
 			.where(eq(aiSuggestion.id, sugestao.id));
 		expect(sugDb!.status).toBe('aceita');
 		expect(sugDb!.decidedByPersonId).toBe(liderId);
+
+		// Cada transferência aplicada deixa rastro no histórico de PG, com origem "ia".
+		const aplicadas = (sugDb!.appliedChanges as { transferenciasAplicadas: number })
+			.transferenciasAplicadas;
+		const caminhoIa = await ctx.db
+			.select()
+			.from(groupMemberHistory)
+			.where(eq(groupMemberHistory.origin, 'ia'));
+		expect(caminhoIa).toHaveLength(aplicadas);
+		for (const c of caminhoIa) expect(c.changedByPersonId).toBe(liderId);
 
 		const logsIa = await ctx.db.select().from(aiInteractionLog);
 		expect(logsIa.length).toBeGreaterThanOrEqual(4);

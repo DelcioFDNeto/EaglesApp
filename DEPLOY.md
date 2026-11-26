@@ -8,15 +8,73 @@ Navegador / PWA / APK ──HTTPS──▶ Firebase Hosting   (SPA estático: bu
                                         └──▶ db:5432 (Postgres 16, só na rede interna)
 ```
 
-- **Frontend**: Firebase Hosting, `https://<id-do-projeto>.web.app`.
-- **API**: serviço Compose no Easypanel, em `https://api.164-152-195-199.sslip.io`.
-  O sslip.io é um DNS gratuito que resolve esse nome para o IP da VPS, e o
-  Easypanel emite o certificado. Não precisa comprar domínio (ver §6 para trocar).
+- **Frontend**: Firebase Hosting, já publicado em `https://eagles-app-pg.web.app` (também `https://eagles-app-pg.firebaseapp.com`, projeto `eagles-app-pg`).
+- **API**: serviço Compose no Easypanel (`docker-compose.yml` na raiz), em `https://api.164-152-195-199.sslip.io`.
+  O sslip.io é um DNS gratuito que resolve esse nome para o IP da VPS, e o proxy reverso (Caddy ou Traefik do Easypanel) emite o certificado HTTPS. Não precisa comprar domínio (ver §6 para trocar).
 - **Autenticação**: JWT no header `Authorization`, sempre conferido contra a
   sessão no banco (sair e desconectar aparelhos valem na hora).
 
 > A pasta `infra/` (Caddy + app SSR completo) é da arquitetura antiga do M01 e
-> **não é usada** neste deploy. O que vale é `deploy/`.
+> **não é usada** neste deploy. O que vale é `docker-compose.yml` na raiz + `deploy/`.
+
+---
+
+## Como prosseguir agora (estado atual da produção)
+
+**Já concluído:**
+
+- Projeto Firebase `eagles-app-pg` criado, `.firebaserc` atualizado e frontend publicado em `https://eagles-app-pg.web.app` (headers de cache e segurança conferidos).
+- Serviço Compose no Easypanel apontando para `docker-compose.yml` na raiz, lendo o `.env` da aba Ambiente, com build de `backup` e `npm ci` da `api` passando.
+
+**Falta fazer na VPS (`164.152.195.199`) para fechar o ar:**
+
+1. **Conferir o Caddy (que já serve o `nexus-itam` nas portas 80/443) e os containers:**
+
+   ```bash
+   cat /etc/caddy/Caddyfile
+   docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+   ```
+
+   _(Não pare nem remova o Caddy — ele mantém o `nexus-itam` no ar.)_
+
+2. **Apontar `api.164-152-195-199.sslip.io` no `Caddyfile`** (o próprio Caddy emite o certificado Let's Encrypt):
+   - **Caso A — o Caddy já encaminha para o Easypanel/Traefik ou compartilha a rede Docker:** adicione um bloco seguindo o mesmo padrão do `nexus-itam` apontando para o serviço `api:3000` (ou para o upstream do Easypanel com o header `Host` preservado).
+   - **Caso B — o Caddy roda no host e faz `reverse_proxy 127.0.0.1:<porta>`:** verifique uma porta livre em localhost (`ss -tlnp`), exponha `ports: ["127.0.0.1:3001:3000"]` (apenas `127.0.0.1`, nunca pública) no serviço `api` do `docker-compose.yml`, reimplante no Easypanel e adicione ao `Caddyfile`:
+     ```caddyfile
+     api.164-152-195-199.sslip.io {
+         reverse_proxy 127.0.0.1:3001
+     }
+     ```
+   - Recarregue o Caddy sem derrubar o `nexus-itam`:
+     ```bash
+     sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
+     ```
+     _(Se o Caddy estiver em container Docker, rode `docker exec <container-caddy> caddy reload --config /etc/caddy/Caddyfile`.)_
+
+3. **Confirmar que a API responde em HTTPS com CORS liberado:**
+
+   ```bash
+   curl -i -H "Origin: https://eagles-app-pg.web.app" https://api.164-152-195-199.sslip.io/api/health
+   # Esperado: HTTP/2 200, Access-Control-Allow-Origin: https://eagles-app-pg.web.app
+   # Corpo: {"status":"ok","banco":true,"latenciaMs":...}
+   ```
+
+4. **Criar o primeiro acesso Master (uma vez só)** no console do container `api` no Easypanel (ou via `docker exec`):
+
+   ```bash
+   node tools/primeiro-master.mjs --nome "Seu Nome" --email delciofarias04@gmail.com
+   ```
+
+   Abra o link impresso, defina sua senha, entre em `https://eagles-app-pg.web.app`, cadastre os 2 líderes em **Pessoas** (`/pessoas`), nomeie-os em **Liderança** (`/lideranca`) e envie os convites pelo WhatsApp.
+
+5. **Publicar atualizações do frontend e conferir backups:**
+   - Após puxar o Ciclo 3 (M04 Grupos e transferências), reimplante o serviço Compose no Easypanel (para aplicar a migração `0010_grupos_transferencia.sql`) e rode localmente:
+     ```bash
+     npm run deploy:firebase
+     ```
+   - Após ~5 minutos do deploy da VPS, confira nos logs do container `backup` as mensagens `restauração conferida` e `backup concluído`.
+
+---
 
 A ordem abaixo importa: o ID do projeto Firebase entra na configuração da API (CORS).
 

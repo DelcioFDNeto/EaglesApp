@@ -231,7 +231,8 @@ export const POST = async ({ request, locals }) => {
 	const grupos = await banco
 		.select({ id: groupTable.id, name: groupTable.name })
 		.from(groupTable)
-		.where(eq(groupTable.teamId, actor.teamId))
+		// PG arquivado não recebe ninguém, então também não entra na proposta.
+		.where(and(eq(groupTable.teamId, actor.teamId), isNull(groupTable.archivedAt)))
 		.orderBy(asc(groupTable.name));
 
 	const saida = sugerirDivisaoGrupos({

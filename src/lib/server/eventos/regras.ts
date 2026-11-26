@@ -70,9 +70,9 @@ export async function validarReferencias(
 		const [g] = await banco
 			.select({ id: group.id })
 			.from(group)
-			.where(and(eq(group.id, refs.groupId), eq(group.teamId, teamId)))
+			.where(and(eq(group.id, refs.groupId), eq(group.teamId, teamId), isNull(group.archivedAt)))
 			.limit(1);
-		if (!g) return { status: 404, erro: 'Grupo não encontrado.' };
+		if (!g) return { status: 404, erro: 'PG não encontrado ou arquivado.' };
 	}
 
 	if (refs.responsiblePersonId) {

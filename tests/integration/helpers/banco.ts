@@ -48,7 +48,9 @@ export async function criarBancoDeTeste(): Promise<BancoDeTeste> {
 
 	await db
 		.insert(permission)
-		.values(ALL_PERMISSIONS.map((key) => ({ key, description: PERMISSIONS[key] })));
+		.values(ALL_PERMISSIONS.map((key) => ({ key, description: PERMISSIONS[key] })))
+		// Algumas migrações já trazem permissões novas (ex.: 0010, group.update).
+		.onConflictDoNothing();
 
 	const papeis: Record<string, string> = {};
 

@@ -38,11 +38,26 @@
 	const pessoaId = page.params.id ?? '';
 
 	let pessoa = $state<any>(null);
-	let permissoes = $state<{ podeEditar: boolean; estagiosPermitidos: Estagio[] }>({
+	let permissoes = $state<{
+		podeEditar: boolean;
+		estagiosPermitidos: Estagio[];
+		mudarDePg?: { destinos: Array<{ id: string; nome: string }>; podeTirarDeTodos: boolean };
+	}>({
 		podeEditar: false,
 		estagiosPermitidos: []
 	});
 	let historico = $state<any[]>([]);
+	let historicoGrupos = $state<any[]>([]);
+
+	// Mudar de PG
+	const SEM_PG = '__sem_pg__';
+	let novoPg = $state('');
+	let motivoPg = $state('');
+	let mudandoPg = $state(false);
+	const podeMudarPg = $derived(
+		(permissoes.mudarDePg?.destinos.length ?? 0) > 0 ||
+			Boolean(permissoes.mudarDePg?.podeTirarDeTodos)
+	);
 	let carregando = $state(true);
 	let erro = $state<string | undefined>(undefined);
 	let mensagem = $state<string | undefined>(undefined);
@@ -83,6 +98,7 @@
 			pessoa = d.pessoa;
 			permissoes = d.permissoes;
 			historico = d.historico ?? [];
+			historicoGrupos = d.historicoGrupos ?? [];
 		} catch {
 			erro = 'Sem conexão. Não foi possível carregar a pessoa.';
 		} finally {
@@ -140,6 +156,57 @@
 			salvando = false;
 		}
 	}
+
+	async function mudarPg() {
+		if (!novoPg) return;
+		mudandoPg = true;
+		erro = undefined;
+		mensagem = undefined;
+		try {
+			const res = await api.post('/api/grupos/transferencias', {
+				pessoas: [pessoaId],
+				paraGrupoId: novoPg === SEM_PG ? null : novoPg,
+				motivo: motivoPg.trim() || null
+			});
+			const d = await res.json().catch(() => ({}));
+			if (res.ok) {
+				mensagem = d.mensagem;
+				novoPg = '';
+				motivoPg = '';
+				await carregar();
+			} else {
+				erro = d.erro ?? 'Não foi possível mudar de PG.';
+			}
+		} catch {
+			erro = 'Sem conexão. A pessoa continua no mesmo PG.';
+		} finally {
+			mudandoPg = false;
+		}
+	}
+
+	/** Estágios e PGs numa linha do tempo só, do mais recente ao mais antigo. */
+	const linhaDoTempo = $derived(
+		[
+			...historico.map((h) => ({
+				id: `e-${h.id}`,
+				em: h.em as string,
+				titulo: (ROTULO[h.para] ?? h.paraRotulo) as string,
+				detalhe: [h.de ? `de ${ROTULO[h.de] ?? h.deRotulo}` : null, h.por ? `por ${h.por}` : null],
+				motivo: h.motivo as string | null
+			})),
+			...historicoGrupos.map((g) => ({
+				id: `g-${g.id}`,
+				em: g.em as string,
+				titulo: g.para ? (g.de ? `Mudou para o ${g.para}` : `Entrou no ${g.para}`) : 'Saiu dos PGs',
+				detalhe: [
+					g.de && g.para ? `vindo do ${g.de}` : g.de ? `estava no ${g.de}` : null,
+					g.por ? `por ${g.por}` : null,
+					g.origem === 'ia' ? 'sugestão da IA aceita' : null
+				],
+				motivo: g.motivo as string | null
+			}))
+		].sort((a, b) => new Date(b.em).getTime() - new Date(a.em).getTime())
+	);
 
 	async function mover() {
 		if (!destino) return;
@@ -261,6 +328,38 @@
 							<Botao carregando={movendo} onclick={mover}>Confirmar</Botao>
 							<Botao variante="texto" desabilitado={movendo} onclick={() => (destino = null)}>
 								Voltar
+							</Botao>
+						</div>
+					{/if}
+				</section>
+			{/if}
+
+			<!-- PG -->
+			{#if podeMudarPg}
+				<section class="bloco" aria-labelledby="titulo-pg">
+					<h2 id="titulo-pg">PG</h2>
+					<p class="sub">Hoje: {pessoa.grupo ? pessoa.grupo.nome : 'sem PG'}</p>
+					<div class="campo-texto">
+						<label for="novo-pg">Mudar para</label>
+						<select id="novo-pg" bind:value={novoPg}>
+							<option value="" disabled>Escolha o PG</option>
+							{#each permissoes.mudarDePg?.destinos ?? [] as g (g.id)}
+								<option value={g.id}>{g.nome}</option>
+							{/each}
+							{#if permissoes.mudarDePg?.podeTirarDeTodos}
+								<option value={SEM_PG}>Tirar de todos os PGs</option>
+							{/if}
+						</select>
+					</div>
+					{#if novoPg}
+						<div class="campo-texto">
+							<label for="motivo-pg">Motivo (opcional, fica no histórico)</label>
+							<textarea id="motivo-pg" bind:value={motivoPg} rows="2" maxlength="500"></textarea>
+						</div>
+						<div class="botoes">
+							<Botao carregando={mudandoPg} onclick={mudarPg}>Mudar de PG</Botao>
+							<Botao variante="texto" desabilitado={mudandoPg} onclick={() => (novoPg = '')}>
+								Cancelar
 							</Botao>
 						</div>
 					{/if}
@@ -393,17 +492,17 @@
 			<!-- Histórico -->
 			<section class="bloco" aria-labelledby="titulo-historico">
 				<h2 id="titulo-historico">Histórico</h2>
-				{#if historico.length === 0}
+				{#if linhaDoTempo.length === 0}
 					<p class="sub">Nenhuma mudança registrada ainda.</p>
 				{:else}
 					<ol class="linha-do-tempo">
-						{#each historico as h (h.id)}
+						{#each linhaDoTempo as h (h.id)}
 							<li>
-								<strong>{ROTULO[h.para] ?? h.paraRotulo}</strong>
+								<strong>{h.titulo}</strong>
 								<span class="detalhe">
-									{#if h.de}de {ROTULO[h.de] ?? h.deRotulo} ·
-									{/if}
-									{data(h.em, true)}{#if h.por}{' '}· por {h.por}{/if}
+									{[h.detalhe[0], data(h.em, true), ...h.detalhe.slice(1)]
+										.filter(Boolean)
+										.join(' · ')}
 								</span>
 								{#if h.motivo}<span class="motivo">{h.motivo}</span>{/if}
 							</li>
@@ -504,6 +603,18 @@
 		font-size: var(--texto-sm);
 		font-weight: 600;
 		color: var(--cor-texto-2);
+	}
+
+	select {
+		min-height: var(--toque-min);
+		padding: 0 var(--esp-3);
+		background: var(--cor-superficie);
+		color: var(--cor-texto);
+		border: 1px solid var(--cor-linha-forte);
+		border-radius: var(--raio);
+		/* 16px evita o zoom automático do Safari no iPhone. */
+		font-size: 16px;
+		font-family: inherit;
 	}
 
 	textarea {

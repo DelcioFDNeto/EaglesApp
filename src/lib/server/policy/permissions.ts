@@ -21,7 +21,8 @@ export const PERMISSIONS = {
 
 	// --- Grupos / PGs --------------------------------------------------------
 	'group.view': 'Ver grupos',
-	'group.manage': 'Criar, editar e remover grupos',
+	'group.manage': 'Criar, editar e arquivar grupos',
+	'group.update': 'Editar nome e descrição do grupo',
 	'group.assign_member': 'Transferir membros entre grupos',
 
 	// --- Eventos -------------------------------------------------------------

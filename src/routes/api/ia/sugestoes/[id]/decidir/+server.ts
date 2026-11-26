@@ -2,7 +2,9 @@ import { json } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { aiSuggestion, auditLog, groupMember } from '$server/db/schema';
+import { aiSuggestion, auditLog } from '$server/db/schema';
+import { grupoAtivo, moverPessoa } from '$server/grupos/transferencia';
+import { carregarAlvo } from '$server/pessoas/alvo';
 import { autenticarAtor, flagAtiva, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
 
@@ -102,33 +104,37 @@ export const POST = async ({ request, params, locals }) => {
 		const alocacoes = output.alocacoes ?? [];
 		const filtro = personIdsAceitos ? new Set(personIdsAceitos) : null;
 		let aplicadas = 0;
+		let ignoradas = 0;
 
-		for (const item of alocacoes) {
-			if (!item.mudou) continue;
-			if (filtro && !filtro.has(item.personId)) continue;
+		// A IA sugeriu; uma pessoa aceitou. Cada mudança passa pelo mesmo
+		// caminho da tela, com histórico marcando a origem "ia".
+		await banco.transaction(async (tx) => {
+			for (const item of alocacoes) {
+				if (!item.mudou) continue;
+				if (filtro && !filtro.has(item.personId)) continue;
 
-			const [existente] = await banco
-				.select({ id: groupMember.id })
-				.from(groupMember)
-				.where(eq(groupMember.personId, item.personId))
-				.limit(1);
+				const destino = await grupoAtivo(tx, actor.teamId, item.grupoSugeridoId);
+				const alvo = await carregarAlvo(tx, actor.teamId, item.personId);
+				// PG arquivado ou pessoa que saiu depois da sugestão: não aplica.
+				if (!destino || !alvo) {
+					ignoradas += 1;
+					continue;
+				}
+				if (alvo.groupId === destino.id) continue;
 
-			if (existente) {
-				await banco
-					.update(groupMember)
-					.set({ groupId: item.grupoSugeridoId, joinedAt: agora, updatedAt: agora })
-					.where(eq(groupMember.id, existente.id));
-			} else {
-				await banco.insert(groupMember).values({
-					groupId: item.grupoSugeridoId,
-					personId: item.personId,
-					roleKey: 'membro',
-					joinedAt: agora
+				await moverPessoa(tx, {
+					teamId: actor.teamId,
+					personId: alvo.id,
+					de: alvo.groupId,
+					para: destino.id,
+					motivo: 'Sugestão de divisão aceita',
+					origem: 'ia',
+					porPersonId: actor.personId
 				});
+				aplicadas += 1;
 			}
-			aplicadas += 1;
-		}
-		appliedChanges = { transferenciasAplicadas: aplicadas };
+		});
+		appliedChanges = { transferenciasAplicadas: aplicadas, ignoradas };
 	}
 
 	const novoStatus = decisao === 'aceitar' ? 'aceita' : 'rejeitada';

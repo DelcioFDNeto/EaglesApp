@@ -1,8 +1,15 @@
 import { json } from '@sveltejs/kit';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { person, personProfile, personStatusHistory, userAccount } from '$server/db/schema';
+import {
+	group,
+	groupMemberHistory,
+	person,
+	personProfile,
+	personStatusHistory,
+	userAccount
+} from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 import { audit } from '$server/audit/log';
@@ -10,6 +17,7 @@ import { alcancaAlvo, carregarAlvo, type Alvo } from '$server/pessoas/alvo';
 import { ESTAGIOS, ROTULO_ESTAGIO, podeMudarEstagio, type Estagio } from '$server/pessoas/jornada';
 import { CAMPOS_RESTRITOS_MENOR, MAIORIDADE, idadeEm, validarIdade } from '$server/pessoas/menores';
 import { naoEhMaster } from '$server/lideranca/regras';
+import { podeTransferir } from '$server/grupos/transferencia';
 import { normalizarTelefone, telefoneValido } from '$shared/telefone';
 import type { Actor } from '$server/policy/policy';
 
@@ -57,9 +65,48 @@ export const GET = async ({ request, params, locals }) => {
 		.orderBy(desc(personStatusHistory.occurredAt))
 		.limit(50);
 
+	const caminho = await banco
+		.select()
+		.from(groupMemberHistory)
+		.where(eq(groupMemberHistory.personId, alvo.id))
+		.orderBy(desc(groupMemberHistory.occurredAt))
+		.limit(50);
+
+	// PGs para onde quem pergunta pode mover a pessoa (só ativos, sem o atual).
+	const podeMover =
+		alcancaAlvo(actor, alvo) &&
+		(can(actor, 'group.assign_member') ||
+			(alvo.groupId !== null && can(actor, 'group.assign_member', { groupId: alvo.groupId })));
+	const ativos = podeMover
+		? await banco
+				.select({ id: group.id, nome: group.name })
+				.from(group)
+				.where(and(eq(group.teamId, actor.teamId), isNull(group.archivedAt)))
+				.orderBy(asc(group.name))
+		: [];
+	const destinos = ativos.filter(
+		(g) => g.id !== alvo.groupId && podeTransferir(actor, alvo.groupId, g.id)
+	);
+
+	const idsGrupos = [
+		...new Set(caminho.flatMap((c) => [c.fromGroupId, c.toGroupId]).filter((x): x is string => !!x))
+	];
+	const nomeGrupo = new Map(
+		idsGrupos.length === 0
+			? []
+			: (
+					await banco
+						.select({ id: group.id, nome: group.name })
+						.from(group)
+						.where(inArray(group.id, idsGrupos))
+				).map((g) => [g.id, g.nome])
+	);
+
 	// Nomes de quem fez cada mudança. O Master não tem nome para a equipe.
 	const autores = [
-		...new Set(historico.map((h) => h.changedByPersonId).filter((x): x is string => !!x))
+		...new Set(
+			[...historico, ...caminho].map((h) => h.changedByPersonId).filter((x): x is string => !!x)
+		)
 	];
 	const nomes = new Map(
 		autores.length === 0
@@ -102,8 +149,23 @@ export const GET = async ({ request, params, locals }) => {
 		},
 		permissoes: {
 			podeEditar: can(actor, 'person.update', contexto) && alcancaAlvo(actor, alvo) && sensivel,
-			estagiosPermitidos: estagiosPermitidos(actor, alvo)
+			estagiosPermitidos: estagiosPermitidos(actor, alvo),
+			mudarDePg: {
+				destinos,
+				// Tirar de todos os PGs: só líderes, e só se a pessoa estiver em um.
+				podeTirarDeTodos:
+					alvo.groupId !== null && podeMover && podeTransferir(actor, alvo.groupId, null)
+			}
 		},
+		historicoGrupos: caminho.map((c) => ({
+			id: c.id,
+			de: c.fromGroupId ? (nomeGrupo.get(c.fromGroupId) ?? null) : null,
+			para: c.toGroupId ? (nomeGrupo.get(c.toGroupId) ?? null) : null,
+			motivo: c.reason,
+			origem: c.origin,
+			por: c.changedByPersonId ? (nomes.get(c.changedByPersonId) ?? null) : null,
+			em: c.occurredAt
+		})),
 		historico: historico.map((h) => ({
 			id: h.id,
 			de: h.fromStatus,

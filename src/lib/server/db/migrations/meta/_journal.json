@@ -71,6 +71,13 @@
       "when": 1795723023939,
       "tag": "0009_jornada_estagio",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795726310695,
+      "tag": "0010_grupos_transferencia",
+      "breakpoints": true
     }
   ]
 }
