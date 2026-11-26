@@ -48,7 +48,7 @@ A ordem abaixo importa: o ID do projeto Firebase entra na configuração da API 
 1. Easypanel → **Create project** (ex.: `eagles`) → **+ Service** → **Compose**.
 2. **Source**: GitHub, repositório `DelcioFDNeto/EaglesApp`, branch `main`.
    Se o repositório for privado, conecte a conta GitHub no Easypanel (Settings → GitHub).
-3. **Compose file**: `deploy/docker-compose.yml`.
+3. **Compose file**: `docker-compose.yml` (na raiz, para que o Docker Compose leia o `.env` gravado pelo Easypanel).
 
 O compose não tem `ports:` nem `container_name:`, como o Easypanel recomenda: o
 tráfego entra só pelo domínio, em HTTPS.
