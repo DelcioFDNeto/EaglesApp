@@ -11,6 +11,7 @@
 		id: string;
 		nome: string;
 		grupo: string | null;
+		status: string;
 		acesso: Acesso;
 		temContato: boolean;
 		podeConvidar: boolean;
@@ -28,6 +29,22 @@
 		ativo: 'Com acesso',
 		convidado: 'Convite enviado',
 		sem_acesso: 'Sem acesso'
+	};
+
+	type Estagio = 'visitante' | 'recorrente' | 'membro';
+
+	const ROTULO_ESTAGIO: Record<string, string> = {
+		visitante: 'Visitante',
+		recorrente: 'Recorrente',
+		membro: 'Membro Eagles',
+		conselheiro: 'Membro Eagles',
+		lider: 'Membro Eagles'
+	};
+
+	const DESCRICAO_ESTAGIO: Record<Estagio, string> = {
+		visitante: 'Primeiro contato. Só vê os eventos.',
+		recorrente: 'Já participa do PG. Por enquanto, o mesmo acesso de visitante.',
+		membro: 'Entrada nos Eagles. Vê o grupo, as escalas e o próprio financeiro.'
 	};
 
 	const SEM_CONEXAO = 'Você está offline. Tente de novo quando houver conexão.';
@@ -52,7 +69,8 @@
 	let telefone = $state('');
 	let email = $state('');
 	let grupoId = $state('');
-	let papel = $state<'membro' | 'visitante'>('membro');
+	let estagio = $state<Estagio>('visitante');
+	let estagiosParaCadastro = $state<Estagio[]>(['visitante']);
 	let convidarEmSeguida = $state(true);
 	let cadastrando = $state(false);
 	let errosCadastro = $state<Record<string, string>>({});
@@ -92,6 +110,8 @@
 			pessoas = data.pessoas ?? [];
 			grupos = data.gruposParaCadastro ?? [];
 			podeCadastrar = Boolean(data.podeCadastrar);
+			estagiosParaCadastro = data.estagiosParaCadastro ?? ['visitante'];
+			if (!estagiosParaCadastro.includes(estagio)) estagio = 'visitante';
 			if (!grupoId && grupos.length === 1) grupoId = grupos[0]!.id;
 		} catch {
 			erro = SEM_CONEXAO;
@@ -159,7 +179,7 @@
 				telefone: telefone.trim() || undefined,
 				email: email.trim() || undefined,
 				grupoId: grupoId || undefined,
-				papel
+				estagio
 			});
 			const data = await res.json().catch(() => ({}));
 
@@ -269,8 +289,10 @@
 							<li class="pessoa">
 								<div class="linha">
 									<div class="info">
-										<strong>{p.nome}</strong>
-										<span class="detalhe">{p.grupo ?? 'Sem grupo'}</span>
+										<a class="nome" href={`/pessoas/${p.id}`}>{p.nome}</a>
+										<span class="detalhe">
+											{ROTULO_ESTAGIO[p.status] ?? p.status} · {p.grupo ?? 'Sem grupo'}
+										</span>
 									</div>
 									<span class="chip chip-{p.acesso}">{ROTULO_ACESSO[p.acesso]}</span>
 								</div>
@@ -395,23 +417,20 @@
 							</div>
 						{/if}
 
-						<fieldset class="papel">
-							<legend>Como a pessoa chega</legend>
-							<label>
-								<input type="radio" name="papel" value="membro" bind:group={papel} />
-								<span>
-									<strong>Membro</strong>
-									<small>Vê eventos, escalas e o próprio financeiro.</small>
-								</span>
-							</label>
-							<label>
-								<input type="radio" name="papel" value="visitante" bind:group={papel} />
-								<span>
-									<strong>Visitante</strong>
-									<small>Só vê os eventos.</small>
-								</span>
-							</label>
-						</fieldset>
+						{#if estagiosParaCadastro.length > 1}
+							<fieldset class="papel">
+								<legend>Em que ponto da caminhada a pessoa está</legend>
+								{#each estagiosParaCadastro as e (e)}
+									<label>
+										<input type="radio" name="estagio" value={e} bind:group={estagio} />
+										<span>
+											<strong>{ROTULO_ESTAGIO[e]}</strong>
+											<small>{DESCRICAO_ESTAGIO[e]}</small>
+										</span>
+									</label>
+								{/each}
+							</fieldset>
+						{/if}
 
 						<label class="marcar">
 							<input type="checkbox" bind:checked={convidarEmSeguida} />
@@ -553,9 +572,21 @@
 		min-width: 0;
 	}
 
-	.info strong {
+	.info .nome {
 		font-weight: 700;
+		color: var(--cor-texto);
+		text-decoration: underline;
+		text-decoration-color: var(--cor-linha-forte);
+		text-underline-offset: 3px;
 		overflow-wrap: anywhere;
+		/* Alvo de toque confortável sem inflar a linha (RNF de toque). */
+		padding-block: 4px;
+	}
+
+	@media (hover: hover) {
+		.info .nome:hover {
+			text-decoration-color: var(--cor-marca);
+		}
 	}
 
 	.detalhe {

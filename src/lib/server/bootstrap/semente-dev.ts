@@ -123,9 +123,13 @@ export async function semearDesenvolvimento(db: Database) {
 		ids[p.nome] = id;
 		criadas++;
 
-		await db
-			.insert(personProfile)
-			.values({ personId: id, phone: p.telefone ?? null, whatsapp: p.telefone ?? null });
+		await db.insert(personProfile).values({
+			personId: id,
+			phone: p.telefone ?? null,
+			whatsapp: p.telefone ?? null,
+			// Estágio coerente com o acesso: só visitante fica como visitante.
+			status: p.papel === 'visitante' ? 'visitante' : 'membro'
+		});
 
 		await db.insert(personRole).values({
 			personId: id,

@@ -2,9 +2,10 @@ import { json } from '@sveltejs/kit';
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { person, personProfile, personStatusHistory } from '$server/db/schema';
+import { person, personProfile, personStatusHistory, userAccount } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
+import { CAMPOS_RESTRITOS_MENOR, validarIdade } from '$server/pessoas/menores';
 
 const atualizarPerfilSchema = z.object({
 	nome: z.string().trim().min(1).max(200).optional(),
@@ -22,7 +23,9 @@ const atualizarPerfilSchema = z.object({
 	relacionamento: z.string().trim().max(80).optional().nullable(),
 	irmaos: z.string().trim().max(250).optional().nullable(),
 	vinculosFamiliares: z.string().trim().max(500).optional().nullable(),
-	status: z.enum(['visitante', 'recorrente', 'membro', 'conselheiro', 'lider']).optional(),
+	// O estágio na jornada não muda aqui: é de líder/conselheiro, com histórico
+	// (POST /api/pessoas/[id]/estagio). Aceito e ignorado, por compatibilidade.
+	status: z.string().optional(),
 	observacoes: z.string().trim().max(1000).optional().nullable()
 });
 
@@ -80,13 +83,14 @@ export const GET = async ({ request, locals }) => {
 		nome: pessoa.fullName,
 		dataNascimento: pessoa.birthDate,
 		criadoEm: pessoa.createdAt,
-		podeAlterarStatus: can(actor, 'person.update'),
+		podeAlterarStatus: false,
 		perfil: perfil
 			? {
 					telefone: perfil.phone,
 					whatsapp: perfil.whatsapp,
 					email: perfil.email,
-					dataNascimento: perfil.birthDate,
+					// A data que vale é a de `person` (ADR 0003).
+					dataNascimento: pessoa.birthDate ?? perfil.birthDate,
 					fotoUrl: perfil.photoUrl,
 					relacionamento: perfil.relationshipStatus,
 					irmaos: perfil.siblings,
@@ -143,81 +147,82 @@ export const PUT = async ({ request, locals }) => {
 
 	const dados = resultado.data;
 
-	if (dados.nome !== undefined) {
-		await banco
-			.update(person)
-			.set({ fullName: dados.nome, updatedAt: new Date() })
-			.where(eq(person.id, actor.personId));
-	}
-
 	const [perfilExistente] = await banco
 		.select()
 		.from(personProfile)
 		.where(eq(personProfile.personId, actor.personId))
 		.limit(1);
 
-	const podeAlterarStatus = can(actor, 'person.update');
-	const statusAtual = perfilExistente?.status ?? 'visitante';
-	const novoStatus = dados.status !== undefined && podeAlterarStatus ? dados.status : statusAtual;
+	const [eu] = await banco
+		.select({ birthDate: person.birthDate })
+		.from(person)
+		.where(eq(person.id, actor.personId))
+		.limit(1);
+
+	const valor = <T>(novo: string | null | undefined, atual: T | null | undefined) =>
+		novo !== undefined ? vazioParaNull(novo) : (atual ?? null);
 
 	const perfilParaSalvar = {
 		personId: actor.personId,
-		phone:
-			dados.telefone !== undefined
-				? vazioParaNull(dados.telefone)
-				: (perfilExistente?.phone ?? null),
-		whatsapp:
-			dados.whatsapp !== undefined
-				? vazioParaNull(dados.whatsapp)
-				: (perfilExistente?.whatsapp ?? null),
-		email:
-			dados.email !== undefined ? vazioParaNull(dados.email) : (perfilExistente?.email ?? null),
-		birthDate:
-			dados.dataNascimento !== undefined
-				? vazioParaNull(dados.dataNascimento)
-				: (perfilExistente?.birthDate ?? null),
-		photoUrl:
-			dados.fotoUrl !== undefined
-				? vazioParaNull(dados.fotoUrl)
-				: (perfilExistente?.photoUrl ?? null),
-		relationshipStatus:
-			dados.relacionamento !== undefined
-				? vazioParaNull(dados.relacionamento)
-				: (perfilExistente?.relationshipStatus ?? null),
-		siblings:
-			dados.irmaos !== undefined
-				? vazioParaNull(dados.irmaos)
-				: (perfilExistente?.siblings ?? null),
-		familyTies:
-			dados.vinculosFamiliares !== undefined
-				? vazioParaNull(dados.vinculosFamiliares)
-				: (perfilExistente?.familyTies ?? null),
-		notes:
-			dados.observacoes !== undefined
-				? vazioParaNull(dados.observacoes)
-				: (perfilExistente?.notes ?? null),
-		status: novoStatus,
+		phone: valor(dados.telefone, perfilExistente?.phone),
+		whatsapp: valor(dados.whatsapp, perfilExistente?.whatsapp),
+		email: valor(dados.email, perfilExistente?.email),
+		// A data que vale é a de `person` (ADR 0003); o perfil guarda uma cópia.
+		birthDate: valor(dados.dataNascimento, eu?.birthDate ?? perfilExistente?.birthDate),
+		photoUrl: valor(dados.fotoUrl, perfilExistente?.photoUrl),
+		relationshipStatus: valor(dados.relacionamento, perfilExistente?.relationshipStatus),
+		siblings: valor(dados.irmaos, perfilExistente?.siblings),
+		familyTies: valor(dados.vinculosFamiliares, perfilExistente?.familyTies),
+		notes: valor(dados.observacoes, perfilExistente?.notes),
 		updatedAt: new Date()
 	};
 
-	if (perfilExistente) {
-		await banco
-			.update(personProfile)
-			.set(perfilParaSalvar)
-			.where(eq(personProfile.personId, actor.personId));
-	} else {
-		await banco.insert(personProfile).values(perfilParaSalvar);
+	// Regra de idade (ADR 0003). Quem está logado tem conta com contato, então
+	// um menor sem consentimento do responsável não passa daqui.
+	const [conta] = await banco
+		.select({ email: userAccount.email, phone: userAccount.phone })
+		.from(userAccount)
+		.where(eq(userAccount.personId, actor.personId))
+		.limit(1);
+	const restritos = {
+		telefone: perfilParaSalvar.phone,
+		whatsapp: perfilParaSalvar.whatsapp,
+		email: perfilParaSalvar.email,
+		observacoes: perfilParaSalvar.notes,
+		relacionamento: perfilParaSalvar.relationshipStatus,
+		irmaos: perfilParaSalvar.siblings,
+		vinculosFamiliares: perfilParaSalvar.familyTies
+	};
+	const erroIdade = validarIdade(
+		perfilParaSalvar.birthDate,
+		CAMPOS_RESTRITOS_MENOR.filter((c) => restritos[c] !== null),
+		Boolean(conta?.email || conta?.phone)
+	);
+	if (erroIdade) {
+		return json({ erro: erroIdade, detalhes: { dataNascimento: [erroIdade] } }, { status: 400 });
 	}
 
-	if (novoStatus !== statusAtual) {
-		await banco.insert(personStatusHistory).values({
-			personId: actor.personId,
-			fromStatus: statusAtual,
-			toStatus: novoStatus,
-			reason: 'Atualização no perfil',
-			changedByPersonId: actor.personId
-		});
-	}
+	await banco.transaction(async (tx) => {
+		if (dados.nome !== undefined || dados.dataNascimento !== undefined) {
+			await tx
+				.update(person)
+				.set({
+					...(dados.nome !== undefined && { fullName: dados.nome }),
+					...(dados.dataNascimento !== undefined && { birthDate: perfilParaSalvar.birthDate }),
+					updatedAt: new Date()
+				})
+				.where(eq(person.id, actor.personId));
+		}
+
+		if (perfilExistente) {
+			await tx
+				.update(personProfile)
+				.set(perfilParaSalvar)
+				.where(eq(personProfile.personId, actor.personId));
+		} else {
+			await tx.insert(personProfile).values(perfilParaSalvar);
+		}
+	});
 
 	return json({ ok: true, mensagem: 'Perfil atualizado com sucesso.' });
 };

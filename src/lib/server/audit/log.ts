@@ -29,6 +29,7 @@ export type AuditAction =
 	| 'person.criada'
 	| 'person.atualizada'
 	| 'person.removida'
+	| 'person.estagio_alterado'
 	// Liderança (mandatos de 2 anos)
 	| 'lideranca.nomeado'
 	| 'lideranca.renovado'

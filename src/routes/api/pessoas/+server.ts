@@ -9,6 +9,7 @@ import {
 	person,
 	personProfile,
 	personRole,
+	personStatusHistory,
 	role,
 	userAccount
 } from '$server/db/schema';
@@ -17,6 +18,7 @@ import { can, groupsWhere, type Actor } from '$server/policy/policy';
 import { audit } from '$server/audit/log';
 import { contatoEmUso, contatoSchema, MENSAGEM_CONTATO_EM_USO } from '$server/pessoas/contato';
 import { naoEhMaster } from '$server/lideranca/regras';
+import { ESTAGIOS, papelDoEstagio, podeMudarEstagio } from '$server/pessoas/jornada';
 
 /**
  * Pessoas da equipe.
@@ -114,6 +116,15 @@ export const GET = async ({ request, url, locals }) => {
 
 	return json({
 		podeCadastrar: global || grupos.length > 0,
+		// Estágios oferecidos no cadastro. Recorrente: quem edita pessoas (no PG
+		// escolhido; o POST confere). Membro: só líderes (entrada nos Eagles).
+		estagiosParaCadastro: ESTAGIOS.filter(
+			(e) =>
+				e === 'visitante' ||
+				(e === 'recorrente' &&
+					(can(actor, 'person.update') || groupsWhere(actor, 'person.update').length > 0)) ||
+				(e === 'membro' && can(actor, 'person.update'))
+		),
 		gruposParaCadastro: grupos,
 		pessoas: filtradas.map((p) => {
 			const acesso: Acesso = p.temSenha ? 'ativo' : abertos.has(p.id) ? 'convidado' : 'sem_acesso';
@@ -139,7 +150,12 @@ const cadastroSchema = z
 	.object({
 		nome: z.string().trim().min(2, 'Informe o nome.').max(120, 'Nome longo demais.'),
 		grupoId: z.string().uuid().optional().nullable(),
-		papel: z.enum(['membro', 'visitante']).default('membro')
+		/**
+		 * Estágio inicial na jornada. Visitante é o padrão: a porta de entrada.
+		 * Cadastrar direto como membro é o mesmo que marcar a entrada nos
+		 * Eagles, então segue a regra da jornada (só líderes).
+		 */
+		estagio: z.enum(ESTAGIOS).default('visitante')
 	})
 	.and(contatoSchema);
 
@@ -160,7 +176,8 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 			{ status: 400 }
 		);
 	}
-	const { nome, grupoId, papel, email, telefone } = parsed.data;
+	const { nome, grupoId, estagio, email, telefone } = parsed.data;
+	const papel = papelDoEstagio(estagio);
 
 	// Conselheiro cadastra só no próprio PG; sem grupo, só quem tem alcance global.
 	const contexto = grupoId ? { groupId: grupoId } : {};
@@ -177,6 +194,18 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 	}
 	if (grupoId && !can(actor, 'group.assign_member', { groupId: grupoId })) {
 		return json({ erro: 'Você não pode incluir pessoas neste grupo.' }, { status: 403 });
+	}
+	if (estagio !== 'visitante' && !podeMudarEstagio(actor, 'visitante', estagio, grupoId ?? null)) {
+		return json(
+			{
+				erro:
+					estagio === 'membro'
+						? 'Só os líderes cadastram alguém direto como membro Eagles.'
+						: 'Você não pode cadastrar alguém neste estágio.',
+				campo: 'estagio'
+			},
+			{ status: 403 }
+		);
 	}
 
 	if (grupoId) {
@@ -217,6 +246,18 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 			phone: telefone,
 			whatsapp: telefone,
 			email,
+			groupId: grupoId ?? null,
+			status: estagio,
+			...(estagio === 'membro' && { joinedAt: new Date() })
+		});
+
+		// Primeiro registro da jornada: o primeiro contato (seção 10).
+		await tx.insert(personStatusHistory).values({
+			personId: p.id,
+			fromStatus: null,
+			toStatus: estagio,
+			reason: 'Cadastro',
+			changedByPersonId: actor.personId,
 			groupId: grupoId ?? null
 		});
 
@@ -243,7 +284,7 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 		action: 'person.criada',
 		entity: 'person',
 		entityId: criada.id,
-		after: { nome, grupoId: grupoId ?? null, papel },
+		after: { nome, grupoId: grupoId ?? null, estagio, papel },
 		ip: getClientAddress(),
 		userAgent: request.headers.get('user-agent')
 	});
