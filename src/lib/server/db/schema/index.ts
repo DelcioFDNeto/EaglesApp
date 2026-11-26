@@ -513,6 +513,12 @@ export const eventType = pgTable(
 		slug: text('slug').notNull(),
 		description: text('description'),
 		color: text('color').default('#A91825'),
+		/**
+		 * Tipo desativado não aparece para novos eventos, mas continua valendo
+		 * para os que já o usam. Não existe exclusão: apagar um tipo apagaria
+		 * (ou órfanaria) o histórico de eventos dele.
+		 */
+		active: boolean('active').notNull().default(true),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
 	},
@@ -543,6 +549,14 @@ export const event = pgTable(
 		responsiblePersonId: uuid('responsible_person_id').references(() => person.id),
 		groupId: uuid('group_id').references(() => group.id),
 		status: text('status').notNull().default('scheduled'), // scheduled, ongoing, completed, cancelled
+		/**
+		 * Cancelar não apaga nada: as confirmações de presença ficam no
+		 * histórico (decisão do usuário, ciclo 1 do M05). Estes campos dizem
+		 * quem cancelou, quando e por quê; são limpos se o evento for reativado.
+		 */
+		cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+		cancelledByPersonId: uuid('cancelled_by_person_id').references(() => person.id),
+		cancelReason: text('cancel_reason'),
 		rsvpEnabled: boolean('rsvp_enabled').notNull().default(true),
 		rsvpOptions: jsonb('rsvp_options')
 			.notNull()

@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Aviso from '$ui/Aviso.svelte';
+	import Botao from '$ui/Botao.svelte';
 	import Marca from '$ui/Marca.svelte';
 	import { api } from '$lib/api';
 
 	let eventos: any[] = $state([]);
+	let podeCriar = $state(false);
 	let carregando = $state(true);
 	let erro = $state<string | undefined>(undefined);
 
@@ -23,6 +25,7 @@
 			if (res.ok) {
 				const data = await res.json();
 				eventos = data.eventos ?? [];
+				podeCriar = Boolean(data.podeCriar);
 			} else {
 				const data = await res.json().catch(() => ({}));
 				erro = data.erro ?? 'Não foi possível carregar os eventos.';
@@ -66,6 +69,12 @@
 			<p class="sub">
 				Encontros, PGs e compromissos dos Eagles. Toque para ver detalhes e confirmar presença.
 			</p>
+			{#if podeCriar}
+				<div class="acoes-cabecalho">
+					<Botao href="/eventos/novo">Novo evento</Botao>
+					<a href="/eventos/tipos" class="link-secundario">Tipos de evento</a>
+				</div>
+			{/if}
 		</header>
 
 		{#if erro}
@@ -81,7 +90,11 @@
 			<div class="vazio">
 				<Marca tamanho={44} />
 				<h2>Ainda não há eventos</h2>
-				<p>Não há encontros cadastrados no momento.</p>
+				<p>
+					{podeCriar
+						? 'Crie o primeiro encontro para as pessoas poderem confirmar presença.'
+						: 'Não há encontros cadastrados no momento.'}
+				</p>
 			</div>
 		{:else}
 			<ul class="lista-eventos">
@@ -100,7 +113,9 @@
 
 								<strong>{e.title}</strong>
 
-								{#if e.description}
+								{#if e.status === 'cancelled' && e.cancelReason}
+									<p class="descricao">Cancelado: {e.cancelReason}</p>
+								{:else if e.description}
 									<p class="descricao">{e.description}</p>
 								{/if}
 
@@ -179,6 +194,22 @@
 		color: var(--cor-texto-2);
 		font-size: var(--texto-sm);
 		margin: 0;
+	}
+
+	.acoes-cabecalho {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: var(--esp-3);
+		margin-top: var(--esp-2);
+	}
+
+	.link-secundario {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		min-height: var(--toque-min);
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.lista-eventos {

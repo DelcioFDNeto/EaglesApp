@@ -33,6 +33,13 @@ export type AuditAction =
 	| 'lideranca.nomeado'
 	| 'lideranca.renovado'
 	| 'lideranca.encerrado'
+	// Eventos
+	| 'event.criado'
+	| 'event.atualizado'
+	| 'event.cancelado'
+	| 'event.reativado'
+	| 'event_type.criado'
+	| 'event_type.atualizado'
 	// RBAC
 	| 'rbac.papel_atribuido'
 	| 'rbac.papel_removido'

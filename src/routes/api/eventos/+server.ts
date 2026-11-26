@@ -2,9 +2,11 @@ import { json } from '@sveltejs/kit';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { event, eventType, group } from '$server/db/schema';
+import { event, eventType } from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
+import { audit } from '$server/audit/log';
+import { opcoesRsvpSchema, validarPeriodo, validarReferencias } from '$server/eventos/regras';
 
 const criarEventoSchema = z.object({
 	eventTypeId: z.string().uuid(),
@@ -16,12 +18,7 @@ const criarEventoSchema = z.object({
 	responsiblePersonId: z.string().uuid().optional(),
 	groupId: z.string().uuid().optional(),
 	rsvpEnabled: z.boolean().default(true),
-	rsvpOptions: z
-		.array(
-			z.object({ key: z.string().trim().min(1).max(50), label: z.string().trim().min(1).max(80) })
-		)
-		.min(1)
-		.optional()
+	rsvpOptions: opcoesRsvpSchema.optional()
 });
 
 /**
@@ -58,6 +55,7 @@ export const GET = async ({ request, url, locals }) => {
 			endsAt: event.endsAt,
 			location: event.location,
 			status: event.status,
+			cancelReason: event.cancelReason,
 			rsvpEnabled: event.rsvpEnabled,
 			rsvpOptions: event.rsvpOptions,
 			eventTypeId: event.eventTypeId,
@@ -86,6 +84,7 @@ export const GET = async ({ request, url, locals }) => {
 			endsAt: e.endsAt,
 			location: e.location,
 			status: e.status,
+			cancelReason: e.cancelReason,
 			rsvpEnabled: e.rsvpEnabled,
 			rsvpOptions: e.rsvpOptions,
 			eventType: tiposMap.get(e.eventTypeId) ?? null,
@@ -133,29 +132,16 @@ export const POST = async ({ request, locals }) => {
 
 	const inicio = new Date(startsAt);
 	const fim = endsAt ? new Date(endsAt) : null;
-	if (fim && fim <= inicio) {
-		return json({ erro: 'O término do evento deve ser posterior ao início.' }, { status: 400 });
-	}
-
-	const [tipoValido] = await banco
-		.select({ id: eventType.id })
-		.from(eventType)
-		.where(and(eq(eventType.id, eventTypeId), eq(eventType.teamId, actor.teamId)))
-		.limit(1);
-
-	if (!tipoValido) {
-		return json({ erro: 'Tipo de evento não encontrado.' }, { status: 404 });
-	}
-
-	if (groupId) {
-		const [grupoValido] = await banco
-			.select({ id: group.id })
-			.from(group)
-			.where(and(eq(group.id, groupId), eq(group.teamId, actor.teamId)))
-			.limit(1);
-		if (!grupoValido) {
-			return json({ erro: 'Grupo não encontrado.' }, { status: 404 });
-		}
+	const erroRegra =
+		validarPeriodo(inicio, fim) ??
+		(await validarReferencias(banco, actor.teamId, {
+			eventTypeId,
+			exigirTipoAtivo: true,
+			groupId: groupId ?? null,
+			responsiblePersonId: resultado.data.responsiblePersonId ?? null
+		}));
+	if (erroRegra) {
+		return json({ erro: erroRegra.erro }, { status: erroRegra.status });
 	}
 
 	const [novoEvento] = await banco
@@ -178,6 +164,20 @@ export const POST = async ({ request, locals }) => {
 	if (!novoEvento) {
 		return json({ erro: 'Não foi possível criar o evento.' }, { status: 500 });
 	}
+
+	await audit(banco, {
+		teamId: actor.teamId,
+		actorPersonId: actor.personId,
+		action: 'event.criado',
+		entity: 'event',
+		entityId: novoEvento.id,
+		after: {
+			title: novoEvento.title,
+			startsAt: novoEvento.startsAt,
+			groupId: novoEvento.groupId,
+			eventTypeId: novoEvento.eventTypeId
+		}
+	});
 
 	return json(
 		{

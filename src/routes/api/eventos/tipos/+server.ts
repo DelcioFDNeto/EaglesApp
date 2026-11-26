@@ -5,6 +5,7 @@ import { db } from '$server/db';
 import { eventType } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
+import { audit } from '$server/audit/log';
 
 const criarTipoSchema = z.object({
 	name: z.string().trim().min(1).max(80),
@@ -46,7 +47,12 @@ export const GET = async ({ request, locals }) => {
 		.where(eq(eventType.teamId, actor.teamId))
 		.orderBy(asc(eventType.name));
 
-	return json({ tipos });
+	return json({
+		tipos,
+		podeCriarTipos: can(actor, 'event.manage') || groupsWhere(actor, 'event.manage').length > 0,
+		// Editar e desativar afetam a equipe toda: só com `event.manage` global.
+		podeEditarTipos: can(actor, 'event.manage')
+	});
 };
 
 /**
@@ -102,6 +108,15 @@ export const POST = async ({ request, locals }) => {
 			color: resultado.data.color
 		})
 		.returning();
+
+	await audit(banco, {
+		teamId: actor.teamId,
+		actorPersonId: actor.personId,
+		action: 'event_type.criado',
+		entity: 'event_type',
+		entityId: criado?.id ?? null,
+		after: { name: resultado.data.name, slug: resultado.data.slug }
+	});
 
 	return json({ ok: true, tipo: criado }, { status: 201 });
 };

@@ -30,6 +30,11 @@
 	let qtdConvidados = $state(0);
 	let notasInscricao = $state('');
 
+	// Cancelar / reativar (só quem gerencia o evento vê os botões; o servidor confere).
+	let confirmandoCancelamento = $state(false);
+	let motivoCancelamento = $state('');
+	let mudandoStatus = $state(false);
+
 	const STATUS_EVENTO: Record<string, string> = {
 		scheduled: 'Agendado',
 		ongoing: 'Em andamento',
@@ -172,6 +177,32 @@
 		}
 	}
 
+	async function mudarStatus(status: 'cancelled' | 'scheduled') {
+		if (!evento?.id) return;
+		mudandoStatus = true;
+		erro = undefined;
+		mensagem = undefined;
+		try {
+			const res = await api.patch(`/api/eventos/${evento.id}`, {
+				status,
+				...(status === 'cancelled' && { motivoCancelamento: motivoCancelamento.trim() || null })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (res.ok) {
+				mensagem = data.mensagem;
+				confirmandoCancelamento = false;
+				motivoCancelamento = '';
+				await carregarEvento();
+			} else {
+				erro = data.erro ?? 'Não foi possível mudar o evento.';
+			}
+		} catch {
+			erro = 'Sem conexão. Nada foi alterado; tente de novo.';
+		} finally {
+			mudandoStatus = false;
+		}
+	}
+
 	function compartilharWhatsapp() {
 		if (!evento) return;
 		const linhas = [
@@ -290,11 +321,80 @@
 					{/if}
 				</div>
 
+				{#if evento.responsavelNome}
+					<p class="meta">Responsável: {evento.responsavelNome}</p>
+				{/if}
+
+				{#if evento.cancelamento}
+					<Aviso tom="aviso" titulo="Evento cancelado">
+						{#if evento.cancelamento.motivo}{evento.cancelamento.motivo}.{/if}
+						{#if evento.cancelamento.por}
+							Cancelado por {evento.cancelamento.por} em
+							{formatarData(evento.cancelamento.em)}.
+						{/if}
+						As respostas de presença continuam guardadas.
+					</Aviso>
+				{/if}
+
 				<div class="acoes-topo">
-					<Botao variante="secundario" onclick={compartilharWhatsapp}>
-						Compartilhar no WhatsApp
-					</Botao>
+					{#if evento.status !== 'cancelled'}
+						<Botao variante="secundario" onclick={compartilharWhatsapp}>
+							Compartilhar no WhatsApp
+						</Botao>
+					{/if}
+					{#if permissoesEvento.podeGerenciarEvento}
+						<Botao variante="secundario" href={`/eventos/${evento.id}/editar`}>Editar</Botao>
+						{#if evento.status === 'cancelled'}
+							<Botao
+								variante="secundario"
+								carregando={mudandoStatus}
+								onclick={() => mudarStatus('scheduled')}
+							>
+								Reativar evento
+							</Botao>
+						{:else if !confirmandoCancelamento}
+							<Botao variante="texto" onclick={() => (confirmandoCancelamento = true)}>
+								Cancelar evento
+							</Botao>
+						{/if}
+					{/if}
 				</div>
+
+				{#if confirmandoCancelamento && evento.status !== 'cancelled'}
+					<div class="confirmar-cancelamento" role="group" aria-labelledby="titulo-cancelar">
+						<h2 id="titulo-cancelar">Cancelar este evento?</h2>
+						<p class="sub">
+							Ninguém mais poderá responder. As respostas que já existem ficam guardadas, e você
+							pode reativar o evento depois.
+						</p>
+						<label for="motivo-cancelamento">Motivo (opcional, aparece para todos)</label>
+						<textarea
+							id="motivo-cancelamento"
+							bind:value={motivoCancelamento}
+							rows="2"
+							maxlength="500"
+							placeholder="Ex.: chuva forte, mudamos para a semana que vem"
+						></textarea>
+						<div class="acoes-rsvp">
+							<Botao
+								variante="destrutivo"
+								largura="cheia"
+								carregando={mudandoStatus}
+								onclick={() => mudarStatus('cancelled')}
+							>
+								Cancelar evento
+							</Botao>
+							<Botao
+								variante="texto"
+								largura="cheia"
+								desabilitado={mudandoStatus}
+								onclick={() => (confirmandoCancelamento = false)}
+							>
+								Manter evento
+							</Botao>
+						</div>
+					</div>
+				{/if}
 			</header>
 
 			{#if evento.rsvpEnabled && evento.status !== 'cancelled'}
@@ -600,6 +700,39 @@
 
 	.acoes-topo {
 		margin-top: var(--esp-2);
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--esp-2);
+	}
+
+	.confirmar-cancelamento {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+		padding: var(--esp-4);
+		border: 1px solid var(--cor-erro);
+		border-radius: var(--raio-lg);
+		background: var(--cor-erro-suave);
+	}
+
+	.confirmar-cancelamento h2 {
+		font-size: var(--texto-lg);
+	}
+
+	.confirmar-cancelamento label {
+		font-size: var(--texto-xs);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
+	.confirmar-cancelamento textarea {
+		padding: var(--esp-2) var(--esp-3);
+		background: var(--cor-superficie);
+		color: var(--cor-texto);
+		border: 1px solid var(--cor-linha-forte);
+		border-radius: var(--raio);
+		font-size: 16px;
+		font-family: inherit;
 	}
 
 	.bloco-rsvp {
