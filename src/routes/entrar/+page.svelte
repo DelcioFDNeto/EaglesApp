@@ -1,14 +1,40 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
 	import Botao from '$ui/Botao.svelte';
 	import Campo from '$ui/Campo.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
-	import type { ActionData } from './$types';
+	import { api } from '$lib/api';
 
-	let { form }: { form: ActionData } = $props();
-
+	let identificador = $state('');
+	let senha = $state('');
+	let erro = $state<string | undefined>(undefined);
 	let enviando = $state(false);
+
+	async function handleSubmit(e: SubmitEvent) {
+		e.preventDefault();
+		erro = undefined;
+		enviando = true;
+
+		try {
+			const res = await api.post('/api/auth/login', {
+				identificador: identificador.trim(),
+				senha
+			});
+			const data = await res.json().catch(() => ({}));
+
+			if (res.ok && data.token) {
+				localStorage.setItem('eagles_token', data.token);
+				await goto('/inicio');
+			} else {
+				erro = data.erro ?? 'Não foi possível entrar. Confira os dados e tente novamente.';
+			}
+		} catch {
+			erro = 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
+		} finally {
+			enviando = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -18,35 +44,20 @@
 <main>
 	<div class="cartao">
 		<header>
-			<Marca tamanho={56} />
-			<h1>Eagles</h1>
-			<p class="sub">Entre para ver seus encontros e responsabilidades.</p>
+			<Marca tamanho={56} comNome />
+			<h1>Entrar</h1>
+			<p class="sub">Digite seu e-mail ou telefone e senha para acessar o Eagles.</p>
 		</header>
 
-		{#if form?.erro}
-			<Aviso tom="erro">{form.erro}</Aviso>
+		{#if erro}
+			<Aviso tom="erro">{erro}</Aviso>
 		{/if}
 
-		<!--
-			`use:enhance` melhora a experiência, mas o formulário é HTML puro:
-			sem JavaScript ele envia por POST normal e funciona igual. É um
-			critério de aceitação do M01, não um detalhe.
-		-->
-		<form
-			method="POST"
-			use:enhance={() => {
-				enviando = true;
-				return async ({ update }) => {
-					await update();
-					enviando = false;
-				};
-			}}
-		>
+		<form onsubmit={handleSubmit}>
 			<Campo
 				id="identificador"
 				rotulo="E-mail ou telefone"
-				valor={form?.identificador ?? ''}
-				erro={form?.erros?.identificador}
+				bind:valor={identificador}
 				autocomplete="username"
 				obrigatorio
 			/>
@@ -55,18 +66,23 @@
 				id="senha"
 				rotulo="Senha"
 				tipo="password"
-				erro={form?.erros?.senha}
+				bind:valor={senha}
 				autocomplete="current-password"
 				obrigatorio
 			/>
 
-			<Botao tipo="submit" largura="cheia" carregando={enviando}>Entrar</Botao>
+			<Botao tipo="submit" largura="cheia" carregando={enviando}>
+				Entrar
+			</Botao>
 		</form>
 
 		<footer>
+			<p class="acoes-rodape">
+				<Botao variante="texto" href="/esqueci-senha">Esqueci minha senha</Botao>
+				<Botao variante="texto" href="/solicitar-cadastro">Solicitar acesso</Botao>
+			</p>
 			<p>
-				Não consegue entrar? Peça um novo convite ao seu conselheiro — ele gera um link novo em
-				segundos.
+				O acesso aos Eagles é feito por convite do seu conselheiro ou líder.
 			</p>
 		</footer>
 	</div>
@@ -105,7 +121,7 @@
 	.sub {
 		color: var(--cor-texto-2);
 		font-size: var(--texto-sm);
-		max-width: 26ch;
+		max-width: 28ch;
 	}
 
 	form {
@@ -114,10 +130,24 @@
 		gap: var(--esp-4);
 	}
 
+	footer {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
 	footer p {
 		font-size: var(--texto-sm);
-		color: var(--cor-texto-3);
+		color: var(--cor-texto-2);
 		text-align: center;
 		text-wrap: pretty;
+		margin: 0;
+	}
+
+	.acoes-rodape {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: var(--esp-1);
 	}
 </style>

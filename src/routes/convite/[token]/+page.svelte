@@ -1,15 +1,65 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import Botao from '$ui/Botao.svelte';
 	import Campo from '$ui/Campo.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
 	import { MIN_PASSWORD_LENGTH } from '$shared/senha';
-	import type { ActionData, PageData } from './$types';
+	import { api } from '$lib/api';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	type Estado =
+		| { estado: 'carregando' }
+		| { estado: 'valido'; nome: string }
+		| { estado: 'invalido' | 'bloqueado'; mensagem: string };
 
+	const SEM_CONEXAO =
+		'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
+
+	let data = $state<Estado>({ estado: 'carregando' });
+	let senha = $state('');
+	let confirmacao = $state('');
+	let erro = $state<string | undefined>(undefined);
+	let erros = $state<{ senha?: string; confirmacao?: string }>({});
 	let enviando = $state(false);
+
+	const caminho = $derived(`/api/auth/convite/${encodeURIComponent(page.params.token ?? '')}`);
+
+	onMount(async () => {
+		try {
+			const res = await api.get(caminho);
+			const corpo = await res.json().catch(() => null);
+			data = corpo?.estado ? corpo : { estado: 'invalido', mensagem: SEM_CONEXAO };
+		} catch {
+			data = { estado: 'invalido', mensagem: SEM_CONEXAO };
+		}
+	});
+
+	async function enviar(e: SubmitEvent) {
+		e.preventDefault();
+		erro = undefined;
+		erros = {};
+		enviando = true;
+
+		try {
+			const res = await api.post(caminho, { senha, confirmacao });
+			const corpo = await res.json().catch(() => ({}));
+
+			if (res.ok && corpo.token) {
+				localStorage.setItem('eagles_token', corpo.token);
+				await goto('/inicio?boas-vindas=1', { replaceState: true });
+				return;
+			}
+
+			erros = corpo.erros ?? {};
+			erro = corpo.erro ?? (corpo.erros ? undefined : 'Não foi possível criar seu acesso.');
+		} catch {
+			erro = SEM_CONEXAO;
+		} finally {
+			enviando = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -28,29 +78,23 @@
 			{/if}
 		</header>
 
-		{#if data.estado !== 'valido'}
+		{#if data.estado === 'carregando'}
+			<p class="sub" role="status">Conferindo seu convite…</p>
+		{:else if data.estado !== 'valido'}
 			<Aviso tom="aviso">{data.mensagem}</Aviso>
 			<Botao href="/entrar" variante="secundario" largura="cheia">Ir para a entrada</Botao>
 		{:else}
-			{#if form?.erro}
-				<Aviso tom="erro">{form.erro}</Aviso>
+			{#if erro}
+				<Aviso tom="erro">{erro}</Aviso>
 			{/if}
 
-			<form
-				method="POST"
-				use:enhance={() => {
-					enviando = true;
-					return async ({ update }) => {
-						await update();
-						enviando = false;
-					};
-				}}
-			>
+			<form onsubmit={enviar}>
 				<Campo
 					id="senha"
 					rotulo="Sua senha"
 					tipo="password"
-					erro={form?.erros?.senha}
+					bind:valor={senha}
+					erro={erros.senha}
 					ajuda="Pelo menos {MIN_PASSWORD_LENGTH} caracteres. Uma frase que só você lembra funciona melhor que símbolos."
 					autocomplete="new-password"
 					obrigatorio
@@ -60,7 +104,8 @@
 					id="confirmacao"
 					rotulo="Repita a senha"
 					tipo="password"
-					erro={form?.erros?.confirmacao}
+					bind:valor={confirmacao}
+					erro={erros.confirmacao}
 					autocomplete="new-password"
 					obrigatorio
 				/>

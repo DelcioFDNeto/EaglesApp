@@ -4,16 +4,12 @@
  * A regra da seção 11.4: "rota sem declaração de permissão é rota bloqueada —
  * a ausência de declaração é erro de teste, não porta aberta."
  *
- * Este arquivo é a execução dessa regra. Ele varre todos os `+page.server.ts`
- * e `+server.ts` do projeto e exige que cada um faça uma de três coisas:
+ * Este arquivo varre todos os `+page.server.ts` e `+server.ts` do projeto e
+ * exige que cada um faça uma de três coisas:
  *
- *   a) chamar `authorize(...)` ou `can(...)`   → rota protegida
+ *   a) chamar `authorize(...)` ou `can(...)`   → rota protegida pelo motor RBAC
  *   b) estar na lista `ROTAS_PUBLICAS`         → pública por decisão consciente
  *   c) falhar o teste                          → alguém esqueceu
- *
- * Adicionar uma rota à lista de públicas é deliberado e fica visível no diff,
- * que é exatamente o ponto: a decisão de expor algo tem que ser vista por
- * alguém, não acontecer por omissão.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -23,16 +19,24 @@ import { describe, expect, it } from 'vitest';
 const RAIZ_ROTAS = join(process.cwd(), 'src', 'routes');
 
 /**
- * Rotas públicas por decisão. Cada uma com o motivo — se o motivo não couber
- * numa linha, provavelmente a rota não deveria ser pública.
+ * Rotas genuinamente públicas (ou pré-autenticação). Todas as rotas de dados
+ * (M02–M07) passam por `can(...)` ou `authorize(...)` e NÃO entram nesta lista.
  */
 const ROTAS_PUBLICAS: Record<string, string> = {
-	'+page.server.ts': 'Raiz: só redireciona conforme a sessão, não expõe dado.',
-	'entrar/+page.server.ts': 'Autenticação: precisa ser alcançável por quem não entrou.',
-	'convite/[token]/+page.server.ts':
+	'api/auth/convite/[token]/+server.ts':
 		'Aceite de convite: protegido pelo token de 256 bits e por rate limit.',
-	'sair/+page.server.ts': 'Encerra a própria sessão; sem sessão, nada acontece.',
-	'api/health/+server.ts': 'Monitor externo e CI consultam sem credencial; não devolve dado.'
+	'api/health/+server.ts': 'Monitor externo e CI consultam sem credencial; não devolve dado.',
+	'api/auth/login/+server.ts':
+		'Autenticação: recebe credenciais e emite JWT + sessão; não expõe dado privado.',
+	'api/auth/me/+server.ts':
+		'Ping de identidade: confere a sessão do JWT e devolve só id e email da própria pessoa.',
+	'api/auth/esqueci-senha/+server.ts':
+		'Redefinição de senha: gera token de uso único sem revelar se o e-mail existe.',
+	'api/auth/resetar-senha/+server.ts':
+		'Redefinição de senha: valida token de uso único e atualiza senha.',
+	'api/auth/logout/+server.ts': 'Logout: revoga a sessão do próprio token; idempotente.',
+	'api/auth/solicitar-cadastro/+server.ts':
+		'Solicitação de acesso: registra interesse para convite posterior do conselheiro.'
 };
 
 function listarArquivosDeRota(dir: string, acumulado: string[] = []): string[] {
@@ -49,7 +53,6 @@ function listarArquivosDeRota(dir: string, acumulado: string[] = []): string[] {
 
 const arquivos = listarArquivosDeRota(RAIZ_ROTAS);
 
-/** Caminho relativo com barra normal, para comparar em qualquer sistema. */
 function chave(caminho: string): string {
 	return relative(RAIZ_ROTAS, caminho).split(sep).join('/');
 }
@@ -70,8 +73,6 @@ describe('toda rota de servidor declara sua permissão', () => {
 			const publicaPorDecisao = rota in ROTAS_PUBLICAS;
 
 			if (publicaPorDecisao) {
-				// Uma rota pública que passou a verificar permissão deve sair da
-				// lista — lista desatualizada engana quem lê.
 				expect(
 					verificaPermissao,
 					`"${rota}" está listada como pública mas verifica permissão. ` +

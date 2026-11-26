@@ -1,6 +1,7 @@
 node_modules
 .svelte-kit
-build
+build
+build-api/
 package-lock.json
 src/lib/server/db/migrations
 docs/site

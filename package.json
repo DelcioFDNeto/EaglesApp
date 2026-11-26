@@ -7,6 +7,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
+		"build:api": "node deploy/build-api.mjs",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"format": "prettier --write .",
@@ -19,8 +20,12 @@
 		"db:seed": "node --experimental-strip-types seed/seed.ts"
 	},
 	"dependencies": {
+		"@capacitor/android": "^7.0.0",
+		"@capacitor/core": "^7.0.0",
 		"@noble/hashes": "^1.8.0",
 		"drizzle-orm": "^0.38.0",
+		"jsonwebtoken": "^9.0.2",
+		"nodemailer": "^6.9.16",
 		"postgres": "^3.4.5",
 		"zod": "^3.24.1"
 	},
@@ -28,9 +33,12 @@
 		"@electric-sql/pglite": "^0.2.17",
 		"@playwright/test": "^1.49.1",
 		"@sveltejs/adapter-node": "^5.2.11",
+		"@sveltejs/adapter-static": "^2.0.3",
 		"@sveltejs/kit": "^2.15.1",
 		"@sveltejs/vite-plugin-svelte": "^5.0.3",
+		"@types/jsonwebtoken": "^9.0.9",
 		"@types/node": "^26.2.0",
+		"@types/nodemailer": "^6.4.17",
 		"drizzle-kit": "^0.30.1",
 		"prettier": "^3.4.2",
 		"prettier-plugin-svelte": "^3.3.2",

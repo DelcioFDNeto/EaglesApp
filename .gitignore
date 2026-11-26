@@ -1,6 +1,7 @@
 node_modules/
 .svelte-kit/
 build/
+build-api/
 .env
 .env.*
 !.env.example
@@ -10,3 +11,4 @@ Thumbs.db
 /backups/
 test-results/
 playwright-report/
+.impeccable/

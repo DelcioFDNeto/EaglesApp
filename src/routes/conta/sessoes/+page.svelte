@@ -1,12 +1,15 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import Botao from '$ui/Botao.svelte';
 	import Aviso from '$ui/Aviso.svelte';
-	import type { ActionData, PageData } from './$types';
+	import { api, apiCache } from '$lib/api';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
-
+	let sessoes: any[] = $state([]);
+	let carregando = $state(true);
+	let erro = $state<string | undefined>(undefined);
 	let confirmando = $state(false);
+	let revogando = $state(false);
 
 	const formatador = new Intl.DateTimeFormat('pt-BR', {
 		day: '2-digit',
@@ -15,7 +18,52 @@
 		minute: '2-digit'
 	});
 
-	const outras = $derived(data.sessoes.filter((s) => !s.atual).length);
+	const outras = $derived(sessoes.filter((s) => !s.atual).length);
+
+	const textoOutras = $derived(
+		outras === 1
+			? 'Outro aparelho precisa entrar de novo com a senha.'
+			: `Outros ${outras} aparelhos precisam entrar de novo com a senha.`
+	);
+
+	const textoConfirmacao = $derived(
+		outras === 1 ? 'Um aparelho será desconectado.' : `${outras} aparelhos serão desconectados.`
+	);
+
+	onMount(async () => {
+		try {
+			sessoes = await apiCache.sessoes();
+		} catch (e: any) {
+			erro = e.message === 'sem_conexao'
+				? 'Você está offline. Os dispositivos conectados estão indisponíveis sem conexão.'
+				: 'Não foi possível carregar os dispositivos. Tente novamente.';
+		} finally {
+			carregando = false;
+		}
+	});
+
+	async function revogarOutras() {
+		revogando = true;
+		erro = undefined;
+		try {
+			const res = await api.post('/api/sessoes/revogar-outras');
+			if (res.ok) {
+				await res.json().catch(() => ({}));
+				sessoes = sessoes.filter((s) => s.atual);
+				confirmando = false;
+			} else {
+				const dados = await res.json().catch(() => ({}));
+				erro = dados.erro ?? 'Não foi possível desconectar os outros aparelhos.';
+			}
+		} catch (e: any) {
+			erro =
+				e.message === 'sem_conexao'
+					? 'Você está offline. Não é possível desconectar dispositivos sem conexão.'
+					: 'Erro ao desconectar dispositivos.';
+		} finally {
+			revogando = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -33,56 +81,55 @@
 			</p>
 		</header>
 
-		{#if form?.sucesso}
-			<Aviso tom="sucesso">{form.sucesso}</Aviso>
-		{/if}
-		{#if form?.erro}
-			<Aviso tom="aviso">{form.erro}</Aviso>
-		{/if}
-
-		<ul>
-			{#each data.sessoes as s (s.id)}
-				<li class:atual={s.atual}>
-					<div>
-						<strong>{s.aparelho}</strong>
-						<span>Entrou em {formatador.format(new Date(s.criadaEm))}</span>
-					</div>
-					{#if s.atual}<span class="marcador">este aparelho</span>{/if}
-				</li>
-			{/each}
-		</ul>
-
-		{#if outras > 0}
-			<section class="perigo">
-				<h2>Desconectar os outros aparelhos</h2>
-				<p>
-					Você continua conectado neste dispositivo. Os outros {outras === 1
-						? 'precisará entrar'
-						: 'precisarão entrar'} de novo com a senha.
-				</p>
-
-				{#if !confirmando}
-					<!--
-						Ação destrutiva: botão de contorno, nunca preenchido de vermelho,
-						e com confirmação textual antes de executar.
-					-->
-					<Botao variante="destrutivo" onclick={() => (confirmando = true)}>
-						Desconectar outros aparelhos
-					</Botao>
-				{:else}
-					<form method="POST" action="?/revogarOutras" use:enhance>
-						<p class="confirmar">
-							Tem certeza? {outras === 1
-								? 'Um aparelho será desconectado'
-								: `${outras} aparelhos serão desconectados`}.
-						</p>
-						<div class="acoes">
-							<Botao tipo="submit" variante="destrutivo">Sim, desconectar</Botao>
-							<Botao variante="texto" onclick={() => (confirmando = false)}>Cancelar</Botao>
+		{#if carregando}
+			<div class="carregando">
+				<p>Carregando dispositivos…</p>
+			</div>
+		{:else if erro}
+			<Aviso tom="erro">{erro}</Aviso>
+			<Botao onclick={() => location.reload()} variante="texto">Tentar novamente</Botao>
+		{:else}
+			<ul>
+				{#each sessoes as s (s.id)}
+					<li class:atual={s.atual}>
+						<div>
+							<strong>{s.aparelho}</strong>
+							<span>Entrou em {formatador.format(new Date(s.criadaEm))}</span>
 						</div>
-					</form>
-				{/if}
-			</section>
+						{#if s.atual}<span class="marcador">este aparelho</span>{/if}
+					</li>
+				{/each}
+			</ul>
+
+			{#if outras > 0}
+				<section class="atencao">
+					<h2>Desconectar os outros aparelhos</h2>
+					<p>{textoOutras}</p>
+
+					{#if !confirmando}
+						<Botao variante="destrutivo" onclick={() => (confirmando = true)}>
+							Desconectar outros aparelhos
+						</Botao>
+					{:else}
+						<form onsubmit={(e) => {
+							e.preventDefault();
+							revogarOutras();
+						}}>
+							<p class="confirmar" role="alert" aria-live="polite">
+								Tem certeza? {textoConfirmacao}
+							</p>
+							<div class="acoes">
+								<Botao tipo="submit" variante="destrutivo" carregando={revogando}>
+									Sim, desconectar
+								</Botao>
+								<Botao variante="texto" tipo="button" onclick={() => (confirmando = false)}>
+									Cancelar
+								</Botao>
+							</div>
+						</form>
+					{/if}
+				</section>
+			{/if}
 		{/if}
 	</div>
 </main>
@@ -101,12 +148,12 @@
 	}
 
 	h2 {
-		font-size: var(--texto-base);
+		font-size: var(--texto-lg);
 	}
 
 	.legenda {
 		font-size: var(--texto-sm);
-		color: var(--cor-texto-3);
+		color: var(--cor-texto-2);
 		text-wrap: pretty;
 	}
 
@@ -137,11 +184,21 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		min-width: 0;
+	}
+
+	li strong {
+		font-size: inherit;
+		font-weight: 600;
+		overflow-wrap: break-word;
+		word-break: break-word;
 	}
 
 	li span {
 		font-size: var(--texto-xs);
-		color: var(--cor-texto-3);
+		color: var(--cor-texto-2);
+		overflow-wrap: break-word;
+		word-break: break-word;
 	}
 
 	.marcador {
@@ -154,21 +211,28 @@
 		color: var(--cor-marca);
 	}
 
-	.perigo {
+	.atencao {
 		display: flex;
 		flex-direction: column;
 		gap: var(--esp-3);
 		padding: var(--esp-4);
+		background: var(--cor-superficie-2);
 		border: 1px solid var(--cor-linha);
-		border-left: 3px solid var(--cor-perigo);
 		border-radius: var(--raio);
-		background: var(--cor-superficie);
 		margin-top: var(--esp-4);
 	}
 
-	.perigo p {
+	.atencao h2 {
+		margin: 0;
+		font-size: var(--texto-lg);
+		overflow-wrap: break-word;
+		word-break: break-word;
+	}
+
+	.atencao p {
 		font-size: var(--texto-sm);
 		color: var(--cor-texto-2);
+		margin: 0;
 		text-wrap: pretty;
 	}
 
@@ -182,5 +246,13 @@
 		display: flex;
 		gap: var(--esp-2);
 		flex-wrap: wrap;
+	}
+
+	.carregando {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: var(--esp-6);
 	}
 </style>

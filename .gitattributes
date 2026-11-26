@@ -1,0 +1,2 @@
+# Scripts que rodam dentro do container Linux: CRLF quebra o shebang.
+*.sh text eol=lf

@@ -16,6 +16,18 @@ export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 let client: postgres.Sql | null = null;
 let database: Database | null = null;
+let testDatabaseOverride: Database | null = null;
+
+/**
+ * Permite injetar o banco PGlite nos testes de integração para testar
+ * os handlers reais das rotas contra PostgreSQL em memória.
+ */
+export function setTestDatabase(override: Database | null): void {
+	if (process.env.NODE_ENV !== 'test') {
+		throw new Error('setTestDatabase só pode ser usado em NODE_ENV=test');
+	}
+	testDatabaseOverride = override;
+}
 
 /**
  * Conexão com o PostgreSQL de produção/desenvolvimento.
@@ -25,6 +37,7 @@ let database: Database | null = null;
  * e a mesma sintaxe, sem exigir Docker na máquina de quem desenvolve.
  */
 export function db(): Database {
+	if (testDatabaseOverride) return testDatabaseOverride;
 	if (database) return database;
 
 	const { DATABASE_URL } = env();

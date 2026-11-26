@@ -104,11 +104,19 @@
 		/* 16px evita o zoom automático do Safari no iPhone ao focar o campo. */
 		font-size: 16px;
 
-		transition: border-color var(--transicao);
+		transition: border-color var(--transicao), box-shadow var(--transicao);
 	}
 
-	input:hover {
-		border-color: var(--cor-texto-3);
+	@media (hover: hover) {
+		input:hover {
+			border-color: var(--cor-texto-2);
+		}
+	}
+
+	input:focus-visible {
+		border-color: var(--cor-foco);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--cor-foco) 24%, transparent);
+		outline: none;
 	}
 
 	input:disabled {

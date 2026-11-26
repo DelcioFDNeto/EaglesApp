@@ -26,6 +26,15 @@
 	} = $props();
 
 	const inativo = $derived(desabilitado || carregando);
+
+	function handleClick(e: MouseEvent) {
+		if (inativo) {
+			e.preventDefault();
+			e.stopPropagation();
+			return;
+		}
+		onclick?.(e);
+	}
 </script>
 
 {#if href && !inativo}
@@ -37,9 +46,11 @@
 		type={tipo}
 		class="botao {variante}"
 		class:cheia={largura === 'cheia'}
-		disabled={inativo}
-		aria-busy={carregando}
-		{onclick}
+		class:ocupado={carregando}
+		disabled={desabilitado}
+		aria-disabled={inativo || undefined}
+		aria-busy={carregando || undefined}
+		onclick={handleClick}
 		{...resto}
 	>
 		{#if carregando}
@@ -67,31 +78,43 @@
 		font-size: var(--texto-base);
 		font-weight: 600;
 		text-decoration: none;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
 
 		cursor: pointer;
 		transition:
 			background-color var(--transicao),
 			border-color var(--transicao),
-			opacity var(--transicao);
+			color var(--transicao),
+			opacity var(--transicao),
+			transform 90ms cubic-bezier(0.2, 0, 0.2, 1),
+			box-shadow var(--transicao);
 	}
 
 	.cheia {
 		width: 100%;
 	}
 
-	.botao:disabled {
-		opacity: 0.55;
+	.botao:disabled,
+	.botao.ocupado {
+		opacity: 0.65;
 		cursor: not-allowed;
+	}
+
+	/* Feedback tátil de clique — só no botão, nunca em containers. */
+	.botao:active:not(:disabled):not(.ocupado) {
+		transform: scale(0.97);
+	}
+
+	/* Anel de foco visível para acessibilidade */
+	.botao:focus-visible {
+		outline: 2px solid var(--cor-foco);
+		outline-offset: 2px;
 	}
 
 	/* --- Primário: a ação que a tela quer que você faça --------------------- */
 	.primario {
 		background: var(--cor-marca);
 		color: var(--cor-sobre-marca);
-	}
-	.primario:hover:not(:disabled) {
-		background: var(--cor-marca-hover);
 	}
 
 	/* --- Secundário --------------------------------------------------------- */
@@ -100,10 +123,6 @@
 		color: var(--cor-texto);
 		border-color: var(--cor-linha-forte);
 	}
-	.secundario:hover:not(:disabled) {
-		border-color: var(--cor-marca);
-		color: var(--cor-marca);
-	}
 
 	/* --- Texto -------------------------------------------------------------- */
 	.texto {
@@ -111,22 +130,29 @@
 		color: var(--cor-marca);
 		padding-inline: var(--esp-3);
 	}
-	.texto:hover:not(:disabled) {
-		background: var(--cor-marca-suave);
-	}
 
 	/* --- Destrutivo ---------------------------------------------------------
-	   NUNCA preenchido de vermelho: nesta marca o vermelho preenchido significa
-	   "ação principal". Um botão de excluir com a mesma aparência do botão de
-	   confirmar presença é acidente esperando acontecer. Contorno + cor de
-	   perigo, e quem usa isto deve acompanhar de confirmação textual. */
+	   NUNCA preenchido de vermelho: contorno + cor de perigo. */
 	.destrutivo {
 		background: transparent;
 		color: var(--cor-perigo);
 		border-color: var(--cor-perigo);
 	}
-	.destrutivo:hover:not(:disabled) {
-		background: var(--cor-perigo-suave);
+
+	@media (hover: hover) {
+		.primario:hover:not(:disabled):not(.ocupado) {
+			background: var(--cor-marca-hover);
+		}
+		.secundario:hover:not(:disabled):not(.ocupado) {
+			border-color: var(--cor-marca);
+			color: var(--cor-marca);
+		}
+		.texto:hover:not(:disabled):not(.ocupado) {
+			background: var(--cor-marca-suave);
+		}
+		.destrutivo:hover:not(:disabled):not(.ocupado) {
+			background: var(--cor-perigo-suave);
+		}
 	}
 
 	.giro {

@@ -19,6 +19,7 @@ export type AuditAction =
 	| 'auth.conta_bloqueada'
 	| 'auth.senha_definida'
 	| 'auth.senha_alterada'
+	| 'auth.senha_redefinida'
 	| 'auth.sessoes_revogadas'
 	// Convite
 	| 'invite.emitido'

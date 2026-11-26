@@ -39,7 +39,15 @@ export const RULES = {
 	/** Login por IP: protege o servidor de varredura em muitas contas. */
 	loginPorIp: { limit: 20, windowSeconds: 300, blockSeconds: 900 },
 	/** Tentativas de resgatar convite: evita adivinhação de token. */
-	convitePorIp: { limit: 10, windowSeconds: 600, blockSeconds: 1800 }
+	convitePorIp: { limit: 10, windowSeconds: 600, blockSeconds: 1800 },
+	/** Pedidos de redefinição por IP: cada um dispara um e-mail. */
+	resetPorIp: { limit: 5, windowSeconds: 900, blockSeconds: 1800 },
+	/** Pedidos de redefinição por e-mail: impede encher a caixa de alguém. */
+	resetPorEmail: { limit: 3, windowSeconds: 3600, blockSeconds: 3600 },
+	/** Uso do token de redefinição por IP: evita adivinhação. */
+	resetarPorIp: { limit: 10, windowSeconds: 600, blockSeconds: 1800 },
+	/** Solicitações de cadastro por IP: a rota é pública e grava no banco. */
+	cadastroPorIp: { limit: 5, windowSeconds: 3600, blockSeconds: 3600 }
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitResult =

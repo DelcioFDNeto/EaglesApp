@@ -1,0 +1,14 @@
+# Nada disto entra na imagem: binários do host, saídas de build e segredos.
+node_modules
+build
+build-api
+.svelte-kit
+.git
+.env
+.env.*
+!.env.example
+android
+ios
+docs
+tests
+*.log

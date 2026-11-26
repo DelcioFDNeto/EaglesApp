@@ -1,4 +1,5 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
+import { sequence } from '@sveltejs/kit/hooks';
 import { randomUUID } from 'node:crypto';
 import { db } from '$server/db';
 import { person } from '$server/db/schema';
@@ -57,24 +58,9 @@ const handleSessao: Handle = async ({ event, resolve }) => {
 const handleSeguranca: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 
-	// CSP restritiva. `unsafe-inline` em style é necessário para os estilos
-	// que o Svelte injeta; script não recebe essa concessão.
-	response.headers.set(
-		'Content-Security-Policy',
-		[
-			"default-src 'self'",
-			"script-src 'self'",
-			"style-src 'self' 'unsafe-inline'",
-			"img-src 'self' data: blob:",
-			"font-src 'self'",
-			"connect-src 'self'",
-			"object-src 'none'",
-			"base-uri 'self'",
-			"form-action 'self'",
-			"frame-ancestors 'none'"
-		].join('; ')
-	);
-
+	// CSP é gerada pelo SvelteKit via `kit.csp` (svelte.config.js) em modo
+	// auto: adiciona nonce aos scripts inline do SvelteKit e permite hidratação,
+	// use:enhave e service worker. Não duplicar aqui para evitar conflito.
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 	response.headers.set('X-Frame-Options', 'DENY');
@@ -89,12 +75,38 @@ const handleSeguranca: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-export const handle: Handle = async (input) => {
-	return handleSeguranca({
-		event: input.event,
-		resolve: (event) => handleSessao({ event, resolve: input.resolve })
-	});
+const handleCors: Handle = async ({ event, resolve }) => {
+	const origin = event.request.headers.get('origin');
+	const allowedOrigins = [
+		process.env.FRONTEND_URL,
+		'http://localhost:5173',
+		'http://127.0.0.1:5173'
+	].filter(Boolean) as string[];
+
+	if (event.request.method === 'OPTIONS') {
+		const headers = new Headers();
+		if (origin && allowedOrigins.includes(origin)) {
+			headers.set('Access-Control-Allow-Origin', origin);
+			headers.set('Access-Control-Allow-Credentials', 'true');
+		}
+		headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+		headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+		return new Response(null, { status: 204, headers });
+	}
+
+	const response = await resolve(event);
+
+	if (origin && allowedOrigins.includes(origin)) {
+		response.headers.set('Access-Control-Allow-Origin', origin);
+		response.headers.set('Access-Control-Allow-Credentials', 'true');
+	}
+	response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+	response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+	return response;
 };
+
+export const handle: Handle = sequence(handleCors, handleSessao, handleSeguranca);
 
 /**
  * Erros que escapam viram uma resposta sem detalhe interno.

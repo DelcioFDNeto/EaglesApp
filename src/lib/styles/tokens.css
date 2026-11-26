@@ -18,6 +18,22 @@
  * Nenhum estado é comunicado só por cor (RNF-12).
  */
 
+/* --- Fonte Archivo (títulos, botões, marca) — auto-hospedada --------------- */
+@font-face {
+	font-family: 'Archivo';
+	src: url('/fonts/Archivo-Regular.ttf') format('truetype');
+	font-weight: 400 500;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: 'Archivo';
+	src: url('/fonts/Archivo-Bold.ttf') format('truetype');
+	font-weight: 600 800;
+	font-style: normal;
+	font-display: swap;
+}
+
 :root {
 	/* --- Marca -------------------------------------------------------------- */
 	--eagles-red: #a91825;
@@ -34,11 +50,11 @@
 	--cor-superficie-3: #ede2e1;
 
 	--cor-texto: #241416;
-	--cor-texto-2: #63494d;
-	--cor-texto-3: #8a7275;
+	--cor-texto-2: #4a3236;
+	--cor-texto-3: #6d5054;
 
-	--cor-linha: #e4d8d8;
-	--cor-linha-forte: #d2bfbf;
+	--cor-linha: #d2bfbf;
+	--cor-linha-forte: #99777a;
 
 	--cor-marca: #a91825;
 	--cor-marca-hover: #8e1420;
@@ -47,11 +63,11 @@
 
 	--cor-perigo: #580f20;
 	--cor-perigo-suave: #f6e4e5;
-	--cor-sucesso: #15803d;
-	--cor-sucesso-suave: #e3f2e8;
-	--cor-aviso: #b45309;
+	--cor-sucesso: #0d5c34;
+	--cor-sucesso-suave: #dcf3e0;
+	--cor-aviso: #7a4a0c;
 	--cor-aviso-suave: #fbeedd;
-	--cor-erro: #b91c1c;
+	--cor-erro: #7a1c1c;
 	--cor-erro-suave: #fdeaea;
 
 	--cor-foco: #a91825;
@@ -60,6 +76,7 @@
 	--sombra-2: 0 1px 2px rgba(88, 15, 32, 0.06), 0 8px 24px -12px rgba(88, 15, 32, 0.18);
 
 	/* --- Tipografia --------------------------------------------------------- */
+	--fonte-titulo: 'Archivo', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 	--fonte: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 	--fonte-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
@@ -91,9 +108,6 @@
 	--toque-min: 44px;
 
 	--transicao: 160ms cubic-bezier(0.2, 0, 0.2, 1);
-
-	/* Altura da barra inferior, para o padding do conteúdo */
-	--altura-nav: 60px;
 }
 
 /* --- Tema escuro por preferência do sistema ------------------------------- */
@@ -109,7 +123,7 @@
 		--cor-texto-3: #9e8689;
 
 		--cor-linha: #3a1c22;
-		--cor-linha-forte: #4e252c;
+		--cor-linha-forte: #87636a;
 
 		/* O #A91825 não tem contraste suficiente sobre fundo quase preto.
 		   O vermelho da marca é levantado, mantendo a mesma família. */
@@ -146,7 +160,7 @@
 	--cor-texto-3: #9e8689;
 
 	--cor-linha: #3a1c22;
-	--cor-linha-forte: #4e252c;
+	--cor-linha-forte: #87636a;
 
 	--cor-marca: #ef5a66;
 	--cor-marca-hover: #f47a84;

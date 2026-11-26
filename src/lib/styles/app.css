@@ -49,6 +49,7 @@ h1,
 h2,
 h3,
 h4 {
+	font-family: var(--fonte-titulo);
 	line-height: 1.2;
 	text-wrap: balance;
 	font-weight: 700;
@@ -74,6 +75,28 @@ a {
 	text-underline-offset: 2px;
 }
 
+/* --- Proteção contra dados extremos (hardening) --------------------------- */
+/* Nomes, e-mails e textos longos não estouram cartões nem telas estreitas. */
+h1, h2, h3, h4 {
+	overflow-wrap: break-word;
+	word-break: break-word;
+}
+
+input,
+button,
+a {
+	overflow-wrap: anywhere;
+	max-width: 100%;
+}
+
+p,
+.caixa p,
+.vazio p,
+.legenda,
+.ajuda {
+	overflow-wrap: break-word;
+}
+
 /* --- Foco visível: requisito de acessibilidade, não enfeite ---------------- */
 
 :focus-visible {
@@ -84,14 +107,29 @@ a {
 
 /* --- Movimento ------------------------------------------------------------ */
 
+/* Hover só em dispositivos que realmente têm apontador (evita "gruda" no touch). */
+@media (hover: hover) {
+	a:not(.botao):hover {
+		opacity: 0.85;
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
 	*::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
-		scroll-behavior: auto !important;
+		animation-duration: 0.01ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.01ms;
+		scroll-behavior: auto;
+	}
+	/* O spinner de carregamento nunca congela: é sinal de estado, não enfeite. */
+	.giro,
+	[class*='giro'],
+	.spinner,
+	[class*='spinner'] {
+		animation-duration: 700ms !important;
+		transition-duration: 160ms !important;
 	}
 }
 

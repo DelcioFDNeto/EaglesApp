@@ -15,6 +15,41 @@
       "when": 1787079367341,
       "tag": "0001_regras_de_banco",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787080000000,
+      "tag": "0002_modulos_02_06",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787090000000,
+      "tag": "0003_modulo_07_responsabilidades",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787100000000,
+      "tag": "0004_modulo_08_comunicacao",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787110000000,
+      "tag": "0005_modulo_09_financeiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787120000000,
+      "tag": "0006_modulo_10_ia",
+      "breakpoints": true
     }
   ]
 }
