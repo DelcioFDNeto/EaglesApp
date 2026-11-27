@@ -12,6 +12,7 @@ export type NomeIcone =
 	| 'eventos'
 	| 'grupos'
 	| 'escalas'
+	| 'frequencia'
 	| 'comunicacao'
 	| 'pessoas'
 	| 'financeiro'
@@ -86,6 +87,13 @@ export function itensNavegacao(permissoes: readonly string[]): ItemNav[] {
 			rotulo: 'Pessoas',
 			rotuloCurto: 'Pessoas',
 			icone: 'pessoas',
+			secao: 'cuidar'
+		},
+		tem(permissoes, 'attendance.report') && {
+			href: '/frequencia',
+			rotulo: 'Frequência',
+			rotuloCurto: 'Frequência',
+			icone: 'frequencia',
 			secao: 'cuidar'
 		},
 		tem(permissoes, 'finance.view_all', 'finance.view_group', 'finance.view_own') && {

@@ -5,6 +5,7 @@
 	import Campo from '$ui/Campo.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
+	import GraficoMensal from '$ui/GraficoMensal.svelte';
 	import { api } from '$lib/api';
 
 	type Estagio = 'visitante' | 'recorrente' | 'membro';
@@ -86,6 +87,17 @@
 
 	onMount(carregar);
 
+	// Frequência: só aparece se o servidor deixar (a própria pessoa ou quem cuida do PG dela).
+	let frequencia = $state<any>(null);
+	async function carregarFrequencia() {
+		try {
+			const res = await api.get(`/api/frequencia/pessoa/${pessoaId}`);
+			frequencia = res.ok ? await res.json() : null;
+		} catch {
+			frequencia = null;
+		}
+	}
+
 	async function carregar() {
 		erro = undefined;
 		try {
@@ -99,6 +111,7 @@
 			permissoes = d.permissoes;
 			historico = d.historico ?? [];
 			historicoGrupos = d.historicoGrupos ?? [];
+			carregarFrequencia();
 		} catch {
 			erro = 'Sem conexão. Não foi possível carregar a pessoa.';
 		} finally {
@@ -330,6 +343,74 @@
 								Voltar
 							</Botao>
 						</div>
+					{/if}
+				</section>
+			{/if}
+
+			<!-- Frequência -->
+			{#if frequencia}
+				<section class="bloco" aria-labelledby="titulo-frequencia">
+					<h2 id="titulo-frequencia">Frequência</h2>
+					<p class="sub">Últimos 3 meses. Só conta encontro com chamada feita.</p>
+
+					{#if frequencia.pg.esperados === 0}
+						<p class="sub">Nenhum encontro do PG com chamada neste período.</p>
+					{:else}
+						<div class="freq-resumo">
+							<strong>{frequencia.pg.taxa}%</strong>
+							<span>
+								veio a {frequencia.pg.presencas} de {frequencia.pg.esperados}
+								{frequencia.pg.esperados === 1 ? 'encontro' : 'encontros'} do PG
+							</span>
+						</div>
+						<div
+							class="freq-trilho"
+							role="meter"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={frequencia.pg.taxa}
+							aria-label="Presença nos encontros do PG"
+						>
+							<div style="width: {frequencia.pg.taxa}%"></div>
+						</div>
+					{/if}
+
+					{#if frequencia.outrosEventos.length > 0}
+						<p class="sub">
+							Também esteve em:
+							{frequencia.outrosEventos.map((o: any) => `${o.presencas} ${o.tipo}`).join(', ')}.
+						</p>
+					{/if}
+
+					{#if frequencia.evolucao.length >= 2}
+						<GraficoMensal titulo="Presença no PG por mês" pontos={frequencia.evolucao} />
+					{/if}
+
+					{#if frequencia.recentes.length > 0}
+						<ul class="recentes">
+							{#each frequencia.recentes.slice(0, 6) as r (r.id)}
+								<li>
+									<span
+										class="marca-presenca presenca-{r.veio === null
+											? 'sem'
+											: r.veio
+												? 'veio'
+												: 'faltou'}"
+									>
+										{r.veio === null ? 'Sem chamada' : r.veio ? 'Veio' : 'Faltou'}
+									</span>
+									<span class="recente-texto">
+										<a href={`/eventos/${r.id}`}>{r.titulo}</a>
+										<span class="detalhe">
+											{data(r.inicio)}{#if r.resposta}
+												· {r.confirmou
+													? 'tinha confirmado'
+													: 'tinha dito que não ia ou talvez'}{/if}
+										</span>
+									</span>
+								</li>
+							{/each}
+						</ul>
 					{/if}
 				</section>
 			{/if}
@@ -700,6 +781,89 @@
 		font-size: var(--texto-sm);
 		color: var(--cor-texto-2);
 		font-style: italic;
+	}
+
+	.freq-resumo {
+		display: flex;
+		align-items: baseline;
+		gap: var(--esp-2);
+		flex-wrap: wrap;
+	}
+
+	.freq-resumo strong {
+		font-family: var(--fonte-titulo);
+		font-size: var(--texto-2xl);
+		font-weight: 800;
+	}
+
+	.freq-resumo span {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
+	}
+
+	.freq-trilho {
+		height: 8px;
+		border-radius: var(--raio-cheio);
+		background: var(--cor-marca-suave);
+		overflow: hidden;
+	}
+
+	.freq-trilho div {
+		height: 100%;
+		background: var(--cor-marca);
+		border-radius: var(--raio-cheio);
+	}
+
+	.recentes {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+	}
+
+	.recentes li {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--esp-3);
+	}
+
+	.recente-texto {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.recente-texto a {
+		font-weight: 600;
+		color: var(--cor-texto);
+		overflow-wrap: anywhere;
+	}
+
+	/* Estado sempre com texto, nunca só cor. */
+	.marca-presenca {
+		flex: none;
+		min-width: 92px;
+		text-align: center;
+		font-size: var(--texto-xs);
+		font-weight: 700;
+		padding: 2px 8px;
+		border-radius: var(--raio-cheio);
+	}
+
+	.presenca-veio {
+		background: var(--cor-sucesso-suave);
+		color: var(--cor-sucesso);
+	}
+
+	.presenca-faltou {
+		background: var(--cor-aviso-suave);
+		color: var(--cor-aviso);
+	}
+
+	.presenca-sem {
+		background: var(--cor-superficie-2);
+		color: var(--cor-texto-2);
 	}
 
 	.estado {

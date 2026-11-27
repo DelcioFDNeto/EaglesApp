@@ -26,6 +26,8 @@ describe('navegação', () => {
 
 	it('conselheiro cuida de pessoas; só líder vê liderança e administração', () => {
 		expect(hrefs('conselheiro')).toContain('/pessoas');
+		expect(hrefs('conselheiro')).toContain('/frequencia');
+		expect(hrefs('membro')).not.toContain('/frequencia');
 		expect(hrefs('conselheiro')).not.toContain('/lideranca');
 		expect(hrefs('lider')).toEqual(expect.arrayContaining(['/lideranca', '/admin', '/pessoas']));
 	});

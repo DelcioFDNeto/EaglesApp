@@ -9,7 +9,10 @@
 	let evento = $state<any>(null);
 	let inscricoes: any[] = $state([]);
 	let presencas: any[] = $state([]);
-	let inscritosSemPresenca: any[] = $state([]);
+	/** Chamada: integrantes do PG e quem respondeu, ainda sem registro. */
+	let paraChamada: any[] = $state([]);
+	/** Quem trocou de resposta (RN-12), para quem cuida do PG. */
+	let mudancasDeResposta: any[] = $state([]);
 	let escalas: any[] = $state([]);
 	let resumoPresenca = $state<any>(null);
 	let permissoesEvento = $state({
@@ -97,17 +100,10 @@
 					: 'Erro ao carregar o evento.';
 		}
 
-		const [resPresencas, resEscalas] = await Promise.allSettled([
-			api.get(`/api/eventos/${eventoId}/presenca`),
+		const [, resEscalas] = await Promise.allSettled([
+			carregarPresencas(eventoId),
 			api.get(`/api/escalas?eventoId=${encodeURIComponent(eventoId)}`)
 		]);
-
-		if (resPresencas.status === 'fulfilled' && resPresencas.value.ok) {
-			const dataPresencas = await resPresencas.value.json();
-			presencas = dataPresencas.presencas ?? [];
-			inscritosSemPresenca = dataPresencas.inscritosSemPresenca ?? [];
-			resumoPresenca = dataPresencas.resumo ?? null;
-		}
 
 		if (resEscalas.status === 'fulfilled' && resEscalas.value.ok) {
 			const dataEscalas = await resEscalas.value.json();
@@ -115,6 +111,27 @@
 		}
 
 		carregando = false;
+	}
+
+	/** Só a presença: cada toque na chamada não recarrega o evento inteiro. */
+	async function carregarPresencas(eventoId = evento?.id) {
+		if (!eventoId) return;
+		const [resPresencas, resRelatorio] = await Promise.allSettled([
+			api.get(`/api/eventos/${eventoId}/presenca`),
+			permissoesEvento.podeVerRelatorio
+				? api.get(`/api/eventos/${eventoId}/relatorio-presenca`)
+				: Promise.resolve(null)
+		]);
+		if (resPresencas.status === 'fulfilled' && resPresencas.value.ok) {
+			const d = await resPresencas.value.json();
+			presencas = d.presencas ?? [];
+			paraChamada = d.paraChamada ?? [];
+			resumoPresenca = d.resumo ?? null;
+		}
+		if (resRelatorio.status === 'fulfilled' && resRelatorio.value?.ok) {
+			const r = await resRelatorio.value.json();
+			mudancasDeResposta = r.mudancasDeResposta ?? [];
+		}
 	}
 
 	onMount(() => {
@@ -165,16 +182,47 @@
 				registrationMethod: 'manual'
 			});
 			if (res.ok) {
-				await carregarEvento();
+				await carregarPresencas();
 			} else {
 				const data = await res.json().catch(() => ({}));
 				erro = data.erro ?? 'Não foi possível registrar presença.';
 			}
 		} catch {
-			erro = 'Erro ao registrar presença.';
+			erro = 'Sem conexão. A presença não foi registrada.';
 		} finally {
 			salvandoPresencaId = null;
 		}
+	}
+
+	async function desfazerPresenca(personId: string) {
+		if (!evento?.id) return;
+		salvandoPresencaId = personId;
+		erro = undefined;
+		try {
+			const res = await api.delete(`/api/eventos/${evento.id}/presenca`, {
+				body: JSON.stringify({ personId })
+			});
+			if (res.ok) {
+				await carregarPresencas();
+			} else {
+				const data = await res.json().catch(() => ({}));
+				erro = data.erro ?? 'Não foi possível desfazer.';
+			}
+		} catch {
+			erro = 'Sem conexão. Nada foi desfeito.';
+		} finally {
+			salvandoPresencaId = null;
+		}
+	}
+
+	function dataHora(iso: string) {
+		return new Date(iso).toLocaleDateString('pt-BR', {
+			weekday: 'short',
+			day: '2-digit',
+			month: 'short',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
 	}
 
 	async function mudarStatus(status: 'cancelled' | 'scheduled') {
@@ -565,30 +613,46 @@
 						</div>
 					{/if}
 
-					{#if permissoesEvento.podeRegistrarPresenca && inscritosSemPresenca.length > 0}
+					{#if permissoesEvento.podeRegistrarPresenca && paraChamada.length > 0}
 						<div class="subbloco">
-							<h3>Aguardando registro</h3>
+							<h3>Chamada</h3>
+							<p class="subitem">
+								Integrantes do PG e quem respondeu. Marque quem veio: depois da chamada, quem é do
+								PG e não foi marcado conta como falta neste encontro.
+							</p>
 							<ul class="lista">
-								{#each inscritosSemPresenca as p (p.id)}
+								{#each paraChamada as p (p.id)}
 									<li class="item item-acoes">
 										<div class="item-info">
 											<strong>{p.nome}</strong>
-											<span class="subitem">RSVP: {rotuloOpcao(p.rsvpOption)}</span>
+											<span class="subitem">
+												{p.rsvpOption ? `Respondeu: ${rotuloOpcao(p.rsvpOption)}` : 'Não respondeu'}
+											</span>
 										</div>
 										<div class="botoes-presenca">
 											<Botao
 												variante="primario"
 												carregando={salvandoPresencaId === p.id}
 												onclick={() => registrarPresenca(p.id, 'present')}
+												aria-label={`${p.nome} veio`}
 											>
-												Presente
+												Veio
 											</Botao>
 											<Botao
 												variante="secundario"
 												desabilitado={salvandoPresencaId === p.id}
 												onclick={() => registrarPresenca(p.id, 'late')}
+												aria-label={`${p.nome} chegou atrasado(a)`}
 											>
 												Atrasou
+											</Botao>
+											<Botao
+												variante="texto"
+												desabilitado={salvandoPresencaId === p.id}
+												onclick={() => registrarPresenca(p.id, 'absent')}
+												aria-label={`${p.nome} faltou`}
+											>
+												Faltou
 											</Botao>
 										</div>
 									</li>
@@ -608,11 +672,46 @@
 									<span class="chip status-presenca-{p.status}">
 										{STATUS_PRESENCA[p.status] ?? p.status}
 									</span>
+									{#if permissoesEvento.podeRegistrarPresenca}
+										<Botao
+											variante="texto"
+											desabilitado={salvandoPresencaId === p.personId}
+											onclick={() => desfazerPresenca(p.personId)}
+											aria-label={`Desfazer o registro de ${p.nome}`}
+										>
+											Desfazer
+										</Botao>
+									{/if}
 								</li>
 							{/each}
 						</ul>
 					{:else if !carregando}
 						<p class="texto-vazio">Nenhuma presença registrada ainda.</p>
+					{/if}
+
+					{#if mudancasDeResposta.length > 0}
+						<details class="mudancas">
+							<summary>
+								{mudancasDeResposta.length}
+								{mudancasDeResposta.length === 1
+									? 'pessoa mudou de resposta'
+									: 'pessoas mudaram de resposta'}
+							</summary>
+							<ul class="lista">
+								{#each mudancasDeResposta as m (m.personId)}
+									<li class="item">
+										<div class="item-info">
+											<strong>{m.nome}</strong>
+											<span class="subitem">
+												{m.respostas
+													.map((r: any) => `${rotuloOpcao(r.option)} (${dataHora(r.em)})`)
+													.join(' → ')}
+											</span>
+										</div>
+									</li>
+								{/each}
+							</ul>
+						</details>
 					{/if}
 				</section>
 			{/if}
@@ -951,8 +1050,14 @@
 
 	.resumo-presenca {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--esp-2);
+	}
+
+	@media (min-width: 560px) {
+		.resumo-presenca {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
 	}
 
 	.stat {
@@ -986,6 +1091,16 @@
 	.subbloco h3 {
 		font-size: var(--texto-sm);
 		color: var(--cor-texto-2);
+	}
+
+	.mudancas summary {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-marca);
+		cursor: pointer;
+		min-height: var(--toque-min);
+		display: flex;
+		align-items: center;
 	}
 
 	.botoes-presenca {

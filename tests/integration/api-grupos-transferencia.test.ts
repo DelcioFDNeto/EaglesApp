@@ -29,6 +29,11 @@ import {
 	userAccount as userAccountTable
 } from '../../src/lib/server/db/schema';
 import { hashPassword } from '../../src/lib/server/auth/password';
+
+// Argon2id custa ~600 ms de CPU: um hash por arquivo, reaproveitado por todas as
+// pessoas de teste (a senha é a mesma). Com a bateria em paralelo, um hash por
+// pessoa estourava o tempo das preparações.
+const hashDeTeste = hashPassword('senha12345');
 import { tokenPara } from './helpers/token';
 import { resetEnvCache } from '../../src/lib/server/env';
 
@@ -94,7 +99,7 @@ async function criar(
 	await ctx.db.insert(userAccountTable).values({
 		personId: p!.id,
 		email: `${nome.toLowerCase().replace(/\s+/g, '.')}@eagles.test`,
-		passwordHash: await hashPassword('senha12345')
+		passwordHash: await hashDeTeste
 	});
 	await ctx.db.insert(personRoleTable).values({
 		personId: p!.id,

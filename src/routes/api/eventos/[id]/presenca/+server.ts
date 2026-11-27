@@ -1,12 +1,20 @@
 import { json } from '@sveltejs/kit';
-import { and, asc, eq, notExists } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, notExists, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { event, eventRegistration, person, personProfile, presence } from '$server/db/schema';
+import {
+	event,
+	eventRegistration,
+	groupMember,
+	person,
+	personProfile,
+	presence
+} from '$server/db/schema';
+import { lerOpcoes } from '$server/eventos/regras';
+import { naoEhMaster } from '$server/lideranca/regras';
+import { chavesQueConfirmam } from '$shared/rsvp';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
-
-const OPCOES_CONFIRMACAO_POSITIVA = new Set(['confirmado', 'atrasado', 'convidado']);
 
 const marcarPresencaSchema = z.object({
 	personId: z.string().uuid(),
@@ -33,7 +41,12 @@ export const GET = async ({ request, params, locals }) => {
 	}
 
 	const [evento] = await banco
-		.select({ id: event.id, teamId: event.teamId, groupId: event.groupId })
+		.select({
+			id: event.id,
+			teamId: event.teamId,
+			groupId: event.groupId,
+			rsvpOptions: event.rsvpOptions
+		})
 		.from(event)
 		.where(and(eq(event.id, eventoId), eq(event.teamId, actor.teamId)))
 		.limit(1);
@@ -82,7 +95,8 @@ export const GET = async ({ request, params, locals }) => {
 						}
 					]
 				: [],
-			inscritosSemPresenca: []
+			inscritosSemPresenca: [],
+			paraChamada: []
 		});
 	}
 
@@ -133,9 +147,60 @@ export const GET = async ({ request, params, locals }) => {
 		.from(eventRegistration)
 		.where(eq(eventRegistration.eventId, eventoId));
 
-	const totalConfirmadosRsvp = inscricoesTodas.filter((i) =>
-		OPCOES_CONFIRMACAO_POSITIVA.has(i.option)
-	).length;
+	const confirmam = chavesQueConfirmam(lerOpcoes(evento.rsvpOptions));
+	const totalConfirmadosRsvp = inscricoesTodas.filter((i) => confirmam.has(i.option)).length;
+
+	/**
+	 * Chamada: todo mundo que pode ter vindo e ainda não foi marcado. Num
+	 * encontro de PG, os integrantes do PG; em qualquer evento, quem respondeu.
+	 * Quem veio sem responder também precisa poder ser marcado: a lista não
+	 * pode depender de a pessoa ter usado o app antes.
+	 */
+	const semPresenca = notExists(
+		banco
+			.select({ id: presence.id })
+			.from(presence)
+			.where(and(eq(presence.eventId, eventoId), eq(presence.personId, person.id)))
+	);
+	const candidatos = or(
+		inArray(
+			person.id,
+			banco
+				.select({ id: eventRegistration.personId })
+				.from(eventRegistration)
+				.where(eq(eventRegistration.eventId, eventoId))
+		),
+		evento.groupId
+			? inArray(
+					person.id,
+					banco
+						.select({ id: groupMember.personId })
+						.from(groupMember)
+						.where(eq(groupMember.groupId, evento.groupId))
+				)
+			: undefined
+	);
+	const paraChamada = await banco
+		.select({
+			id: person.id,
+			nome: person.fullName,
+			rsvpOption: eventRegistration.option
+		})
+		.from(person)
+		.leftJoin(
+			eventRegistration,
+			and(eq(eventRegistration.eventId, eventoId), eq(eventRegistration.personId, person.id))
+		)
+		.where(
+			and(
+				eq(person.teamId, actor.teamId),
+				isNull(person.deletedAt),
+				naoEhMaster(person.id),
+				candidatos,
+				semPresenca
+			)
+		)
+		.orderBy(asc(person.fullName));
 	const totalPresent = presencas.filter((p) => p.status === 'present').length;
 	const totalLate = presencas.filter((p) => p.status === 'late').length;
 	const totalAusentes = presencas.filter((p) => p.status === 'absent').length;
@@ -165,6 +230,12 @@ export const GET = async ({ request, params, locals }) => {
 			metodo: p.registrationMethod,
 			registradoEm: p.registeredAt,
 			registradoPor: p.registeredByPersonId
+		})),
+		paraChamada: paraChamada.map((p) => ({
+			id: p.id,
+			nome: p.nome,
+			rsvpOption: p.rsvpOption,
+			confirmou: p.rsvpOption ? confirmam.has(p.rsvpOption) : false
 		})),
 		inscritosSemPresenca: inscritosSemPresenca.map((i) => ({
 			id: i.id,
@@ -264,4 +335,50 @@ export const POST = async ({ request, params, locals }) => {
 	}
 
 	return json({ ok: true, mensagem: 'Presença registrada com sucesso.' });
+};
+
+const desmarcarSchema = z.object({ personId: z.string().uuid() }).strict();
+
+/**
+ * Desfaz um registro de presença (toque errado na chamada). A pessoa volta
+ * para a lista de chamada. Exige `attendance.record` no PG do evento.
+ */
+export const DELETE = async ({ request, params, locals }) => {
+	const banco = db();
+	const auth = await autenticarAtor(request, banco, locals?.actor);
+	if (!auth) {
+		return json({ erro: 'Não autenticado' }, { status: 401 });
+	}
+
+	const { actor } = auth;
+	const eventoId = params.id;
+	if (!isUuid(eventoId)) {
+		return json({ erro: 'Identificador de evento inválido.' }, { status: 400 });
+	}
+
+	const parsed = desmarcarSchema.safeParse(await request.json().catch(() => null));
+	if (!parsed.success) {
+		return json({ erro: 'Informe a pessoa.' }, { status: 400 });
+	}
+
+	const [evento] = await banco
+		.select({ id: event.id, groupId: event.groupId })
+		.from(event)
+		.where(and(eq(event.id, eventoId), eq(event.teamId, actor.teamId)))
+		.limit(1);
+	if (!evento) {
+		return json({ erro: 'Evento não encontrado.' }, { status: 404 });
+	}
+	if (!can(actor, 'attendance.record', { groupId: evento.groupId })) {
+		return json(
+			{ erro: 'Apenas líderes e conselheiros podem registrar presença.' },
+			{ status: 403 }
+		);
+	}
+
+	await banco
+		.delete(presence)
+		.where(and(eq(presence.eventId, eventoId), eq(presence.personId, parsed.data.personId)));
+
+	return json({ ok: true, mensagem: 'Registro desfeito.' });
 };

@@ -24,7 +24,9 @@ export const opcoesRsvpSchema = z
 				.min(1)
 				.max(50)
 				.regex(/^[a-z0-9_]+$/, 'Use apenas letras minúsculas, números e _.'),
-			label: z.string().trim().min(1).max(80)
+			label: z.string().trim().min(1).max(80),
+			/** Conta como "vou"? Ver `$shared/rsvp`. */
+			confirma: z.boolean().optional()
 		})
 	)
 	.min(1, 'O evento precisa de pelo menos uma opção de resposta.')

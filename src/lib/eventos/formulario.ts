@@ -7,7 +7,8 @@
  * do mesmo erro.
  */
 
-export type OpcaoRsvp = { key: string; label: string };
+/** `confirma`: a resposta conta como "vou"? (ver `$shared/rsvp`). */
+export type OpcaoRsvp = { key: string; label: string; confirma?: boolean };
 
 export type DadosFormulario = {
 	title: string;
@@ -133,7 +134,11 @@ export function paraApi(dados: DadosFormulario, modo: 'criar' | 'editar'): Recor
 		// exige ao menos uma, e elas voltam a valer se a confirmação for religada).
 		rsvpOptions:
 			dados.rsvpOptions.length > 0
-				? dados.rsvpOptions.map((o) => ({ key: o.key, label: o.label.trim() }))
+				? dados.rsvpOptions.map((o) => ({
+						key: o.key,
+						label: o.label.trim(),
+						...(o.confirma !== undefined && { confirma: o.confirma })
+					}))
 				: undefined
 	};
 }

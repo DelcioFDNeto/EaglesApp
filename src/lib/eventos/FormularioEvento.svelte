@@ -10,6 +10,7 @@
 		type DadosFormulario,
 		type ErrosFormulario
 	} from './formulario';
+	import { opcaoConfirma } from '$shared/rsvp';
 
 	export type OpcoesFormulario = {
 		podeSemGrupo: boolean;
@@ -42,7 +43,11 @@
 	// O formulário é montado uma vez com os dados já carregados; daí em diante
 	// o estado é dele. (A página só o renderiza depois de ter `inicial`.)
 	function copiaInicial(): DadosFormulario {
-		return { ...inicial, rsvpOptions: inicial.rsvpOptions.map((o) => ({ ...o })) };
+		// Cada opção chega com o "conta como vou" já resolvido, para a caixa mostrar o real.
+		return {
+			...inicial,
+			rsvpOptions: inicial.rsvpOptions.map((o) => ({ ...o, confirma: opcaoConfirma(o) }))
+		};
 	}
 
 	let dados = $state<DadosFormulario>(copiaInicial());
@@ -59,7 +64,7 @@
 			rotulo,
 			dados.rsvpOptions.map((o) => o.key)
 		);
-		dados.rsvpOptions.push({ key: chave, label: rotulo });
+		dados.rsvpOptions.push({ key: chave, label: rotulo, confirma: opcaoConfirma({ key: chave }) });
 		novaOpcao = '';
 	}
 
@@ -209,33 +214,39 @@
 			<ul class="opcoes" aria-describedby="opcoes-ajuda">
 				{#each dados.rsvpOptions as opcao, i (opcao.key)}
 					<li class="opcao">
-						<label class="visualmente-oculto" for={`opcao-${i}`}>Opção {i + 1}</label>
-						<input
-							id={`opcao-${i}`}
-							type="text"
-							bind:value={opcao.label}
-							maxlength="80"
-							aria-invalid={erros.rsvpOptions && !opcao.label.trim() ? 'true' : undefined}
-						/>
-						{#if comResposta.has(opcao.key)}
-							<span class="tem-resposta">Tem respostas</span>
-						{:else}
-							<button
-								type="button"
-								class="remover"
-								onclick={() => removerOpcao(opcao.key)}
-								aria-label={`Remover a opção ${opcao.label || i + 1}`}
-							>
-								<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-									<path
-										d="M4 4l8 8M12 4l-8 8"
-										stroke="currentColor"
-										stroke-width="1.6"
-										stroke-linecap="round"
-									/>
-								</svg>
-							</button>
-						{/if}
+						<div class="opcao-linha">
+							<label class="visualmente-oculto" for={`opcao-${i}`}>Opção {i + 1}</label>
+							<input
+								id={`opcao-${i}`}
+								type="text"
+								bind:value={opcao.label}
+								maxlength="80"
+								aria-invalid={erros.rsvpOptions && !opcao.label.trim() ? 'true' : undefined}
+							/>
+							{#if comResposta.has(opcao.key)}
+								<span class="tem-resposta">Tem respostas</span>
+							{:else}
+								<button
+									type="button"
+									class="remover"
+									onclick={() => removerOpcao(opcao.key)}
+									aria-label={`Remover a opção ${opcao.label || i + 1}`}
+								>
+									<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+										<path
+											d="M4 4l8 8M12 4l-8 8"
+											stroke="currentColor"
+											stroke-width="1.6"
+											stroke-linecap="round"
+										/>
+									</svg>
+								</button>
+							{/if}
+						</div>
+						<label class="conta-como">
+							<input type="checkbox" bind:checked={opcao.confirma} />
+							<span>Conta como “vou”</span>
+						</label>
 					</li>
 				{/each}
 			</ul>
@@ -312,7 +323,7 @@
 
 	select,
 	textarea,
-	.opcao input,
+	.opcao-linha input,
 	.nova-opcao input {
 		background: var(--cor-superficie);
 		color: var(--cor-texto);
@@ -327,7 +338,7 @@
 	}
 
 	select,
-	.opcao input,
+	.opcao-linha input,
 	.nova-opcao input {
 		min-height: var(--toque-min);
 		padding: 0 var(--esp-3);
@@ -401,14 +412,37 @@
 		gap: var(--esp-2);
 	}
 
-	.opcao,
+	.opcao {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-1);
+	}
+
+	.conta-como {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--esp-2);
+		min-height: 32px;
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
+		cursor: pointer;
+		align-self: flex-start;
+	}
+
+	.conta-como input {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--cor-marca);
+	}
+
+	.opcao-linha,
 	.nova-opcao {
 		display: flex;
 		align-items: center;
 		gap: var(--esp-2);
 	}
 
-	.opcao input,
+	.opcao-linha input,
 	.nova-opcao input {
 		flex: 1;
 		min-width: 0;

@@ -647,6 +647,33 @@ export const eventRegistration = pgTable(
 	]
 );
 
+/**
+ * Histórico de respostas de presença (RN-12): cada resposta dada, inclusive as
+ * que foram trocadas depois. `event_registration` guarda só a resposta ATUAL;
+ * aqui fica o caminho ("confirmou na segunda, desmarcou na quinta").
+ *
+ * Append-only, garantido por gatilho no banco. Observações não são copiadas:
+ * o histórico responde "o que respondeu e quando", não guarda texto livre.
+ */
+export const rsvpHistory = pgTable(
+	'rsvp_history',
+	{
+		id: pk(),
+		eventId: uuid('event_id')
+			.notNull()
+			.references(() => event.id, { onDelete: 'cascade' }),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		option: text('option').notNull(),
+		guests: integer('guests').notNull().default(0),
+		/** Quem registrou a resposta (hoje, sempre a própria pessoa). */
+		answeredByPersonId: uuid('answered_by_person_id').references(() => person.id),
+		answeredAt: timestamp('answered_at', { withTimezone: true }).notNull().defaultNow()
+	},
+	(t) => [index('rsvp_history_event_person_idx').on(t.eventId, t.personId, t.answeredAt)]
+);
+
 // ---------------------------------------------------------------------------
 // Módulo 06 — Presença e Check-in
 // ---------------------------------------------------------------------------

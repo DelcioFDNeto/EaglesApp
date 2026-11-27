@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { event, eventRegistration } from '$server/db/schema';
+import { event, eventRegistration, rsvpHistory } from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 
@@ -84,20 +84,40 @@ export const POST = async ({ request, params, locals }) => {
 		)
 		.limit(1);
 
-	if (inscricaoExistente) {
-		await banco
-			.update(eventRegistration)
-			.set({ option, guests, notes: notes ?? null, updatedAt: new Date() })
-			.where(eq(eventRegistration.id, inscricaoExistente.id));
-	} else {
-		await banco.insert(eventRegistration).values({
-			eventId: eventoId,
-			personId: actor.personId,
-			option,
-			guests,
-			notes: notes ?? null
-		});
-	}
+	// Mesma resposta de novo (inclusive convidados): só as observações podem mudar,
+	// e isso não é uma nova resposta para o histórico.
+	const mudouResposta =
+		!inscricaoExistente ||
+		inscricaoExistente.option !== option ||
+		inscricaoExistente.guests !== guests;
+
+	await banco.transaction(async (tx) => {
+		if (inscricaoExistente) {
+			await tx
+				.update(eventRegistration)
+				.set({ option, guests, notes: notes ?? null, updatedAt: new Date() })
+				.where(eq(eventRegistration.id, inscricaoExistente.id));
+		} else {
+			await tx.insert(eventRegistration).values({
+				eventId: eventoId,
+				personId: actor.personId,
+				option,
+				guests,
+				notes: notes ?? null
+			});
+		}
+
+		// RN-12: toda resposta fica no histórico, inclusive as que forem trocadas.
+		if (mudouResposta) {
+			await tx.insert(rsvpHistory).values({
+				eventId: eventoId,
+				personId: actor.personId,
+				option,
+				guests,
+				answeredByPersonId: actor.personId
+			});
+		}
+	});
 
 	return json({ ok: true, mensagem: 'Participação registrada com sucesso.' });
 };
