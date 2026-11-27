@@ -6,6 +6,7 @@ import { can } from '$server/policy/policy';
 import { audit } from '$server/audit/log';
 import { alcancaAlvo, carregarAlvo, type Alvo } from '$server/pessoas/alvo';
 import { grupoAtivo, moverPessoa, podeTransferir } from '$server/grupos/transferencia';
+import { notificarPessoa } from '$server/notificacoes/motor';
 
 const schema = z
 	.object({
@@ -112,6 +113,21 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 				ip: getClientAddress(),
 				userAgent: request.headers.get('user-agent')
 			});
+
+			try {
+				await notificarPessoa(banco, {
+					teamId: actor.teamId,
+					personId: a.id,
+					kind: 'grupo',
+					title: destinoNome ? `Você agora faz parte de ${destinoNome}` : 'Alteração de subgrupo',
+					body: destinoNome
+						? `Sua participação foi transferida para ${destinoNome}.${motivo ? ` Motivo: ${motivo}` : ''}`
+						: `Você foi removido do subgrupo atual.${motivo ? ` Motivo: ${motivo}` : ''}`,
+					href: paraGrupoId ? `/grupos/${paraGrupoId}` : '/grupos'
+				});
+			} catch {
+				// Melhor esforço: nunca desfaz a transferência.
+			}
 		}
 	}
 

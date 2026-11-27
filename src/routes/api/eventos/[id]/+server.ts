@@ -8,9 +8,10 @@ import {
 	eventType,
 	group,
 	person,
-	personProfile
+	personProfile,
+	presence
 } from '$server/db/schema';
-import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
+import { autenticarAtor, flagAtiva, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 import { audit } from '$server/audit/log';
 import {
@@ -70,7 +71,7 @@ export const GET = async ({ request, params, locals }) => {
 		return json({ erro: 'Sem permissão para ver este evento.' }, { status: 403 });
 	}
 
-	const [[tipo], grupoRow] = await Promise.all([
+	const [[tipo], grupoRow, checkinQrAtivo, [minhaPresenca]] = await Promise.all([
 		banco
 			.select({
 				id: eventType.id,
@@ -88,8 +89,29 @@ export const GET = async ({ request, params, locals }) => {
 					.where(eq(group.id, evento.groupId))
 					.limit(1)
 					.then((rows) => rows[0] ?? null)
-			: Promise.resolve(null)
+			: Promise.resolve(null),
+		flagAtiva(banco, actor.teamId, 'checkin_qrcode'),
+		banco
+			.select({
+				id: presence.id,
+				status: presence.status,
+				registrationMethod: presence.registrationMethod,
+				registeredAt: presence.registeredAt
+			})
+			.from(presence)
+			.where(and(eq(presence.eventId, eventoId), eq(presence.personId, actor.personId)))
+			.limit(1)
 	]);
+
+	const meuCheckin =
+		minhaPresenca && (minhaPresenca.status === 'present' || minhaPresenca.status === 'late')
+			? {
+					id: minhaPresenca.id,
+					status: minhaPresenca.status,
+					metodo: minhaPresenca.registrationMethod,
+					registradoEm: minhaPresenca.registeredAt
+				}
+			: null;
 
 	const podeVerSensivel = can(actor, 'person.view_sensitive', { groupId: evento.groupId });
 
@@ -165,6 +187,8 @@ export const GET = async ({ request, params, locals }) => {
 					updatedAt: minha.updatedAt
 				}
 			: null,
+		checkinQrAtivo,
+		meuCheckin,
 		permissoesEvento: {
 			podeGerenciarEvento: can(actor, 'event.manage', { groupId: evento.groupId }),
 			podeRegistrarPresenca: can(actor, 'attendance.record', { groupId: evento.groupId }),

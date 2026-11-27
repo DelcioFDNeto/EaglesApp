@@ -33,6 +33,12 @@
 
 	const SECOES_LATERAL: Secao[] = ['dia_a_dia', 'cuidar', 'administrar'];
 	const conta = $derived(itens.filter((i) => i.secao === 'conta'));
+	const naoLidas = $derived(sessao.notificacoesNaoLidas);
+	const rotuloSino = $derived(
+		naoLidas > 0
+			? `Notificações (${naoLidas} não ${naoLidas === 1 ? 'lida' : 'lidas'})`
+			: 'Notificações'
+	);
 
 	const iniciais = $derived(
 		(sessao.dados?.nome ?? '')
@@ -55,9 +61,23 @@
 <div class="moldura">
 	<!-- Desktop: menu lateral fixo -->
 	<aside class="lateral">
-		<a href="/inicio" class="marca-link" aria-label="Eagles, início">
-			<Marca tamanho={34} comNome />
-		</a>
+		<div class="topo-lateral">
+			<a href="/inicio" class="marca-link" aria-label="Eagles, início">
+				<Marca tamanho={34} comNome />
+			</a>
+			<a
+				href="/notificacoes"
+				class="botao-sino"
+				aria-current={estaAtivo(caminho, '/notificacoes') ? 'page' : undefined}
+				aria-label={rotuloSino}
+				title="Notificações"
+			>
+				<Icone nome="sino" tamanho={20} />
+				{#if naoLidas > 0}
+					<span class="badge-sino" aria-hidden="true">{naoLidas > 99 ? '99+' : naoLidas}</span>
+				{/if}
+			</a>
+		</div>
 
 		<nav aria-label="Menu principal">
 			{#each SECOES_LATERAL as secao (secao)}
@@ -126,9 +146,23 @@
 		<a href="/inicio" class="marca-link" aria-label="Eagles, início">
 			<Marca tamanho={30} comNome />
 		</a>
-		{#if sessao.dados}
-			<a href="/perfil" class="avatar" aria-label="Meu perfil">{iniciais}</a>
-		{/if}
+		<div class="acoes-topo">
+			<a
+				href="/notificacoes"
+				class="botao-sino"
+				aria-current={estaAtivo(caminho, '/notificacoes') ? 'page' : undefined}
+				aria-label={rotuloSino}
+				title="Notificações"
+			>
+				<Icone nome="sino" tamanho={20} />
+				{#if naoLidas > 0}
+					<span class="badge-sino" aria-hidden="true">{naoLidas > 99 ? '99+' : naoLidas}</span>
+				{/if}
+			</a>
+			{#if sessao.dados}
+				<a href="/perfil" class="avatar" aria-label="Meu perfil">{iniciais}</a>
+			{/if}
+		</div>
 	</header>
 
 	<div class="area" id="conteudo" tabindex="-1">
@@ -201,6 +235,63 @@
 		font-size: var(--texto-sm);
 		font-weight: 800;
 		text-decoration: none;
+	}
+
+	.acoes-topo {
+		display: flex;
+		align-items: center;
+		gap: var(--esp-2);
+	}
+
+	.botao-sino {
+		position: relative;
+		display: inline-grid;
+		place-items: center;
+		flex: none;
+		min-width: var(--toque-min);
+		min-height: var(--toque-min);
+		border-radius: var(--raio);
+		color: var(--cor-texto-2);
+		text-decoration: none;
+		transition:
+			background-color var(--transicao),
+			color var(--transicao),
+			transform 90ms cubic-bezier(0.2, 0, 0.2, 1);
+	}
+
+	.botao-sino[aria-current='page'] {
+		background: var(--cor-marca-suave);
+		color: var(--cor-marca);
+	}
+
+	.botao-sino:active {
+		transform: scale(0.95);
+	}
+
+	@media (hover: hover) {
+		.botao-sino:hover {
+			background: var(--cor-superficie-2);
+			color: var(--cor-texto);
+		}
+	}
+
+	.badge-sino {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 18px;
+		height: 18px;
+		padding: 0 5px;
+		border-radius: var(--raio-cheio);
+		background: var(--cor-marca);
+		color: var(--cor-sobre-marca);
+		border: 2px solid var(--cor-superficie);
+		font-size: 0.6875rem;
+		font-weight: 700;
+		line-height: 1;
 	}
 
 	/* ---------------- Celular (padrão) ---------------- */
@@ -315,8 +406,12 @@
 			overflow-y: auto;
 		}
 
-		.lateral .marca-link {
-			padding: 0 var(--esp-2);
+		.topo-lateral {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: var(--esp-2);
+			padding: 0 var(--esp-1) 0 var(--esp-2);
 		}
 
 		.lateral nav {

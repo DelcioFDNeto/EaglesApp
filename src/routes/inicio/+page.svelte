@@ -16,6 +16,133 @@
 	let erro = $state<string | undefined>(undefined);
 
 	const podeCriarEvento = $derived((inicio?.permissoes ?? []).includes('event.manage'));
+	const podeVerDraft = $derived((inicio?.permissoes ?? []).includes('person.view'));
+	const dashboard = $derived(inicio?.dashboard ?? null);
+	const ehPainelLideranca = $derived(
+		dashboard?.perfil === 'lider' || dashboard?.perfil === 'conselheiro'
+	);
+
+	function formatarCentavos(cents: number): string {
+		const inteiro = Math.trunc(cents);
+		const negativo = inteiro < 0;
+		const abs = Math.abs(inteiro);
+		const reais = Math.floor(abs / 100);
+		const resto = abs % 100;
+		return `${negativo ? '-' : ''}R$ ${reais.toLocaleString('pt-BR')},${String(resto).padStart(2, '0')}`;
+	}
+
+	function formatarMedia(valor: number | null): string {
+		return valor === null ? '—' : valor.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+	}
+
+	type KpiCard = {
+		href: string;
+		rotulo: string;
+		valor: string;
+		detalhe: string;
+		negativo?: boolean;
+	};
+
+	const kpisLideranca = $derived.by((): KpiCard[] => {
+		if (!dashboard || (dashboard.perfil !== 'lider' && dashboard.perfil !== 'conselheiro')) {
+			return [];
+		}
+		const lista: KpiCard[] = [];
+		if (dashboard.frequenciaPg30d) {
+			const f = dashboard.frequenciaPg30d;
+			lista.push({
+				href: '/frequencia',
+				rotulo: 'Frequência PG (30d)',
+				valor: f.taxaPresenca !== null ? `${f.taxaPresenca}%` : '—',
+				detalhe:
+					f.chamadas > 0
+						? `${f.chamadas} ${f.chamadas === 1 ? 'chamada' : 'chamadas'}${f.mediaPresentes !== null ? ` · média ${formatarMedia(f.mediaPresentes)}` : ''}`
+						: 'Sem chamadas no período'
+			});
+		}
+		if (dashboard.pessoasNovas30d !== undefined) {
+			lista.push({
+				href: '/pessoas',
+				rotulo: 'Pessoas novas (30d)',
+				valor: String(dashboard.pessoasNovas30d),
+				detalhe: 'Visitantes e recorrentes'
+			});
+		}
+		if (dashboard.subgrupos) {
+			const s = dashboard.subgrupos;
+			const aloc = `${s.pessoasAlocadas} ${s.pessoasAlocadas === 1 ? 'alocada' : 'alocadas'}`;
+			const sem = s.membrosSemSubgrupo > 0 ? ` · ${s.membrosSemSubgrupo} sem subgrupo` : '';
+			lista.push({
+				href: '/grupos',
+				rotulo: 'Subgrupos ativos',
+				valor: String(s.ativos),
+				detalhe: `${aloc}${sem}`
+			});
+		}
+		if (dashboard.financeiro) {
+			const fin = dashboard.financeiro;
+			lista.push({
+				href: '/financeiro',
+				rotulo: 'Saldo em caixa',
+				valor: formatarCentavos(fin.saldoCents),
+				detalhe: `Entradas ${formatarCentavos(fin.arrecadadoCents)}`,
+				negativo: fin.saldoCents < 0
+			});
+		}
+		return lista;
+	});
+
+	type ItemPendencia = {
+		href: string;
+		titulo: string;
+		subtitulo: string;
+		total: number;
+	};
+
+	const pendenciasLista = $derived.by((): ItemPendencia[] => {
+		if (
+			!dashboard ||
+			(dashboard.perfil !== 'lider' && dashboard.perfil !== 'conselheiro') ||
+			!dashboard.pendencias
+		) {
+			return [];
+		}
+		const p = dashboard.pendencias;
+		const itens: ItemPendencia[] = [];
+		if (p.convitesAbertos && p.convitesAbertos > 0) {
+			itens.push({
+				href: '/pessoas',
+				titulo: 'Convites abertos',
+				subtitulo: 'Aguardando aceite de acesso',
+				total: p.convitesAbertos
+			});
+		}
+		if (p.escalasPropostas && p.escalasPropostas > 0) {
+			itens.push({
+				href: '/responsabilidades',
+				titulo: 'Escalas propostas',
+				subtitulo: 'Próximos encontros para confirmar',
+				total: p.escalasPropostas
+			});
+		}
+		if (p.despesasPendentes && p.despesasPendentes > 0) {
+			itens.push({
+				href: '/financeiro',
+				titulo: 'Despesas para aprovar',
+				subtitulo: 'Lançamentos aguardando revisão',
+				total: p.despesasPendentes
+			});
+		}
+		if (p.sugestoesIaPendentes && p.sugestoesIaPendentes > 0) {
+			itens.push({
+				href: '/assistente',
+				titulo: 'Sugestões do assistente',
+				subtitulo: 'Propostas aguardando revisão',
+				total: p.sugestoesIaPendentes
+			});
+		}
+		return itens;
+	});
 
 	// "sexta-feira, 27 de novembro" → "Sexta-feira, 27 de novembro" (só a primeira letra).
 	const hoje = (() => {
@@ -73,8 +200,12 @@
 	const faltaAlgumPasso = $derived(passos.some((p) => !p.feito));
 	// Sem nada para a coluna da direita, o painel fica numa coluna só, centrada.
 	const temLateral = $derived(
-		(inicio?.proximasResponsabilidades?.length ?? 0) > 0 || Boolean(inicio?.ultimoAviso)
+		(inicio?.proximasResponsabilidades?.length ?? 0) > 0 ||
+			Boolean(inicio?.ultimoAviso) ||
+			pendenciasLista.length > 0 ||
+			(ehPainelLideranca && podeVerDraft)
 	);
+	const usarLarguraAmpla = $derived(temLateral || kpisLideranca.length > 0);
 	const proximoPasso = $derived(passos.find((p) => !p.feito));
 
 	async function carregarInicio() {
@@ -115,7 +246,7 @@
 	<title>Início · Eagles</title>
 </svelte:head>
 
-<main class="conteudo" class:largo={temLateral}>
+<main class="conteudo" class:largo={usarLarguraAmpla}>
 	{#if carregando}
 		<div class="carregando" aria-live="polite">
 			<Marca tamanho={44} />
@@ -147,6 +278,18 @@
 			{/if}
 
 			<InstalarPwa />
+
+			{#if kpisLideranca.length > 0}
+				<section class="indicadores" aria-label="Indicadores da equipe">
+					{#each kpisLideranca as kpi (kpi.href)}
+						<a href={kpi.href} class="indicador">
+							<span class="rotulo">{kpi.rotulo}</span>
+							<strong class="valor" class:negativo={kpi.negativo}>{kpi.valor}</strong>
+							<span class="detalhe">{kpi.detalhe}</span>
+						</a>
+					{/each}
+				</section>
+			{/if}
 
 			<div class="painel" class:duas-colunas={temLateral}>
 				<div class="coluna">
@@ -217,9 +360,105 @@
 							</ol>
 						</section>
 					{/if}
+
+					{#if dashboard?.perfil === 'membro'}
+						<section class="bloco" aria-labelledby="titulo-seu-resumo">
+							<div class="cabecalho-bloco">
+								<h2 id="titulo-seu-resumo">Seu resumo</h2>
+							</div>
+							<div class="resumo-membro">
+								{#if dashboard.meuSubgrupo}
+									<a href={`/grupos/${dashboard.meuSubgrupo.id}`} class="indicador">
+										<span class="rotulo">Meu subgrupo</span>
+										<strong class="valor">{dashboard.meuSubgrupo.nome}</strong>
+										<span class="detalhe">Ver integrantes e encontros</span>
+									</a>
+								{:else}
+									<a href="/grupos" class="indicador">
+										<span class="rotulo">Meu subgrupo</span>
+										<strong class="valor">Sem subgrupo</strong>
+										<span class="detalhe">Ver subgrupos dos Eagles</span>
+									</a>
+								{/if}
+
+								{#if dashboard.minhaFrequencia90d}
+									{@const freq = dashboard.minhaFrequencia90d}
+									<a href="/perfil" class="indicador">
+										<span class="rotulo">Minha frequência (90d)</span>
+										<strong class="valor">
+											{freq.taxa !== null ? `${freq.taxa}%` : '—'}
+										</strong>
+										<span class="detalhe">
+											{freq.esperados > 0
+												? `${freq.presencas} de ${freq.esperados} ${freq.esperados === 1 ? 'encontro' : 'encontros'}`
+												: 'Sem chamadas no período'}
+										</span>
+									</a>
+								{/if}
+
+								{#if dashboard.minhasContribuicoes}
+									{@const contrib = dashboard.minhasContribuicoes}
+									<a href="/financeiro" class="indicador">
+										<span class="rotulo">Minhas contribuições</span>
+										<strong class="valor">{formatarCentavos(contrib.totalCents)}</strong>
+										<span class="detalhe">
+											{contrib.quantidade === 0
+												? 'Nenhum registro'
+												: contrib.quantidade === 1
+													? '1 registro confirmado'
+													: `${contrib.quantidade} registros confirmados`}
+										</span>
+									</a>
+								{/if}
+							</div>
+
+							{#if podeVerDraft}
+								<a href="/draft" class="linha-link">
+									<div class="linha-texto">
+										<strong>Draft de equipes</strong>
+										<span>Consulte os perfis e times salvos</span>
+									</div>
+									<svg class="seta" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+										<path
+											d="M6 3.5 10.5 8 6 12.5"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.6"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+								</a>
+							{/if}
+						</section>
+					{/if}
 				</div>
 
 				<div class="coluna">
+					{#if pendenciasLista.length > 0}
+						<section class="bloco" aria-labelledby="titulo-pendencias">
+							<div class="cabecalho-bloco">
+								<h2 id="titulo-pendencias">Pendências</h2>
+							</div>
+							<ul class="lista-simples">
+								{#each pendenciasLista as item (item.href)}
+									<li>
+										<a href={item.href} class="linha-link">
+											<div class="linha-texto">
+												<strong>{item.titulo}</strong>
+												<span>{item.subtitulo}</span>
+											</div>
+											<span class="tag tag-proposta">
+												{item.total}
+												{item.total === 1 ? 'pendente' : 'pendentes'}
+											</span>
+										</a>
+									</li>
+								{/each}
+							</ul>
+						</section>
+					{/if}
+
 					{#if inicio?.proximasResponsabilidades && inicio.proximasResponsabilidades.length > 0}
 						<section class="bloco" aria-labelledby="titulo-minhas-escalas">
 							<div class="cabecalho-bloco">
@@ -258,6 +497,30 @@
 							</a>
 						</section>
 					{/if}
+
+					{#if ehPainelLideranca && podeVerDraft}
+						<section class="bloco" aria-labelledby="titulo-atalho-draft">
+							<div class="cabecalho-bloco">
+								<h2 id="titulo-atalho-draft">Organização</h2>
+							</div>
+							<a href="/draft" class="linha-link">
+								<div class="linha-texto">
+									<strong>Draft de equipes</strong>
+									<span>Monte times equilibrados para provas e atividades</span>
+								</div>
+								<svg class="seta" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+									<path
+										d="M6 3.5 10.5 8 6 12.5"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.6"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									/>
+								</svg>
+							</a>
+						</section>
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -282,6 +545,99 @@
 		font-size: var(--texto-2xl);
 		font-weight: 800;
 		color: var(--cor-texto);
+	}
+
+	/* --- Indicadores (Líder / Conselheiro) e Resumo (Membro) --- */
+
+	.indicadores {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--esp-2);
+	}
+
+	@media (min-width: 720px) {
+		.indicadores {
+			grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+			gap: var(--esp-3);
+		}
+	}
+
+	.resumo-membro {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--esp-2);
+	}
+
+	@media (min-width: 560px) {
+		.resumo-membro {
+			grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+		}
+	}
+
+	.indicador {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-height: var(--toque-min);
+		padding: var(--esp-3) var(--esp-4);
+		background: var(--cor-superficie);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio);
+		text-decoration: none;
+		color: var(--cor-texto);
+		transition:
+			background-color var(--transicao),
+			border-color var(--transicao),
+			transform var(--transicao);
+	}
+
+	@media (hover: hover) {
+		.indicador:hover {
+			background: var(--cor-superficie-2);
+			border-color: var(--cor-marca);
+		}
+	}
+
+	.indicador:active,
+	.linha-link:active {
+		transform: scale(0.985);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.indicador:active,
+		.linha-link:active {
+			transform: none;
+		}
+	}
+
+	.indicador .rotulo {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
+	.indicador .valor {
+		font-family: var(--fonte-titulo);
+		font-size: var(--texto-xl);
+		font-weight: 800;
+		line-height: 1.2;
+		color: var(--cor-texto);
+		font-variant-numeric: tabular-nums;
+		overflow-wrap: anywhere;
+	}
+
+	.indicador .valor.negativo {
+		color: var(--cor-erro);
+	}
+
+	.indicador .detalhe {
+		font-size: var(--texto-xs);
+		color: var(--cor-texto-2);
+	}
+
+	.seta {
+		flex: none;
+		color: var(--cor-texto-2);
 	}
 
 	.painel,
@@ -472,6 +828,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--esp-3);
+		min-height: var(--toque-min);
 		padding: var(--esp-3) var(--esp-4);
 		background: var(--cor-superficie);
 		border: 1px solid var(--cor-linha);
@@ -480,7 +837,8 @@
 		color: var(--cor-texto);
 		transition:
 			background-color var(--transicao),
-			border-color var(--transicao);
+			border-color var(--transicao),
+			transform var(--transicao);
 	}
 
 	@media (hover: hover) {

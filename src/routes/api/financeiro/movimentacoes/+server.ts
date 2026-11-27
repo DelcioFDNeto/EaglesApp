@@ -17,6 +17,7 @@ import {
 import { autenticarAtor, flagAtiva, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
 import { calcularResumoFinanceiro, formatarCentavos } from '$server/financeiro/calculos';
+import { notificarPessoa } from '$server/notificacoes/motor';
 
 const criarMovimentacaoSchema = z.object({
 	kind: z.enum(['entrada', 'saida']),
@@ -352,6 +353,22 @@ export const POST = async ({ request, locals }) => {
 			eventId: criada.eventId
 		}
 	});
+
+	if (criada.personId && criada.status === 'confirmada' && criada.kind === 'entrada') {
+		try {
+			await notificarPessoa(banco, {
+				teamId: actor.teamId,
+				personId: criada.personId,
+				kind: 'financeiro',
+				title: 'Contribuição registrada',
+				body: `${categoria.name}: ${formatarCentavos(criada.amountCents)} (${criada.description}).`,
+				href: '/financeiro',
+				dedupeKey: `financeiro:mov:${criada.id}`
+			});
+		} catch {
+			// Melhor esforço: nunca desfaz o lançamento financeiro.
+		}
+	}
 
 	return json(
 		{

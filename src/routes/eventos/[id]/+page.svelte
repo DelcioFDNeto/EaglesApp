@@ -1,10 +1,35 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import Botao from '$ui/Botao.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
 	import { api } from '$lib/api';
+	import { extrairCodigoCheckin, gerarSvgQr } from '$lib/eventos/qrcode';
+
+	interface BarcodeDetectorResultado {
+		rawValue?: string;
+	}
+	interface BarcodeDetectorInstancia {
+		detect(fonte: HTMLVideoElement): Promise<BarcodeDetectorResultado[]>;
+	}
+	interface BarcodeDetectorCtor {
+		new (opcoes?: { formats?: string[] }): BarcodeDetectorInstancia;
+		getSupportedFormats?: () => Promise<string[]>;
+	}
+
+	type MeuCheckin = {
+		id: string;
+		status: string;
+		metodo: string;
+		registradoEm?: string;
+	};
+
+	type QrAtivo = {
+		qrCode: string;
+		expiresAt: string;
+		isActive: boolean;
+	};
 
 	let evento = $state<any>(null);
 	let inscricoes: any[] = $state([]);
@@ -37,6 +62,54 @@
 	let confirmandoCancelamento = $state(false);
 	let motivoCancelamento = $state('');
 	let mudandoStatus = $state(false);
+
+	// Check-in opcional por QR Code (RN-14 / RN-29): só aparece quando a flag está ligada.
+	let checkinQrAtivo = $state(false);
+	let meuCheckin = $state<MeuCheckin | null>(null);
+	let qrAtivo = $state<QrAtivo | null>(null);
+	let validadeMinutos = $state(120);
+	let gerandoQr = $state(false);
+	let erroCheckin = $state<string | undefined>(undefined);
+	let mensagemCheckin = $state<string | undefined>(undefined);
+	let codigoCopiado = $state(false);
+	let codigoCheckin = $state('');
+	let enviandoCheckin = $state(false);
+	let suportaCameraQr = $state(false);
+	let escaneandoCamera = $state(false);
+	let videoEl = $state<HTMLVideoElement | null>(null);
+
+	let cameraStream: MediaStream | null = null;
+	let timerScan: ReturnType<typeof setTimeout> | null = null;
+	let timerCopiado: ReturnType<typeof setTimeout> | null = null;
+
+	const OPCOES_VALIDADE_QR = [
+		{ minutos: 30, rotulo: '30 minutos' },
+		{ minutos: 120, rotulo: '2 horas' },
+		{ minutos: 240, rotulo: '4 horas' }
+	] as const;
+
+	const qrExpirado = $derived(
+		qrAtivo ? new Date(qrAtivo.expiresAt).getTime() <= Date.now() : false
+	);
+
+	function conteudoQrCode(codigo: string): string {
+		if (typeof window !== 'undefined' && evento?.id) {
+			const link = `${window.location.origin}/eventos/${evento.id}?checkin=${encodeURIComponent(codigo)}`;
+			if (new TextEncoder().encode(link).length <= 250) {
+				return link;
+			}
+		}
+		return codigo;
+	}
+
+	const qrSvg = $derived.by(() => {
+		if (!qrAtivo) return '';
+		try {
+			return gerarSvgQr(conteudoQrCode(qrAtivo.qrCode), 240);
+		} catch {
+			return gerarSvgQr(qrAtivo.qrCode, 240);
+		}
+	});
 
 	const STATUS_EVENTO: Record<string, string> = {
 		scheduled: 'Agendado',
@@ -81,6 +154,8 @@
 				evento = data.evento;
 				inscricoes = data.inscricoes ?? [];
 				minhaInscricao = data.minhaInscricao ?? null;
+				checkinQrAtivo = Boolean(data.checkinQrAtivo);
+				meuCheckin = data.meuCheckin ?? null;
 				if (data.permissoesEvento) {
 					permissoesEvento = data.permissoesEvento;
 				}
@@ -102,7 +177,10 @@
 
 		const [, resEscalas] = await Promise.allSettled([
 			carregarPresencas(eventoId),
-			api.get(`/api/escalas?eventoId=${encodeURIComponent(eventoId)}`)
+			api.get(`/api/escalas?eventoId=${encodeURIComponent(eventoId)}`),
+			checkinQrAtivo && evento?.status !== 'cancelled' && permissoesEvento.podeRegistrarPresenca
+				? carregarQrAtivo(eventoId)
+				: Promise.resolve()
 		]);
 
 		if (resEscalas.status === 'fulfilled' && resEscalas.value.ok) {
@@ -111,6 +189,182 @@
 		}
 
 		carregando = false;
+	}
+
+	async function carregarQrAtivo(eventoId = evento?.id) {
+		if (!eventoId) return;
+		try {
+			const res = await api.get(`/api/eventos/${eventoId}/checkin`);
+			if (res.ok) {
+				const data = await res.json();
+				qrAtivo = {
+					qrCode: data.qrCode,
+					expiresAt: data.expiresAt,
+					isActive: Boolean(data.isActive)
+				};
+			} else if (res.status === 404) {
+				qrAtivo = null;
+			}
+		} catch {
+			// Offline ou indisponível: mantém o estado atual sem bloquear o evento.
+		}
+	}
+
+	async function gerarQrCode() {
+		if (!evento?.id) return;
+		gerandoQr = true;
+		erroCheckin = undefined;
+		mensagemCheckin = undefined;
+		codigoCopiado = false;
+		try {
+			const res = await api.post(`/api/eventos/${evento.id}/checkin`, {
+				expiresInMinutes: validadeMinutos
+			});
+			const data = await res.json().catch(() => ({}));
+			if (res.ok) {
+				qrAtivo = {
+					qrCode: data.qrCode,
+					expiresAt: data.expiresAt,
+					isActive: Boolean(data.isActive)
+				};
+				mensagemCheckin = 'QR Code pronto para uso.';
+			} else {
+				erroCheckin = data.erro ?? 'Não foi possível gerar o QR Code.';
+			}
+		} catch {
+			erroCheckin = 'Sem conexão. Não foi possível gerar o QR Code.';
+		} finally {
+			gerandoQr = false;
+		}
+	}
+
+	async function copiarCodigoQr() {
+		if (!qrAtivo?.qrCode) return;
+		erroCheckin = undefined;
+		try {
+			await navigator.clipboard.writeText(qrAtivo.qrCode);
+			codigoCopiado = true;
+			if (timerCopiado) clearTimeout(timerCopiado);
+			timerCopiado = setTimeout(() => {
+				codigoCopiado = false;
+			}, 2500);
+		} catch {
+			erroCheckin = 'Não foi possível copiar automaticamente. Selecione o código abaixo.';
+		}
+	}
+
+	function pararCamera() {
+		if (timerScan) {
+			clearTimeout(timerScan);
+			timerScan = null;
+		}
+		if (cameraStream) {
+			for (const track of cameraStream.getTracks()) {
+				track.stop();
+			}
+			cameraStream = null;
+		}
+		if (videoEl) {
+			videoEl.srcObject = null;
+		}
+		escaneandoCamera = false;
+	}
+
+	async function iniciarCamera() {
+		if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+		const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor })
+			.BarcodeDetector;
+		if (!Detector) return;
+
+		erroCheckin = undefined;
+		mensagemCheckin = undefined;
+		escaneandoCamera = true;
+		await tick();
+
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: { facingMode: { ideal: 'environment' } },
+				audio: false
+			});
+
+			// Usuário pode ter fechado a câmera enquanto a permissão estava aberta.
+			if (!escaneandoCamera) {
+				for (const track of stream.getTracks()) track.stop();
+				return;
+			}
+
+			cameraStream = stream;
+			if (videoEl) {
+				videoEl.srcObject = stream;
+				await videoEl.play();
+			}
+
+			const detector = new Detector({ formats: ['qr_code'] });
+
+			const lerQuadro = async () => {
+				if (!escaneandoCamera || !videoEl) return;
+				try {
+					if (videoEl.readyState >= 2) {
+						const achados = await detector.detect(videoEl);
+						const valor = achados[0]?.rawValue;
+						if (valor) {
+							pararCamera();
+							const codigo = extrairCodigoCheckin(valor);
+							codigoCheckin = codigo;
+							await confirmarCheckin(codigo);
+							return;
+						}
+					}
+				} catch {
+					// Quadro inválido ou câmera reiniciando; tenta o próximo.
+				}
+				if (escaneandoCamera) {
+					timerScan = setTimeout(lerQuadro, 220);
+				}
+			};
+
+			timerScan = setTimeout(lerQuadro, 250);
+		} catch {
+			pararCamera();
+			erroCheckin =
+				'Não foi possível abrir a câmera. Verifique a permissão ou digite o código abaixo.';
+		}
+	}
+
+	async function confirmarCheckin(entrada = codigoCheckin) {
+		if (!evento?.id) return;
+		const codigo = extrairCodigoCheckin(entrada);
+		if (!codigo) {
+			erroCheckin = 'Informe o código de check-in do encontro.';
+			return;
+		}
+
+		enviandoCheckin = true;
+		erroCheckin = undefined;
+		mensagemCheckin = undefined;
+		try {
+			const res = await api.post(`/api/eventos/${evento.id}/checkin-scan`, {
+				qrCode: codigo
+			});
+			const data = await res.json().catch(() => ({}));
+			if (res.ok) {
+				meuCheckin = {
+					id: 'self',
+					status: 'present',
+					metodo: 'qr_code',
+					registradoEm: new Date().toISOString()
+				};
+				mensagemCheckin = data.mensagem ?? 'Check-in realizado com sucesso.';
+				codigoCheckin = '';
+				await carregarPresencas();
+			} else {
+				erroCheckin = data.erro ?? 'Não foi possível confirmar o check-in.';
+			}
+		} catch {
+			erroCheckin = 'Sem conexão. Tente novamente ou avise quem está fazendo a chamada.';
+		} finally {
+			enviandoCheckin = false;
+		}
 	}
 
 	/** Só a presença: cada toque na chamada não recarrega o evento inteiro. */
@@ -135,7 +389,38 @@
 	}
 
 	onMount(() => {
+		const checkinParam = page.url.searchParams.get('checkin');
+		if (checkinParam) {
+			codigoCheckin = extrairCodigoCheckin(checkinParam);
+		}
+
+		if (
+			typeof window !== 'undefined' &&
+			typeof navigator !== 'undefined' &&
+			Boolean(navigator.mediaDevices?.getUserMedia) &&
+			'BarcodeDetector' in window
+		) {
+			const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor })
+				.BarcodeDetector;
+			if (Detector?.getSupportedFormats) {
+				Detector.getSupportedFormats()
+					.then((formatos) => {
+						suportaCameraQr = formatos.includes('qr_code');
+					})
+					.catch(() => {
+						suportaCameraQr = true;
+					});
+			} else {
+				suportaCameraQr = true;
+			}
+		}
+
 		carregarEvento();
+
+		return () => {
+			pararCamera();
+			if (timerCopiado) clearTimeout(timerCopiado);
+		};
 	});
 
 	async function fazerInscricao() {
@@ -522,6 +807,137 @@
 							</div>
 						</form>
 					{/if}
+				</section>
+			{/if}
+
+			{#if checkinQrAtivo && evento.status !== 'cancelled'}
+				<section class="secao" aria-labelledby="titulo-checkin-qr">
+					<div class="cabecalho-checkin">
+						<h2 id="titulo-checkin-qr">Check-in por QR Code</h2>
+						<p class="sub">Opcional: quem não usar o app entra na chamada normalmente.</p>
+					</div>
+
+					{#if erroCheckin}
+						<Aviso tom="erro">{erroCheckin}</Aviso>
+					{/if}
+					{#if mensagemCheckin}
+						<Aviso tom="sucesso">{mensagemCheckin}</Aviso>
+					{/if}
+
+					{#if permissoesEvento.podeRegistrarPresenca}
+						<div class="bloco-checkin">
+							<div class="controles-qr">
+								<div class="campo-validade">
+									<label for="validade-qr">Validade do QR Code</label>
+									<select id="validade-qr" bind:value={validadeMinutos}>
+										{#each OPCOES_VALIDADE_QR as opcao (opcao.minutos)}
+											<option value={opcao.minutos}>{opcao.rotulo}</option>
+										{/each}
+									</select>
+								</div>
+								<Botao variante="primario" carregando={gerandoQr} onclick={gerarQrCode}>
+									{qrAtivo ? 'Gerar novo QR Code' : 'Gerar QR Code'}
+								</Botao>
+							</div>
+
+							{#if qrAtivo}
+								{#if qrExpirado}
+									<Aviso tom="aviso">
+										Este QR Code expirou. Gere um novo código para liberar novos check-ins.
+									</Aviso>
+								{/if}
+
+								<div class="qr-apresentacao">
+									<div class="qr-moldura">
+										{@html qrSvg}
+									</div>
+									<p class="qr-validade">
+										{qrExpirado ? 'Expirou em' : 'Válido até'}
+										{formatarData(qrAtivo.expiresAt)}
+									</p>
+								</div>
+
+								<div class="qr-codigo-linha">
+									<code class="qr-codigo-texto">{qrAtivo.qrCode}</code>
+									<Botao variante="secundario" onclick={copiarCodigoQr}>
+										{codigoCopiado ? 'Código copiado' : 'Copiar código'}
+									</Botao>
+								</div>
+							{/if}
+						</div>
+					{/if}
+
+					<div class="bloco-checkin">
+						{#if meuCheckin}
+							<Aviso
+								tom="sucesso"
+								titulo={meuCheckin.metodo === 'qr_code'
+									? 'Presença registrada por QR Code'
+									: 'Presença registrada'}
+							>
+								{#if meuCheckin.status === 'late'}
+									Presença registrada com atraso neste encontro.
+								{:else if meuCheckin.registradoEm}
+									Confirmado em {formatarData(meuCheckin.registradoEm)}.
+								{:else}
+									Sua presença neste encontro já está confirmada.
+								{/if}
+							</Aviso>
+						{:else}
+							{#if suportaCameraQr}
+								{#if escaneandoCamera}
+									<div class="camera-previa">
+										<video
+											bind:this={videoEl}
+											playsinline
+											muted
+											aria-label="Prévia da câmera para leitura do QR Code"
+										></video>
+										<Botao variante="texto" largura="cheia" onclick={pararCamera}>
+											Fechar câmera
+										</Botao>
+									</div>
+								{:else}
+									<Botao variante="secundario" largura="cheia" onclick={iniciarCamera}>
+										Escanear com a câmera
+									</Botao>
+								{/if}
+							{:else}
+								<p class="sub">
+									Aponte a câmera do celular para o QR Code do encontro ou informe o código abaixo.
+								</p>
+							{/if}
+
+							<form
+								class="form-checkin"
+								onsubmit={(e) => {
+									e.preventDefault();
+									confirmarCheckin();
+								}}
+							>
+								<div class="campo-extra">
+									<label for="codigo-checkin">Ou digite/cole o código do encontro</label>
+									<input
+										id="codigo-checkin"
+										type="text"
+										bind:value={codigoCheckin}
+										placeholder="eagles-checkin-..."
+										autocomplete="off"
+										autocapitalize="off"
+										spellcheck="false"
+									/>
+								</div>
+								<Botao
+									tipo="submit"
+									largura="cheia"
+									carregando={enviandoCheckin}
+									desabilitado={!codigoCheckin.trim()}
+								>
+									Confirmar check-in
+								</Botao>
+							</form>
+						{/if}
+					</div>
 				</section>
 			{/if}
 
@@ -936,6 +1352,139 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--esp-2);
+	}
+
+	.cabecalho-checkin {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-1);
+	}
+
+	.cabecalho-checkin h2 {
+		font-size: var(--texto-lg);
+	}
+
+	.bloco-checkin {
+		padding: var(--esp-4);
+		background: var(--cor-superficie);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio-lg);
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+	}
+
+	.controles-qr {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: var(--esp-3);
+	}
+
+	.campo-validade {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-1);
+		flex: 1;
+		min-width: 150px;
+	}
+
+	.campo-validade label {
+		font-size: var(--texto-xs);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
+	.campo-validade select {
+		min-height: var(--toque-min);
+		padding: var(--esp-2) var(--esp-3);
+		background: var(--cor-superficie);
+		color: var(--cor-texto);
+		border: 1px solid var(--cor-linha-forte);
+		border-radius: var(--raio);
+		font-size: 16px;
+		font-family: inherit;
+	}
+
+	.campo-validade select:focus-visible {
+		outline: 2px solid var(--cor-foco);
+		outline-offset: 2px;
+	}
+
+	.qr-apresentacao {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--esp-2);
+	}
+
+	/* Fundo branco fixo mesmo no tema escuro para leitura confiável pela câmera. */
+	.qr-moldura {
+		background: #ffffff;
+		padding: var(--esp-3);
+		border-radius: var(--raio);
+		border: 1px solid var(--cor-linha);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.qr-moldura :global(svg) {
+		display: block;
+		width: min(240px, 100%);
+		height: auto;
+	}
+
+	.qr-validade {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
+		text-align: center;
+	}
+
+	.qr-codigo-linha {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--esp-2);
+	}
+
+	.qr-codigo-texto {
+		flex: 1;
+		min-width: 180px;
+		padding: var(--esp-2) var(--esp-3);
+		background: var(--cor-superficie-2);
+		color: var(--cor-texto);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio-sm);
+		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-size: var(--texto-xs);
+		word-break: break-all;
+		user-select: all;
+	}
+
+	.camera-previa {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.camera-previa video {
+		width: 100%;
+		max-height: 320px;
+		object-fit: cover;
+		border-radius: var(--raio);
+		border: 1px solid var(--cor-linha-forte);
+		background: #000000;
+	}
+
+	.form-checkin {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.form-checkin .campo-extra {
+		margin-bottom: 0;
 	}
 
 	.secao {

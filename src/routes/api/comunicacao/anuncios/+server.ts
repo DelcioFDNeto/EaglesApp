@@ -13,6 +13,7 @@ import {
 } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
+import { notificarAnuncioPublicado } from '$server/notificacoes/motor';
 
 const criarAnuncioSchema = z.object({
 	title: z.string().trim().min(1).max(160),
@@ -232,6 +233,12 @@ export const POST = async ({ request, locals }) => {
 			entityId: criado.id,
 			after: { title: criado.title, audienceScope: criado.audienceScope }
 		});
+
+		try {
+			await notificarAnuncioPublicado(banco, criado);
+		} catch {
+			// Melhor esforço: falha de notificação nunca cancela o anúncio publicado.
+		}
 	}
 
 	return json({ ok: true, anuncio: criado }, { status: 201 });

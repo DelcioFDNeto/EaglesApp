@@ -377,6 +377,7 @@ O sistema deve possuir controle de acesso baseado em funções.
 Funções iniciais:
 
 **Líder**
+
 - administração geral;
 - gestão de usuários;
 - gestão de grupos;
@@ -388,6 +389,7 @@ Funções iniciais:
 - acesso às informações administrativas autorizadas.
 
 **Conselheiro**
+
 - gestão dos grupos sob sua responsabilidade;
 - gestão de participantes;
 - eventos;
@@ -398,6 +400,7 @@ Funções iniciais:
 - relatórios permitidos.
 
 **Membro**
+
 - próprio perfil;
 - seus eventos;
 - confirmações de presença;
@@ -406,6 +409,7 @@ Funções iniciais:
 - informações permitidas dos grupos.
 
 **Visitante**
+
 - acesso limitado;
 - eventos autorizados;
 - inscrição/participação;
@@ -492,6 +496,7 @@ Em vez disso, deve existir um mecanismo simples para registrar despesas e recurs
 Exemplo:
 
 **PG Azul**
+
 - alimentação;
 - estrutura;
 - materiais;
@@ -602,42 +607,49 @@ Ela deverá funcionar como uma ferramenta de apoio aos líderes e conselheiros, 
 Considere funcionalidades como:
 
 ### Organização de grupos
+
 - sugerir divisão equilibrada;
 - analisar frequência;
 - identificar desequilíbrios;
 - sugerir reorganizações.
 
 ### Escalas
+
 - gerar escala de responsabilidades;
 - evitar repetições;
 - sugerir substitutos;
 - identificar conflitos.
 
 ### Participação
+
 - identificar padrões de baixa frequência;
 - gerar relatórios;
 - destacar pessoas que podem precisar de atenção;
 - identificar tendências.
 
 ### Comunicação
+
 - gerar anúncios;
 - adaptar mensagens;
 - resumir informações;
 - preparar mensagens para WhatsApp.
 
 ### Reuniões
+
 - resumir atas, quando houver conteúdo fornecido;
 - extrair tarefas;
 - identificar responsáveis;
 - acompanhar pendências.
 
 ### Administração
+
 - gerar relatórios;
 - responder perguntas sobre dados autorizados;
 - encontrar pendências;
 - auxiliar líderes na tomada de decisão.
 
 ### Financeiro
+
 - resumir movimentações;
 - identificar categorias;
 - gerar relatórios;
@@ -918,6 +930,7 @@ Divida o Eagles App em módulos independentes.
 Uma sugestão inicial:
 
 ### Módulo 01 — Fundação
+
 - arquitetura;
 - infraestrutura;
 - autenticação;
@@ -926,6 +939,7 @@ Uma sugestão inicial:
 - configuração inicial.
 
 ### Módulo 02 — Pessoas
+
 - usuários;
 - visitantes;
 - participantes recorrentes;
@@ -934,17 +948,20 @@ Uma sugestão inicial:
 - histórico.
 
 ### Módulo 03 — RBAC
+
 - funções;
 - permissões;
 - políticas de acesso.
 
 ### Módulo 04 — Grupos/PGs
+
 - criação;
 - composição;
 - reorganização;
 - sugestões da IA.
 
 ### Módulo 05 — Eventos
+
 - calendário;
 - reuniões;
 - PGs;
@@ -952,18 +969,21 @@ Uma sugestão inicial:
 - outros eventos.
 
 ### Módulo 06 — Presença
+
 - RSVP;
 - histórico;
 - relatórios;
 - check-in opcional.
 
 ### Módulo 07 — Responsabilidades
+
 - tarefas;
 - escalas;
 - automação;
 - IA.
 
 ### Módulo 08 — Financeiro
+
 - entradas;
 - despesas;
 - contribuições;
@@ -972,24 +992,28 @@ Uma sugestão inicial:
 - prestação de contas.
 
 ### Módulo 09 — Comunicação
+
 - anúncios;
 - notificações;
 - compartilhamento;
 - integração com WhatsApp.
 
 ### Módulo 10 — IA
+
 - assistente;
 - análises;
 - automações;
 - sugestões.
 
 ### Módulo 11 — Administração
+
 - configurações;
 - auditoria;
 - relatórios;
 - gerenciamento do sistema.
 
 ### Módulo 12 — Evolução
+
 - funcionalidades futuras;
 - integrações;
 - novas funções;

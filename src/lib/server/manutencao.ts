@@ -3,6 +3,7 @@ import type { Database } from './db';
 import { senhaReset } from './db/schema';
 import { pruneSessions } from './auth/session';
 import { pruneRateLimits } from './auth/ratelimit';
+import { gerarLembretesAutomaticos } from './notificacoes/motor';
 
 /**
  * Limpeza periódica da API.
@@ -19,6 +20,7 @@ import { pruneRateLimits } from './auth/ratelimit';
  */
 
 const A_CADA_10_MIN = 10 * 60_000;
+const A_CADA_1_H = 60 * 60_000;
 const A_CADA_6_H = 6 * 60 * 60_000;
 const DIAS_GUARDAR_RESET = 7;
 
@@ -76,8 +78,23 @@ export function iniciarManutencao(banco: () => Database): void {
 	const primeira = setTimeout(rodarBanco, 60_000);
 	const banco6h = setInterval(rodarBanco, A_CADA_6_H);
 
-	for (const t of [memoria, primeira, banco6h]) t.unref?.();
-	timers = [memoria, primeira as unknown as ReturnType<typeof setInterval>, banco6h];
+	const rodarLembretes = async () => {
+		try {
+			const r = await gerarLembretesAutomaticos(banco());
+			if (r.total > 0) {
+				console.log(
+					`[MANUTENÇÃO] ${r.total} lembretes gerados (${r.eventos} encontros, ${r.rsvp} RSVP, ${r.escalas} escalas)`
+				);
+			}
+		} catch (erro) {
+			console.error('[MANUTENÇÃO] falha ao gerar lembretes automáticos', erro);
+		}
+	};
+
+	const lembretes1h = setInterval(rodarLembretes, A_CADA_1_H);
+
+	for (const t of [memoria, primeira, banco6h, lembretes1h]) t.unref?.();
+	timers = [memoria, primeira as unknown as ReturnType<typeof setInterval>, banco6h, lembretes1h];
 }
 
 /** Apenas para testes. */

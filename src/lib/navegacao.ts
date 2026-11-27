@@ -15,6 +15,7 @@ export type NomeIcone =
 	| 'frequencia'
 	| 'draft'
 	| 'comunicacao'
+	| 'sino'
 	| 'pessoas'
 	| 'financeiro'
 	| 'assistente'

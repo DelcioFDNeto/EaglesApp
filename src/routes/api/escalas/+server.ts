@@ -11,6 +11,7 @@ import {
 } from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
+import { formatarDataHoraCurta, notificarPessoa } from '$server/notificacoes/motor';
 
 const criarEscalaSchema = z.object({
 	eventoId: z.string().uuid(),
@@ -111,7 +112,12 @@ export const POST = async ({ request, locals }) => {
 	} = resultado.data;
 
 	const [evento] = await banco
-		.select({ id: eventTable.id, groupId: eventTable.groupId })
+		.select({
+			id: eventTable.id,
+			groupId: eventTable.groupId,
+			title: eventTable.title,
+			startsAt: eventTable.startsAt
+		})
 		.from(eventTable)
 		.where(and(eq(eventTable.id, eventoId), eq(eventTable.teamId, actor.teamId)))
 		.limit(1);
@@ -128,7 +134,7 @@ export const POST = async ({ request, locals }) => {
 	}
 
 	const [respEncontrada] = await banco
-		.select({ id: responsabilidadeTable.id })
+		.select({ id: responsabilidadeTable.id, nome: responsabilidadeTable.nome })
 		.from(responsabilidadeTable)
 		.where(
 			and(
@@ -199,6 +205,20 @@ export const POST = async ({ request, locals }) => {
 		alteradoPorPersonId: actor.personId,
 		observacoes: observacoes || 'Atribuição manual'
 	});
+
+	try {
+		await notificarPessoa(banco, {
+			teamId: actor.teamId,
+			personId: pessoaAlvoId,
+			kind: 'escala',
+			title: `Nova responsabilidade: ${respEncontrada.nome}`,
+			body: `Você foi escalado para "${respEncontrada.nome}" em ${evento.title} (${formatarDataHoraCurta(evento.startsAt)}).`,
+			href: `/eventos/${evento.id}`,
+			dedupeKey: `escala:atribuida:${novaEscala.id}`
+		});
+	} catch {
+		// Melhor esforço: nunca desfaz a atribuição de escala.
+	}
 
 	return json(
 		{

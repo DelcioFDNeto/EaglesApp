@@ -111,10 +111,56 @@ export type Perfil = {
 
 export type Sessao = { id: string; aparelho: string; criadaEm: string; atual: boolean };
 
+export type DashboardPendencias = {
+	convitesAbertos?: number;
+	escalasPropostas?: number;
+	despesasPendentes?: number;
+	sugestoesIaPendentes?: number;
+};
+
+export type DashboardInicio =
+	| {
+			perfil: 'lider' | 'conselheiro';
+			frequenciaPg30d?: {
+				taxaPresenca: number | null;
+				chamadas: number;
+				mediaPresentes: number | null;
+			};
+			pessoasNovas30d?: number;
+			subgrupos?: {
+				ativos: number;
+				pessoasAlocadas: number;
+				membrosSemSubgrupo: number;
+			};
+			pendencias?: DashboardPendencias;
+			financeiro?: {
+				arrecadadoCents: number;
+				despesasCents: number;
+				saldoCents: number;
+			};
+	  }
+	| {
+			perfil: 'membro';
+			meuSubgrupo: { id: string; nome: string } | null;
+			minhaFrequencia90d?: {
+				taxa: number | null;
+				presencas: number;
+				esperados: number;
+			};
+			minhasContribuicoes?: {
+				totalCents: number;
+				quantidade: number;
+			};
+	  }
+	| {
+			perfil: 'visitante';
+	  };
+
 export type Inicio = {
 	nome: string;
 	papeis: string[];
 	permissoes: string[];
+	notificacoesNaoLidas?: number;
 	proximoEvento: {
 		id: string;
 		title: string;
@@ -147,6 +193,8 @@ export type Inicio = {
 		pessoas: boolean | null;
 		evento: boolean | null;
 	};
+	/** Visão resumida da tela inicial, ajustada às permissões da pessoa (§22). */
+	dashboard?: DashboardInicio;
 };
 
 export const apiCache = {

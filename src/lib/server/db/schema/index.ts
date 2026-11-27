@@ -1476,3 +1476,70 @@ export const draftSessionRelations = relations(draftSession, ({ one }) => ({
 	team: one(team, { fields: [draftSession.teamId], references: [team.id] }),
 	createdBy: one(person, { fields: [draftSession.createdByPersonId], references: [person.id] })
 }));
+
+// ---------------------------------------------------------------------------
+// Notificações in-app e assinaturas Web Push (§19 / F6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Notificações entregues à pessoa dentro do app (e opcionalmente via Web Push).
+ * `dedupeKey` garante idempotência dos lembretes automáticos por pessoa.
+ */
+export const notification = pgTable(
+	'notification',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id, { onDelete: 'cascade' }),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		/** 'evento' | 'rsvp' | 'escala' | 'anuncio' | 'financeiro' | 'grupo' | 'sistema' */
+		kind: text('kind').notNull(),
+		title: text('title').notNull(),
+		body: text('body').notNull(),
+		href: text('href'),
+		dedupeKey: text('dedupe_key'),
+		readAt: timestamp('read_at', { withTimezone: true }),
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('notification_person_created_idx').on(t.personId, t.createdAt),
+		uniqueIndex('notification_person_dedupe_idx')
+			.on(t.personId, t.dedupeKey)
+			.where(sql`${t.dedupeKey} is not null`)
+	]
+);
+
+/**
+ * Assinaturas Web Push registradas pelo navegador/PWA da pessoa (opcional).
+ */
+export const pushSubscription = pgTable(
+	'push_subscription',
+	{
+		id: pk(),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+		endpoint: text('endpoint').notNull(),
+		p256dh: text('p256dh').notNull(),
+		auth: text('auth').notNull(),
+		userAgent: text('user_agent'),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		uniqueIndex('push_subscription_endpoint_idx').on(t.endpoint),
+		index('push_subscription_person_idx').on(t.personId)
+	]
+);
+
+export const notificationRelations = relations(notification, ({ one }) => ({
+	team: one(team, { fields: [notification.teamId], references: [team.id] }),
+	person: one(person, { fields: [notification.personId], references: [person.id] })
+}));
+
+export const pushSubscriptionRelations = relations(pushSubscription, ({ one }) => ({
+	person: one(person, { fields: [pushSubscription.personId], references: [person.id] })
+}));
