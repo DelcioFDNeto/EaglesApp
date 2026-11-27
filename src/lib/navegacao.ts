@@ -63,8 +63,8 @@ export function itensNavegacao(permissoes: readonly string[]): ItemNav[] {
 		},
 		tem(permissoes, 'group.view') && {
 			href: '/grupos',
-			rotulo: 'PGs',
-			rotuloCurto: 'PGs',
+			rotulo: 'Subgrupos',
+			rotuloCurto: 'Subgrupos',
 			icone: 'grupos',
 			secao: 'dia_a_dia'
 		},

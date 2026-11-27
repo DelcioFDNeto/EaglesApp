@@ -2,7 +2,14 @@ import { json } from '@sveltejs/kit';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { event, eventRegistration, eventType, person, personProfile } from '$server/db/schema';
+import {
+	event,
+	eventRegistration,
+	eventType,
+	group,
+	person,
+	personProfile
+} from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 import { audit } from '$server/audit/log';
@@ -63,11 +70,26 @@ export const GET = async ({ request, params, locals }) => {
 		return json({ erro: 'Sem permissão para ver este evento.' }, { status: 403 });
 	}
 
-	const [tipo] = await banco
-		.select({ id: eventType.id, name: eventType.name, color: eventType.color })
-		.from(eventType)
-		.where(eq(eventType.id, evento.eventTypeId))
-		.limit(1);
+	const [[tipo], grupoRow] = await Promise.all([
+		banco
+			.select({
+				id: eventType.id,
+				name: eventType.name,
+				slug: eventType.slug,
+				color: eventType.color
+			})
+			.from(eventType)
+			.where(eq(eventType.id, evento.eventTypeId))
+			.limit(1),
+		evento.groupId
+			? banco
+					.select({ id: group.id, name: group.name })
+					.from(group)
+					.where(eq(group.id, evento.groupId))
+					.limit(1)
+					.then((rows) => rows[0] ?? null)
+			: Promise.resolve(null)
+	]);
 
 	const podeVerSensivel = can(actor, 'person.view_sensitive', { groupId: evento.groupId });
 
@@ -129,6 +151,7 @@ export const GET = async ({ request, params, locals }) => {
 			eventTypeId: evento.eventTypeId,
 			eventType: tipo ?? null,
 			groupId: evento.groupId,
+			grupoNome: grupoRow?.name ?? null,
 			responsiblePersonId: evento.responsiblePersonId,
 			responsavelNome: nomeDe(evento.responsiblePersonId),
 			createdAt: evento.createdAt

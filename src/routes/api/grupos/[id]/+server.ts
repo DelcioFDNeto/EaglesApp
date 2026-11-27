@@ -173,7 +173,7 @@ export const GET = async ({ request, params, locals }) => {
 
 const editarSchema = z
 	.object({
-		name: z.string().trim().min(1, 'Dê um nome ao PG.').max(100),
+		name: z.string().trim().min(1, 'Dê um nome ao subgrupo.').max(100),
 		description: z
 			.string()
 			.trim()
@@ -224,7 +224,7 @@ export const PATCH = async ({ request, params, locals }) => {
 		!can(actor, 'group.manage') &&
 		!can(actor, 'group.update', { groupId: grupoId })
 	) {
-		return json({ erro: 'Sem permissão para editar este PG.' }, { status: 403 });
+		return json({ erro: 'Sem permissão para editar este subgrupo.' }, { status: 403 });
 	}
 
 	const estaArquivado = atual.archivedAt !== null;
@@ -232,7 +232,7 @@ export const PATCH = async ({ request, params, locals }) => {
 	const reativando = dados.arquivado === false && estaArquivado;
 
 	if ((arquivando || reativando) && !can(actor, 'group.manage')) {
-		return json({ erro: 'Só os líderes arquivam ou reativam PGs.' }, { status: 403 });
+		return json({ erro: 'Só os líderes arquivam ou reativam subgrupos.' }, { status: 403 });
 	}
 
 	if (arquivando) {
@@ -243,8 +243,8 @@ export const PATCH = async ({ request, params, locals }) => {
 		if (Number(integrantes) > 0) {
 			return json(
 				{
-					erro: `Mova as ${integrantes} pessoas deste PG para outro antes de arquivá-lo.`,
-					codigo: 'pg_com_integrantes'
+					erro: `Mova as ${integrantes} pessoas deste subgrupo para outro antes de arquivá-lo.`,
+					codigo: 'subgrupo_com_integrantes'
 				},
 				{ status: 409 }
 			);
@@ -263,8 +263,8 @@ export const PATCH = async ({ request, params, locals }) => {
 		if (Number(futuros) > 0) {
 			return json(
 				{
-					erro: `Este PG tem ${futuros} evento(s) marcado(s). Cancele ou mude de PG antes de arquivar.`,
-					codigo: 'pg_com_eventos'
+					erro: `Este subgrupo tem ${futuros} evento(s) marcado(s). Cancele ou mude o subgrupo antes de arquivar.`,
+					codigo: 'subgrupo_com_eventos'
 				},
 				{ status: 409 }
 			);
@@ -314,6 +314,10 @@ export const PATCH = async ({ request, params, locals }) => {
 	return json({
 		ok: true,
 		alterado: true,
-		mensagem: arquivando ? 'PG arquivado.' : reativando ? 'PG reativado.' : 'PG atualizado.'
+		mensagem: arquivando
+			? 'Subgrupo arquivado.'
+			: reativando
+				? 'Subgrupo reativado.'
+				: 'Subgrupo atualizado.'
 	});
 };

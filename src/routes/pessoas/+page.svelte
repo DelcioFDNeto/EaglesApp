@@ -43,8 +43,8 @@
 
 	const DESCRICAO_ESTAGIO: Record<Estagio, string> = {
 		visitante: 'Primeiro contato. Só vê os eventos.',
-		recorrente: 'Já participa do PG. Por enquanto, o mesmo acesso de visitante.',
-		membro: 'Entrada nos Eagles. Vê o grupo, as escalas e o próprio financeiro.'
+		recorrente: 'Já participa dos PGs. Por enquanto, o mesmo acesso de visitante.',
+		membro: 'Entrada nos Eagles. Vê os subgrupos, as escalas e o próprio financeiro.'
 	};
 
 	const SEM_CONEXAO = 'Você está offline. Tente de novo quando houver conexão.';
@@ -289,7 +289,7 @@
 									<div class="info">
 										<a class="nome" href={`/pessoas/${p.id}`}>{p.nome}</a>
 										<span class="detalhe">
-											{ROTULO_ESTAGIO[p.status] ?? p.status} · {p.grupo ?? 'Sem grupo'}
+											{ROTULO_ESTAGIO[p.status] ?? p.status} · {p.grupo ?? 'Sem subgrupo'}
 										</span>
 									</div>
 									<span class="chip chip-{p.acesso}">{ROTULO_ACESSO[p.acesso]}</span>
@@ -397,14 +397,14 @@
 
 						{#if grupos.length > 0}
 							<div class="campo-select">
-								<label for="grupo">Grupo (PG)</label>
+								<label for="grupo">Subgrupo</label>
 								<select
 									id="grupo"
 									bind:value={grupoId}
 									aria-invalid={errosCadastro.grupoId ? 'true' : undefined}
 									aria-describedby={errosCadastro.grupoId ? 'grupo-erro' : undefined}
 								>
-									<option value="">Sem grupo por enquanto</option>
+									<option value="">Sem subgrupo por enquanto</option>
 									{#each grupos as g (g.id)}
 										<option value={g.id}>{g.nome}</option>
 									{/each}

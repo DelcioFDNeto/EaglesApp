@@ -103,3 +103,14 @@ FROM person p;
 deve tratar NULL como _"aplique o regime restrito"_, nunca como _"é maior"_ —
 há teste cobrindo os três casos em
 [`tests/integration/banco.test.ts`](../../tests/integration/banco.test.ts).
+
+---
+
+## Atualização de implementação (27/11/2026)
+
+No Ciclo 2 (`docs/02-modulo-02-pessoas-ciclo-2.md`, revisão `b9ee85d`), as regras de proteção de menores foram reforçadas no servidor (`src/lib/server/pessoas/menores.ts`) e cobertas por testes de integração:
+
+- **Piso de 16 anos:** cadastro com idade inferior a 16 anos é recusado no servidor.
+- **Cadastro mínimo para 16–17 anos (RN-30):** enquanto menor de 18 anos sem consentimento parental ativo, o servidor bloqueia contato (telefone/e-mail), vínculos familiares, observações pastorais e emissão de convite/conta de acesso.
+- **IA pseudonimizada:** o motor em `src/lib/server/ia/motor.ts` pseudonimiza registros de menores antes de produzir análises.
+- **Lacuna mantida aberta conscientemente:** a tabela `consent` existe no banco, mas o **fluxo de coleta, registro de evidência e revogação de consentimento parental na interface** (RN-31, RN-34, RN-35) e a foto de perfil com upload ainda não foram expostos na UI — enquanto isso, o regime restrito padrão continua bloqueando os campos sensíveis de menores no servidor.

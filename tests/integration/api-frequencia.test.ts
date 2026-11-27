@@ -16,6 +16,7 @@ import {
 	groupMember,
 	groupMemberHistory,
 	person as personTable,
+	personProfile as personProfileTable,
 	personRole as personRoleTable,
 	presence,
 	rsvpHistory,
@@ -143,6 +144,7 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 		tipoId = t!.id;
 
 		id.lider = await criar('Lider Ana', 'lider', { escopo: 'global' });
+		id.conselheiroGlobal = await criar('Conselheira Global', 'conselheiro', { escopo: 'global' });
 		id.conselheiroA = await criar('Conselheiro Pedro', 'conselheiro', {
 			escopo: 'group',
 			grupo: pg.A
@@ -150,6 +152,8 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 		id.joao = await criar('Joao', 'membro', { grupo: pg.A });
 		id.rita = await criar('Rita', 'membro', { grupo: pg.A });
 		id.leticia = await criar('Leticia', 'membro', { grupo: pg.B });
+		id.visitante = await criar('Visitante Lucas', 'visitante');
+		await ctx.db.insert(personProfileTable).values({ personId: id.visitante, status: 'visitante' });
 
 		const [outra] = await ctx.db
 			.insert(teamTable)
@@ -157,7 +161,15 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 			.returning({ id: teamTable.id });
 		id.estranho = await criar('Lider Bears', 'lider', { escopo: 'global', teamId: outra!.id });
 
-		for (const k of ['lider', 'conselheiroA', 'joao', 'leticia', 'estranho']) {
+		for (const k of [
+			'lider',
+			'conselheiroGlobal',
+			'conselheiroA',
+			'joao',
+			'leticia',
+			'visitante',
+			'estranho'
+		]) {
 			tk[k] = await tokenPara(ctx.db, id[k]!);
 		}
 	}, 60_000);
@@ -250,6 +262,25 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 			).toBe(403);
 		});
 
+		it('num PG da equipe toda (sem subgrupo), a chamada lista todos os membros ativos e visitantes que responderam', async () => {
+			const ePg = await evento('PG geral da semana', 2, null);
+			const semRsvp = await (
+				await presencaRoute.GET(chamar(tk.conselheiroGlobal!, { params: { id: ePg } }))
+			).json();
+			const nomesSemRsvp = semRsvp.paraChamada.map((p: any) => p.nome);
+			expect(nomesSemRsvp).toEqual(
+				expect.arrayContaining(['Conselheiro Pedro', 'Joao', 'Leticia', 'Lider Ana', 'Rita'])
+			);
+			// Visitante que não respondeu não entra na chamada; quando responde, entra.
+			expect(nomesSemRsvp).not.toContain('Visitante Lucas');
+
+			await responder(tk.visitante!, ePg, 'confirmado');
+			const comRsvp = await (
+				await presencaRoute.GET(chamar(tk.conselheiroGlobal!, { params: { id: ePg } }))
+			).json();
+			expect(comRsvp.paraChamada.map((p: any) => p.nome)).toContain('Visitante Lucas');
+		});
+
 		it('opção personalizada marcada como "vou" conta como confirmação', async () => {
 			const [e] = await ctx.db
 				.insert(eventTable)
@@ -278,21 +309,31 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 	describe('relatório de frequência', () => {
 		let e1: string;
 		let e2: string;
+		let ePg1: string;
+		let ePg2: string;
 
 		beforeAll(async () => {
-			// Dois PGs passados com chamada: Joao veio nos dois, Rita em um.
-			e1 = await evento('PG semana 1', 14, pg.A!);
-			e2 = await evento('PG semana 2', 7, pg.A!);
+			// Dois encontros de subgrupo A com chamada: Joao veio nos dois, Rita em um.
+			e1 = await evento('Encontro Subgrupo 1', 14, pg.A!);
+			e2 = await evento('Encontro Subgrupo 2', 7, pg.A!);
 			await marcar(tk.conselheiroA!, e1, id.joao!);
 			await marcar(tk.conselheiroA!, e1, id.rita!);
 			await marcar(tk.conselheiroA!, e2, id.joao!, 'late');
+
+			// Dois PGs da equipe toda (sem subgrupo): Joao e Leticia vieram, visitante veio a 1.
+			ePg1 = await evento('PG Quinta 1', 12, null);
+			ePg2 = await evento('PG Quinta 2', 5, null);
+			await marcar(tk.conselheiroGlobal!, ePg1, id.joao!);
+			await marcar(tk.conselheiroGlobal!, ePg1, id.leticia!);
+			await marcar(tk.conselheiroGlobal!, ePg1, id.visitante!);
+			await marcar(tk.conselheiroGlobal!, ePg2, id.joao!, 'late');
 		});
 
-		it('conselheiro vê o próprio PG em ordem alfabética', async () => {
+		it('papel restrito a subgrupo vê apenas o próprio subgrupo em ordem alfabética', async () => {
 			const res = await frequenciaRoute.GET(chamar(tk.conselheiroA!));
 			expect(res.status).toBe(200);
 			const r = await res.json();
-			expect(r.escopo).toBe('pg');
+			expect(r.escopo).toBe('subgrupo');
 			expect(r.grupo.id).toBe(pg.A);
 			const joao = r.pessoas.find((p: any) => p.nome === 'Joao');
 			const rita = r.pessoas.find((p: any) => p.nome === 'Rita');
@@ -302,20 +343,33 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 			expect(nomes).toEqual([...nomes].sort((a: string, b: string) => a.localeCompare(b, 'pt-BR')));
 		});
 
-		it('conselheiro não vê outro PG nem a visão da equipe; membro não vê relatório', async () => {
+		it('papel restrito a subgrupo não vê outro subgrupo; membro não vê relatório', async () => {
 			expect(
 				(await frequenciaRoute.GET(chamar(tk.conselheiroA!, { busca: `?grupo=${pg.B}` }))).status
 			).toBe(403);
 			expect((await frequenciaRoute.GET(chamar(tk.joao!))).status).toBe(403);
 		});
 
-		it('líder vê a equipe por PG, sem nomes', async () => {
-			const r = await (await frequenciaRoute.GET(chamar(tk.lider!))).json();
-			expect(r.escopo).toBe('equipe');
-			const a = r.porPg.find((x: any) => x.grupo.id === pg.A);
-			expect(a.chamadas).toBeGreaterThanOrEqual(2);
-			expect(a).not.toHaveProperty('pessoas');
-			expect(JSON.stringify(r)).not.toContain('Rita');
+		it('líder e conselheiro global veem frequência dos PGs (membros ativos) e resumo por subgrupo sem nomes', async () => {
+			for (const token of [tk.lider!, tk.conselheiroGlobal!]) {
+				const r = await (await frequenciaRoute.GET(chamar(token))).json();
+				expect(r.escopo).toBe('equipe');
+				expect(r.tipoSelecionado.slug).toBe('pg');
+				expect(r.chamadas).toBeGreaterThanOrEqual(2);
+				// Lista alfabética de membros ativos (visitante não entra como esperado).
+				const nomes = r.pessoas.map((p: any) => p.nome);
+				expect(nomes).toContain('Joao');
+				expect(nomes).toContain('Leticia');
+				expect(nomes).not.toContain('Visitante Lucas');
+				expect(nomes).toEqual(
+					[...nomes].sort((a: string, b: string) => a.localeCompare(b, 'pt-BR'))
+				);
+
+				// Resumo por subgrupo não expõe nomes individuais.
+				const a = r.porSubgrupo.find((x: any) => x.grupo.id === pg.A);
+				expect(a.chamadas).toBeGreaterThanOrEqual(2);
+				expect(a).not.toHaveProperty('pessoas');
+			}
 		});
 
 		it('período inválido ou longo demais é recusado', async () => {
@@ -329,7 +383,7 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 			).toBe(400);
 		});
 
-		it('a pessoa vê a própria frequência; quem cuida do PG também; mais ninguém', async () => {
+		it('a pessoa vê a própria frequência; conselheiro global e do subgrupo também; mais ninguém', async () => {
 			const propria = await frequenciaPessoaRoute.GET(
 				chamar(tk.joao!, { params: { id: id.joao! } })
 			);
@@ -338,15 +392,32 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 			expect(d.pg.presencas).toBe(d.pg.esperados);
 			expect(d.recentes.length).toBeGreaterThan(0);
 
+			// Visitante que foi a 1 PG não tem faltas e vê o PG em outrosEventos.
+			const vis = await (
+				await frequenciaPessoaRoute.GET(
+					chamar(tk.conselheiroGlobal!, { params: { id: id.visitante! } })
+				)
+			).json();
+			expect(vis.pg.esperados).toBe(0);
+			expect(vis.outrosEventos).toEqual([{ tipo: 'PG', presencas: 1 }]);
+
 			expect(
 				(await frequenciaPessoaRoute.GET(chamar(tk.conselheiroA!, { params: { id: id.rita! } })))
 					.status
 			).toBe(200);
-			// Colega do mesmo PG não vê a frequência do outro.
+			// Conselheiro global vê qualquer pessoa da equipe (inclusive Leticia do subgrupo B).
+			expect(
+				(
+					await frequenciaPessoaRoute.GET(
+						chamar(tk.conselheiroGlobal!, { params: { id: id.leticia! } })
+					)
+				).status
+			).toBe(200);
+			// Colega do mesmo subgrupo não vê a frequência do outro.
 			expect(
 				(await frequenciaPessoaRoute.GET(chamar(tk.joao!, { params: { id: id.rita! } }))).status
 			).toBe(403);
-			// Conselheiro do A não vê quem é do B.
+			// Papel restrito ao subgrupo A não vê quem é do B.
 			expect(
 				(await frequenciaPessoaRoute.GET(chamar(tk.conselheiroA!, { params: { id: id.leticia! } })))
 					.status
@@ -354,6 +425,41 @@ describe('M06 — histórico de respostas, chamada e frequência', () => {
 			expect(
 				(await frequenciaPessoaRoute.GET(chamar(tk.estranho!, { params: { id: id.joao! } }))).status
 			).toBe(404);
+		});
+	});
+
+	describe('migração 0012 (PG como evento e conselheiro global)', () => {
+		it('cria tipo PG em equipe existente e promove conselheiro de grupo para global sem duplicar', async () => {
+			// Conselheiro com dois vínculos de grupo (subgrupo A e B) no formato antigo.
+			const multi = await criar('Conselheiro Multi', 'conselheiro', {
+				escopo: 'group',
+				grupo: pg.A
+			});
+			await ctx.db.insert(personRoleTable).values({
+				personId: multi,
+				roleId: ctx.papeis.conselheiro!,
+				scopeType: 'group',
+				scopeId: pg.B!
+			});
+
+			const sql = readFileSync(
+				'src/lib/server/db/migrations/0012_pg_e_subgrupos.sql',
+				'utf8'
+			).split('--> statement-breakpoint');
+			for (const cmd of sql) await ctx.cliente.exec(cmd);
+			// Idempotência: rodar de novo não falha nem duplica.
+			for (const cmd of sql) await ctx.cliente.exec(cmd);
+
+			const atribuicoes = await ctx.db
+				.select()
+				.from(personRoleTable)
+				.where(eq(personRoleTable.personId, multi));
+			expect(atribuicoes).toHaveLength(1);
+			expect(atribuicoes[0]).toMatchObject({ scopeType: 'global', scopeId: null });
+
+			const tiposPg = await ctx.db.select().from(eventType).where(eq(eventType.slug, 'pg'));
+			// Equipe eagles já tinha 'pg'; equipe bears ganhou 'pg' pela migração.
+			expect(tiposPg.length).toBeGreaterThanOrEqual(2);
 		});
 	});
 

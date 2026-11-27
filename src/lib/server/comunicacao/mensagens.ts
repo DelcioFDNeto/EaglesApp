@@ -24,7 +24,7 @@ export const VARIAVEIS_SUPORTADAS = [
 	{ chave: 'evento', descricao: 'Nome do encontro' },
 	{ chave: 'data', descricao: 'Data e horário formatados' },
 	{ chave: 'local', descricao: 'Local do encontro' },
-	{ chave: 'grupo', descricao: 'Nome do grupo (PG)' },
+	{ chave: 'grupo', descricao: 'Nome do subgrupo' },
 	{ chave: 'escala', descricao: 'Lista de responsabilidades e nomes' },
 	{ chave: 'titulo', descricao: 'Título do aviso' },
 	{ chave: 'mensagem', descricao: 'Texto principal do aviso' },

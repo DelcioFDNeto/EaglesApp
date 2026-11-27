@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Database } from '../db';
 import { personProfile, personRole, personStatusHistory, role } from '../db/schema';
+import { ehLider, ehMaster } from '../lideranca/regras';
 import { can, type Actor } from '../policy/policy';
 
 /**
@@ -11,12 +12,12 @@ import { can, type Actor } from '../policy/policy';
  * O campo `person_profile.status` ainda aceita esses valores por legado
  * (anúncios por status), mas a jornada só move entre os três abaixo.
  *
- * Decisões do usuário (26/11/2026):
+ * Regras:
  *   - Acesso: só o estágio `membro` dá o papel base `membro`. Visitante e
  *     recorrente ficam com o papel base `visitante`.
- *   - Quem muda: conselheiro, no próprio PG, entre visitante e recorrente.
- *     Qualquer mudança que entre em `membro` ou saia dele é dos líderes,
- *     porque é a entrada formal nos Eagles.
+ *   - Quem muda: conselheiro move entre visitante e recorrente.
+ *     Qualquer mudança que entre em `membro` ou saia dele é dos líderes
+ *     (ou Master), porque é a entrada formal nos Eagles.
  */
 
 export const ESTAGIOS = ['visitante', 'recorrente', 'membro'] as const;
@@ -36,10 +37,10 @@ export function papelDoEstagio(estagio: Estagio): 'visitante' | 'membro' {
 }
 
 /**
- * Pode mover de `de` para `para`? `groupId` é o PG atual da pessoa.
+ * Pode mover de `de` para `para`? `groupId` é o subgrupo atual da pessoa.
  *
  * `de` pode ser um valor legado (`conselheiro`, `lider`): conta como membro,
- * então mexer nele exige o alcance de líder.
+ * então mexer nele exige o alcance de líder (ou Master).
  */
 export function podeMudarEstagio(
 	actor: Actor,
@@ -49,7 +50,9 @@ export function podeMudarEstagio(
 ): boolean {
 	const envolveMembro =
 		para === 'membro' || !(ESTAGIOS as readonly string[]).includes(de) || de === 'membro';
-	if (envolveMembro) return can(actor, 'person.update');
+	if (envolveMembro) {
+		return can(actor, 'person.update') && (ehLider(actor) || ehMaster(actor));
+	}
 	return can(actor, 'person.update', { groupId });
 }
 

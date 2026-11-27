@@ -2,16 +2,19 @@
 
 Fonte única de verdade para tokens de interface, arquitetura de UI e regras de uso. Todas as telas do produto são **modo Operate** (sistema, dashboard, formulários, admin). Nunca aplicar ritmo ou estética de landing page dentro de telas operacionais.
 
+> Sincronizado com [`src/lib/styles/tokens.css`](src/lib/styles/tokens.css) e [`src/lib/ui/Moldura.svelte`](src/lib/ui/Moldura.svelte) na revisão `b9ee85d` (`27/11/2026`).
+
 ## 1. Modo de operação
 
-| Superfície                                                          | Modo        | Regra                                                                                                                                |
-| ------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `/entrar`, `/convite/[token]`, `/inicio`, `/conta/sessoes`, `/sair` | **Operate** | Telas de sistema. Hierarquia tipográfica, superfícies limpas, alvos de toque ≥ 44px, sem animação decorativa, sem copy de marketing. |
-| `docs/site/*.html`                                                  | **Read**    | Conteúdo estático. Somente correções de shell P0 (doctype, lang, charset, viewport, contraste `.close`).                             |
+| Superfície                                                                                                                                                                                                                                                                                                                                     | Modo        | Regra                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Telas autenticadas (`Moldura`):** `/inicio`, `/eventos`, `/eventos/novo`, `/eventos/[id]`, `/eventos/[id]/editar`, `/eventos/tipos`, `/frequencia`, `/grupos`, `/grupos/[id]`, `/pessoas`, `/pessoas/[id]`, `/responsabilidades`, `/comunicacao`, `/financeiro`, `/assistente`, `/lideranca`, `/admin`, `/perfil`, `/conta/sessoes`, `/menu` | **Operate** | Telas de sistema dentro da moldura (menu lateral no desktop, barra inferior no celular). Hierarquia tipográfica, superfícies limpas, alvos de toque ≥ 44 px, sem animação decorativa, sem copy de marketing. |
+| **Telas sem sessão (`PainelEntrada`):** `/entrar`, `/convite/[token]`, `/esqueci-senha`, `/resetar-senha`, `/solicitar-cadastro`                                                                                                                                                                                                               | **Operate** | Fora da moldura. No desktop ganham painel vermelho da marca à esquerda; no celular permanecem centralizadas e limpas.                                                                                        |
+| `docs/site/*.html`                                                                                                                                                                                                                                                                                                                             | **Read**    | Conteúdo estático de documentação.                                                                                                                                                                           |
 
 ## 2. Tokens de cor (WCAG 2.1 AA)
 
-Contraste mínimo 4,5:1 para texto normal sobre fundo claro e escuro. Mínimo 3:1 para bordas de campo e componentes de UI.
+Contraste mínimo 4,5:1 para texto normal sobre fundo claro e escuro. Mínimo 3:1 para bordas de campo e componentes de UI (WCAG 1.4.11).
 
 ### Marca (extraída dos pixels da logo)
 
@@ -31,23 +34,23 @@ Contraste mínimo 4,5:1 para texto normal sobre fundo claro e escuro. Mínimo 3:
 | `--cor-superficie-2` | `#F5EEED` | `#2A1217` | Superfície secundária (avisos info, linhas suaves)                                           |
 | `--cor-superficie-3` | `#EDE2E1` | `#38191F` | Superfície terciária (tags, pinos)                                                           |
 | `--cor-texto`        | `#241416` | `#F2ECEC` | Texto primário (4,5:1+ em ambos os temas)                                                    |
-| `--cor-texto-2`      | `#5A3E42` | `#C6B0B3` | Texto secundário (legenda, rótulo)                                                           |
-| `--cor-texto-3`      | `#7A5A5E` | `#9E8689` | Texto terciário / ajuda — **só usar em tamanho ≥ 1rem ou com fundo de contraste suficiente** |
-| `--cor-linha`        | `#D2BFBF` | `#3A1C22` | Borda sutil (3:1 sobre fundo)                                                                |
-| `--cor-linha-forte`  | `#BF9A9A` | `#4E252C` | Borda de campo ativa / foco (3:1)                                                            |
+| `--cor-texto-2`      | `#4A3236` | `#C6B0B3` | Texto secundário (legenda, rótulo)                                                           |
+| `--cor-texto-3`      | `#6D5054` | `#9E8689` | Texto terciário / ajuda — **só usar em tamanho ≥ 1rem ou com fundo de contraste suficiente** |
+| `--cor-linha`        | `#D2BFBF` | `#3A1C22` | Borda sutil                                                                                  |
+| `--cor-linha-forte`  | `#99777A` | `#87636A` | Borda de campo ativa / controles de formulário (contraste ≥ 3:1, WCAG 1.4.11)                |
 
 ### Estados semânticos (ícone + texto, nunca cor sozinha)
 
-| Token                 | Claro     | Escuro    |
-| --------------------- | --------- | --------- |
-| `--cor-sucesso`       | `#15803D` | `#5DD48B` |
-| `--cor-sucesso-suave` | `#E3F2E8` | `#17301F` |
-| `--cor-aviso`         | `#B45309` | `#E9A03C` |
-| `--cor-aviso-suave`   | `#FBEEDD` | `#33230F` |
-| `--cor-erro`          | `#B91C1C` | `#F4757F` |
-| `--cor-erro-suave`    | `#FDEAEA` | `#331013` |
+| Token                 | Claro     | Escuro    | Uso                                                        |
+| --------------------- | --------- | --------- | ---------------------------------------------------------- |
+| `--cor-sucesso`       | `#0D5C34` | `#5DD48B` | Confirmação, presença, acesso ativo                        |
+| `--cor-sucesso-suave` | `#DCF3E0` | `#17301F` | Fundo de sucesso                                           |
+| `--cor-aviso`         | `#7A4A0C` | `#E9A03C` | Aviso, pendência, evento cancelado                         |
+| `--cor-aviso-suave`   | `#FBEEDD` | `#33230F` | Fundo de aviso                                             |
+| `--cor-erro`          | `#7A1C1C` | `#F4757F` | Erro de validação ou falha de requisição                   |
+| `--cor-erro-suave`    | `#FDEAEA` | `#331013` | Fundo de erro                                              |
 | `--cor-perigo`        | `#580F20` | `#F0A9AF` | Ação destrutiva: SEMPRE contorno + ícone, nunca preenchido |
-| `--cor-perigo-suave`  | `#F6E4E5` | `#33141A` |
+| `--cor-perigo-suave`  | `#F6E4E5` | `#33141A` | Fundo suave de ação destrutiva                             |
 
 ### Foco e sombra
 
@@ -71,11 +74,11 @@ Contraste mínimo 4,5:1 para texto normal sobre fundo claro e escuro. Mínimo 3:
 | `--texto-2xl`  | Título de página / h1           | Archivo   | 1.75rem  | 800     |
 | `--texto-3xl`  | Marca grande (entrar / convite) | Archivo   | 2.25rem  | 800     |
 
-- **Títulos, botões e marca:** Archivo auto-hospedado (`font-src 'self'`). ~25 KB, cabe no orçamento de bundle.
+- **Títulos, botões e marca:** Archivo auto-hospedado (`font-src 'self'`, pesos `400–500` e `600–800`). ~25 KB, cabe no orçamento de bundle.
 - **Corpo de texto, inputs, rótulos:** `system-ui` (sem flash de fonte na hidratação, performático em rede fraca).
 - Linha do corpo: `1.55`. Títulos: `1.2`. `text-wrap: pretty` em parágrafos; `text-wrap: balance` em títulos.
 
-## 4. Espaçamento
+## 4. Espaçamento e layout
 
 | Token     | Valor   | Uso                              |
 | --------- | ------- | -------------------------------- |
@@ -98,10 +101,10 @@ Conteúdo operacional sempre dentro de `.conteudo` (`margin-inline: auto`, paddi
 ### Moldura e navegação (`src/lib/ui/Moldura.svelte`)
 
 - **Celular:** faixa da marca no topo + barra inferior com até 4 atalhos do dia a dia e "Mais" (`/menu`).
-- **Desktop:** menu lateral fixo, agrupado em Dia a dia / Cuidar / Administrar, com a conta no rodapé.
-- Os itens vêm de `src/lib/navegacao.ts`, filtrados pelas permissões. O menu só esconde; quem barra é o servidor.
-- Telas de topo não têm "← Início": a moldura já leva lá. Telas de detalhe mantêm o voltar delas ("← Eventos").
-- Telas sem sessão (entrar, convite, senha) ficam fora da moldura; no desktop ganham o painel da marca (`PainelEntrada.svelte`).
+- **Desktop:** menu lateral fixo, agrupado em Dia a dia / Cuidar / Administrar, com a conta e o botão Sair no rodapé.
+- Os itens vêm de [`src/lib/navegacao.ts`](src/lib/navegacao.ts), filtrados pelas permissões. O menu só esconde; quem barra é o servidor.
+- Telas de topo não têm "← Início": a moldura já leva lá. Telas de detalhe mantêm o voltar delas ("← Eventos", "← Pessoas").
+- Telas sem sessão (entrar, convite, senha) ficam fora da moldura; no desktop ganham o painel da marca ([`PainelEntrada.svelte`](src/lib/ui/PainelEntrada.svelte)).
 
 ## 5. Formas
 
@@ -136,12 +139,8 @@ Conteúdo operacional sempre dentro de `.conteudo` (`margin-inline: auto`, paddi
 ## 8. Marca, ícones e prévia de links
 
 - **Arte:** a águia da `Eagles.png`, recortada sem o letreiro (ilegível em ícone), sobre `#A91825`.
-- **Ícones:** `icone-192/512` ("any", águia em ~88% do quadro) e `icone-maskable-192/512` (~72%, dentro da área segura do Android). `apple-touch-icon` (180) e `favicon` (64).
-- **Marca no app:** `marca-96/192.png` em quadrado arredondado (`Marca.svelte`).
-- **Prévia de links (WhatsApp):** `og-eagles.jpg` (1200×630, < 100 KB) e metatags Open Graph no `src/app.html`, com endereço absoluto vindo de `PUBLIC_SITE_URL`.
+- **Ícones:** `icone-192/512` (`any`, águia em ~88% do quadro) e `icone-maskable-192/512` (~72%, dentro da área segura do Android), `apple-touch-icon` (180) e `favicon` (64).
+- **Marca no app:** `marca-96/192.png` em quadrado arredondado ([`Marca.svelte`](src/lib/ui/Marca.svelte)).
+- **Prévia de links (WhatsApp):** `og-eagles.jpg` (1200×630, < 100 KB) e metatags Open Graph no [`src/app.html`](src/app.html), com endereço absoluto vindo de `PUBLIC_SITE_URL`.
 - `theme-color` separado para claro (`#A91825`) e escuro (`#17090C`). O app não trava mais na vertical.
-- **Pendente:** logo vetorial. A arte de origem é um JPEG de 640px; os ícones grandes saem levemente suaves.
-
----
-
-Próximos passos na Fase 2: aplicar tokens nos componentes (`Botao`, `Campo`, `Aviso`, `Marca`), refazer `/inicio`, remover RBAC/flags do membro comum, e ajustar `tokens.css` com os valores acima.
+- **Pendente:** logo vetorial (SVG). A arte de origem é um JPEG de 640 px; os ícones grandes saem levemente suaves.

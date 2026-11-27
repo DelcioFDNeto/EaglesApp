@@ -27,7 +27,7 @@ import * as inicioRoute from '../../src/routes/api/inicio/+server';
 import * as pessoasRoute from '../../src/routes/api/pessoas/+server';
 import * as liderancaRoute from '../../src/routes/api/lideranca/+server';
 
-const { featureFlag, permission, person, role, rolePermission, team } = schema;
+const { eventType, featureFlag, permission, person, role, rolePermission, team } = schema;
 
 let cliente: PGlite;
 let jwtMaster: string;
@@ -94,6 +94,8 @@ describe('primeiro acesso num banco vazio', () => {
 		const flags = await db.select({ enabled: featureFlag.enabled }).from(featureFlag);
 		expect(flags).toHaveLength(FUNCIONALIDADES.length);
 		expect(flags.every((f) => !f.enabled)).toBe(true);
+		const tipos = await db.select({ slug: eventType.slug, name: eventType.name }).from(eventType);
+		expect(tipos).toEqual([{ slug: 'pg', name: 'PG (Pequeno Grupo)' }]);
 
 		// A liderança tira uma permissão do conselheiro pela administração...
 		await db.delete(rolePermission).where(eq(rolePermission.roleId, primeiro.papeis.conselheiro!));

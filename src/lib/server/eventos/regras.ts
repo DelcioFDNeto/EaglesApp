@@ -74,7 +74,7 @@ export async function validarReferencias(
 			.from(group)
 			.where(and(eq(group.id, refs.groupId), eq(group.teamId, teamId), isNull(group.archivedAt)))
 			.limit(1);
-		if (!g) return { status: 404, erro: 'PG não encontrado ou arquivado.' };
+		if (!g) return { status: 404, erro: 'Subgrupo não encontrado ou arquivado.' };
 	}
 
 	if (refs.responsiblePersonId) {

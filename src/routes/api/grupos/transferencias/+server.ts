@@ -50,7 +50,7 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 	if (paraGrupoId) {
 		const destino = await grupoAtivo(banco, actor.teamId, paraGrupoId);
 		if (!destino) {
-			return json({ erro: 'PG de destino não encontrado ou arquivado.' }, { status: 404 });
+			return json({ erro: 'Subgrupo de destino não encontrado ou arquivado.' }, { status: 404 });
 		}
 		destinoNome = destino.name;
 	}
@@ -75,9 +75,9 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 			{
 				erro:
 					paraGrupoId === null
-						? 'Só os líderes tiram alguém de todos os PGs.'
+						? 'Só quem tem alcance na equipe toda tira alguém de todos os subgrupos.'
 						: `Você não pode mover: ${barradas.map((b) => b.nome).join(', ')}. ` +
-							'Conselheiros movem só quem está no próprio PG.',
+							'Sem permissão para transferir estas pessoas.',
 				barradas: barradas.map((b) => b.id)
 			},
 			{ status: 403 }
@@ -122,9 +122,9 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 		inalteradas: alvos.length - n,
 		mensagem:
 			n === 0
-				? 'Ninguém mudou: todos já estavam nesse PG.'
+				? 'Ninguém mudou: todos já estavam nesse subgrupo.'
 				: `${n} ${n === 1 ? 'pessoa movida' : 'pessoas movidas'} ${
-						destinoNome ? `para ${destinoNome}` : 'para fora dos PGs'
+						destinoNome ? `para ${destinoNome}` : 'para fora dos subgrupos'
 					}.`
 	});
 };

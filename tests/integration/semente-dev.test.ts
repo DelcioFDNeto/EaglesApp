@@ -19,7 +19,7 @@ import * as loginRoute from '../../src/routes/api/auth/login/+server';
 import * as grupoRoute from '../../src/routes/api/grupos/[id]/+server';
 import * as pessoasRoute from '../../src/routes/api/pessoas/+server';
 
-const { group, groupMember, mandatoLider, person } = schema;
+const { eventType, group, groupMember, mandatoLider, person } = schema;
 
 let cliente: PGlite;
 let db: Database;
@@ -98,10 +98,20 @@ describe('semente de desenvolvimento', () => {
 		const tokenConselheiro = await entrar('pedro@eagles.local');
 		await entrar('dev@eagles.local');
 
-		// O conselheiro do PG A vê o próprio grupo com os membros.
-		const [pgA] = await db.select({ id: group.id }).from(group).where(eq(group.slug, 'pg-a'));
+		// Tipo de evento padrão "PG (Pequeno Grupo)" vem criado de fábrica.
+		const [tipoPg] = await db
+			.select({ name: eventType.name, slug: eventType.slug })
+			.from(eventType)
+			.where(eq(eventType.slug, 'pg'));
+		expect(tipoPg).toMatchObject({ slug: 'pg', name: 'PG (Pequeno Grupo)' });
+
+		// O conselheiro atua com escopo global na equipe (vê todos os subgrupos e pessoas).
+		const [subA] = await db
+			.select({ id: group.id })
+			.from(group)
+			.where(eq(group.slug, 'subgrupo-a'));
 		const res = await grupoRoute.GET(
-			evento('GET', '/x', { token: tokenConselheiro, params: { id: pgA!.id } })
+			evento('GET', '/x', { token: tokenConselheiro, params: { id: subA!.id } })
 		);
 		expect(res.status).toBe(200);
 		const membros = (await res.json()).membros.map((m: any) => m.nome);
@@ -109,11 +119,17 @@ describe('semente de desenvolvimento', () => {
 			expect.arrayContaining(['Pedro Henrique Vasconcelos', 'Rafael Monteiro'])
 		);
 
-		const membrosPgA = await db
+		const membrosSubA = await db
 			.select({ n: count() })
 			.from(groupMember)
-			.where(and(eq(groupMember.groupId, pgA!.id)));
-		expect(Number(membrosPgA[0]!.n)).toBe(4);
+			.where(and(eq(groupMember.groupId, subA!.id)));
+		expect(Number(membrosSubA[0]!.n)).toBe(4);
+
+		// O conselheiro global enxerga todas as pessoas da equipe (exceto o Master).
+		const pessoasConselheiro = await (
+			await pessoasRoute.GET(evento('GET', '/api/pessoas', { token: tokenConselheiro }))
+		).json();
+		expect(pessoasConselheiro.pessoas).toHaveLength(11);
 
 		// O Master não aparece para a liderança.
 		const pessoas = await (

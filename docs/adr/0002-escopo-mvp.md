@@ -31,3 +31,18 @@ MVP com **6 módulos em ~10 semanas**: M01 Fundação, M02 Pessoas, M03 RBAC, M0
 ## Lançamento
 
 Não lançar para todos de uma vez. **Um PG piloto por 3 semanas**, com um conselheiro paciente e comunicativo, antes de abrir para os demais. O custo de um lançamento geral ruim é a comunidade concluir coletivamente que "aquele app não funciona" — impressão quase impossível de reverter.
+
+---
+
+## Atualização de implementação (27/11/2026)
+
+Na implementação (revisão `b9ee85d`), todos os **11 módulos (M01–M11)** já possuem schema, endpoints de API e telas funcionais no repositório, e os **4 ciclos bloqueadores do piloto** foram fechados e testados:
+
+- **Ciclo 1 (`docs/05-modulo-05-eventos-ciclo-1.md`):** criação/edição/cancelamento de eventos, tipos de evento e opções de resposta configuráveis.
+- **Ciclo 2 (`docs/02-modulo-02-pessoas-ciclo-2.md`):** ficha completa da pessoa, vínculos familiares e regime estrito de menores (piso de 16 anos e cadastro mínimo de 16–17).
+- **Ciclo 3 (`docs/04-modulo-04-grupos-ciclo-3.md`):** gestão de PGs, transferências entre grupos e histórico.
+- **Ciclo 4 (`docs/06-modulo-06-presenca-ciclo-4.md`):** chamada completa com histórico de mudanças de RSVP e painel de Frequência por pessoa, PG e equipe.
+
+**Sobre M09 (Financeiro) e M10 (IA):** ambos foram entregues atrás de feature flags desligadas por padrão na tabela `feature_flag` (`financeiro` e `ia_assistente`). O motor de IA atual (`src/lib/server/ia/motor.ts`) é determinístico (heurísticas sobre dados reais, custo zero de LLM) e respeita a pseudonimização de menores.
+
+A estratégia de **lançamento gradual com 1 PG piloto** definida neste ADR continua válida e em vigor para a entrada em uso real.

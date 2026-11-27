@@ -37,7 +37,7 @@
 
 	let atribPersonId = $state('');
 	let atribRoleId = $state('');
-	let atribScopeType = $state<'global' | 'group' | 'self'>('group');
+	let atribScopeType = $state<'global' | 'group' | 'self'>('global');
 	let atribScopeId = $state('');
 	let salvandoAtrib = $state(false);
 
@@ -47,7 +47,7 @@
 
 	const ESCOPO_LABEL: Record<string, string> = {
 		global: 'Global',
-		group: 'Grupo',
+		group: 'Subgrupo',
 		self: 'Próprio'
 	};
 
@@ -506,14 +506,14 @@
 									<select id="atrib-escopo" bind:value={atribScopeType}>
 										<option value="global">Global (toda a equipe)</option>
 										{#if grupos.length > 0}
-											<option value="group">Grupo específico (PG)</option>
+											<option value="group">Subgrupo específico</option>
 										{/if}
 										<option value="self">Próprio (self)</option>
 									</select>
 								</div>
 								{#if atribScopeType === 'group' && grupos.length > 0}
 									<div class="campo-select">
-										<label for="atrib-grupo">Grupo</label>
+										<label for="atrib-grupo">Subgrupo</label>
 										<select id="atrib-grupo" bind:value={atribScopeId}>
 											{#each grupos as g (g.id)}
 												<option value={g.id}>{g.name}</option>

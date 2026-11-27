@@ -86,7 +86,7 @@ export function validar(
 	if (!dados.title.trim()) erros.title = 'Dê um nome ao evento.';
 	if (!dados.eventTypeId) erros.eventTypeId = 'Escolha o tipo do evento.';
 	if (!dados.groupId && !contexto.podeSemGrupo) {
-		erros.groupId = 'Escolha o PG deste evento.';
+		erros.groupId = 'Escolha o subgrupo deste evento.';
 	}
 
 	const inicio = deInputLocal(dados.inicio);

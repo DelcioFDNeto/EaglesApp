@@ -8,7 +8,9 @@ import {
 	groupMember,
 	person,
 	personProfile,
-	presence
+	personRole,
+	presence,
+	role
 } from '$server/db/schema';
 import { lerOpcoes } from '$server/eventos/regras';
 import { naoEhMaster } from '$server/lideranca/regras';
@@ -151,8 +153,11 @@ export const GET = async ({ request, params, locals }) => {
 	const totalConfirmadosRsvp = inscricoesTodas.filter((i) => confirmam.has(i.option)).length;
 
 	/**
-	 * Chamada: todo mundo que pode ter vindo e ainda não foi marcado. Num
-	 * encontro de PG, os integrantes do PG; em qualquer evento, quem respondeu.
+	 * Chamada: todo mundo que pode ter vindo e ainda não foi marcado.
+	 *   - Num encontro da equipe toda (como os PGs): todos os membros ativos dos
+	 *     Eagles e qualquer visitante/recorrente que respondeu ao RSVP.
+	 *   - Num encontro de subgrupo específico: os integrantes do subgrupo e quem
+	 *     respondeu ao RSVP.
 	 * Quem veio sem responder também precisa poder ser marcado: a lista não
 	 * pode depender de a pessoa ter usado o app antes.
 	 */
@@ -161,6 +166,36 @@ export const GET = async ({ request, params, locals }) => {
 			.select({ id: presence.id })
 			.from(presence)
 			.where(and(eq(presence.eventId, eventoId), eq(presence.personId, person.id)))
+	);
+	const membrosAtivosDaEquipe = or(
+		inArray(
+			person.id,
+			banco
+				.select({ id: personProfile.personId })
+				.from(personProfile)
+				.where(inArray(personProfile.status, ['membro', 'conselheiro', 'lider']))
+		),
+		and(
+			notExists(
+				banco
+					.select({ id: personProfile.id })
+					.from(personProfile)
+					.where(eq(personProfile.personId, person.id))
+			),
+			inArray(
+				person.id,
+				banco
+					.select({ id: personRole.personId })
+					.from(personRole)
+					.innerJoin(role, eq(role.id, personRole.roleId))
+					.where(
+						and(
+							eq(role.teamId, actor.teamId),
+							inArray(role.key, ['membro', 'conselheiro', 'lider'])
+						)
+					)
+			)
+		)
 	);
 	const candidatos = or(
 		inArray(
@@ -178,7 +213,7 @@ export const GET = async ({ request, params, locals }) => {
 						.from(groupMember)
 						.where(eq(groupMember.groupId, evento.groupId))
 				)
-			: undefined
+			: membrosAtivosDaEquipe
 	);
 	const paraChamada = await banco
 		.select({

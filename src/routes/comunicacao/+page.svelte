@@ -415,7 +415,7 @@
 					<div class="vazio">
 						<Marca tamanho={40} />
 						<h2>Nenhum aviso publicado</h2>
-						<p>Os avisos importantes da liderança e do seu PG aparecem aqui.</p>
+						<p>Os avisos importantes da liderança e do seu subgrupo aparecem aqui.</p>
 					</div>
 				{:else}
 					<ul class="lista">
@@ -490,7 +490,7 @@
 								<select id="escopo-aviso" bind:value={novoEscopo}>
 									<option value="all">Todos os Eagles</option>
 									{#if grupos.length > 0}
-										<option value="group">Grupo específico (PG)</option>
+										<option value="group">Subgrupo específico</option>
 									{/if}
 									<option value="status">Por status na comunidade</option>
 								</select>
@@ -707,7 +707,7 @@
 						<legend>O que você quer receber</legend>
 						<label class="check-linha">
 							<input type="checkbox" bind:checked={prefAnuncios} />
-							<span>Avisos publicados para a comunidade ou meu PG</span>
+							<span>Avisos publicados para a comunidade ou meu subgrupo</span>
 						</label>
 						<label class="check-linha">
 							<input type="checkbox" bind:checked={prefEventos} />

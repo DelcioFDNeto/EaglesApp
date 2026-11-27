@@ -658,7 +658,7 @@
 						<div class="grade-2">
 							{#if grupos.length > 0}
 								<div class="campo-select">
-									<label for="tx-grupo">Grupo / PG (opcional)</label>
+									<label for="tx-grupo">Subgrupo (opcional)</label>
 									<select id="tx-grupo" bind:value={formGroupId}>
 										<option value="">Geral dos Eagles</option>
 										{#each grupos as g (g.id)}

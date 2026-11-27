@@ -42,19 +42,8 @@
 	const passos = $derived.by(() => {
 		const p = inicio?.primeirosPassos;
 		if (!p) return [];
+		const subgrupo = p.subgrupo ?? p.pg ?? null;
 		return [
-			{
-				feito: p.pg,
-				titulo: 'Criar o primeiro PG',
-				texto: 'Os PGs organizam as pessoas e os encontros.',
-				href: '/grupos'
-			},
-			{
-				feito: p.tipoEvento,
-				titulo: 'Cadastrar os tipos de evento',
-				texto: 'Ex.: PG, Encontro dos Eagles, Outside.',
-				href: '/eventos/tipos'
-			},
 			{
 				feito: p.pessoas,
 				titulo: 'Cadastrar pessoas e enviar convites',
@@ -63,9 +52,21 @@
 			},
 			{
 				feito: p.evento,
-				titulo: 'Marcar o primeiro encontro',
-				texto: 'Depois disso, cada um confirma presença em um toque.',
+				titulo: 'Marcar o primeiro PG ou encontro',
+				texto: 'O tipo PG (Pequeno Grupo) já vem pronto. Depois, cada um confirma em um toque.',
 				href: '/eventos/novo'
+			},
+			{
+				feito: p.tipoEvento,
+				titulo: 'Conferir os tipos de evento',
+				texto: 'PG (Pequeno Grupo), Outside, viagem e outros compromissos.',
+				href: '/eventos/tipos'
+			},
+			{
+				feito: subgrupo,
+				titulo: 'Criar o primeiro subgrupo',
+				texto: 'Opcional para organizar e acompanhar a equipe em subgrupos.',
+				href: '/grupos'
 			}
 		].filter((x): x is typeof x & { feito: boolean } => x.feito !== null);
 	});

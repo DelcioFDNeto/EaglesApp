@@ -210,7 +210,7 @@
 		<header>
 			<h1>Tipos de evento</h1>
 			<p class="sub">
-				PG, encontro, Outside, viagem… Cada evento tem um tipo, e o tipo dá a cor na agenda.
+				PG (Pequeno Grupo), Outside, viagem… Cada evento tem um tipo, e o tipo dá a cor na agenda.
 				Desativar esconde o tipo dos eventos novos sem mexer nos antigos.
 			</p>
 		</header>
@@ -269,7 +269,7 @@
 			{#if podeCriar && !podeEditar}
 				<p class="sub">
 					Você pode criar tipos. Editar e desativar ficam com quem gerencia os eventos da equipe
-					toda, porque mudam o que todos os PGs veem.
+					toda, porque mudam o que toda a equipe vê.
 				</p>
 			{/if}
 		{/if}

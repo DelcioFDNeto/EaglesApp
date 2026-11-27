@@ -14,7 +14,7 @@
 
 	export type OpcoesFormulario = {
 		podeSemGrupo: boolean;
-		tipos: Array<{ id: string; name: string }>;
+		tipos: Array<{ id: string; name: string; slug?: string }>;
 		grupos: Array<{ id: string; name: string }>;
 		pessoas: Array<{ id: string; nome: string }>;
 	};
@@ -123,7 +123,7 @@
 
 	<div class="campo-select">
 		<label for="grupo">
-			PG
+			Subgrupo
 			{#if !opcoes.podeSemGrupo}<span class="obrigatorio" aria-hidden="true">*</span>{/if}
 		</label>
 		<select
@@ -134,9 +134,9 @@
 			aria-describedby={erros.groupId ? 'grupo-erro' : 'grupo-ajuda'}
 		>
 			{#if opcoes.podeSemGrupo}
-				<option value="">Equipe toda (sem PG)</option>
+				<option value="">Equipe toda (sem subgrupo)</option>
 			{:else}
-				<option value="" disabled>Escolha o PG</option>
+				<option value="" disabled>Escolha o subgrupo</option>
 			{/if}
 			{#each opcoes.grupos as g (g.id)}
 				<option value={g.id}>{g.name}</option>
@@ -145,7 +145,9 @@
 		{#if erros.groupId}
 			<p id="grupo-erro" class="erro" role="alert">{erros.groupId}</p>
 		{:else}
-			<p id="grupo-ajuda" class="ajuda">Define quem vê e quem pode cuidar do evento.</p>
+			<p id="grupo-ajuda" class="ajuda">
+				Opcional. Deixe em “Equipe toda” para PGs e encontros abertos a todos os Eagles.
+			</p>
 		{/if}
 	</div>
 

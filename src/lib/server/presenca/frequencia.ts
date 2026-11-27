@@ -8,7 +8,11 @@ import {
 	groupMember,
 	groupMemberHistory,
 	person,
-	presence
+	personProfile,
+	personRole,
+	personStatusHistory,
+	presence,
+	role
 } from '../db/schema';
 import { lerOpcoes } from '../eventos/regras';
 import { naoEhMaster } from '../lideranca/regras';
@@ -17,15 +21,17 @@ import { chavesQueConfirmam } from '$shared/rsvp';
 /**
  * Frequência (RF-06.3, RF-06.4).
  *
- * Definições, todas explícitas para ninguém tirar conclusão errada:
+ * Definições explícitas:
  *
+ *   - **PG (Pequeno Grupo):** reunião periódica da equipe toda (`groupId = null`,
+ *     tipo `slug = 'pg'`). Quem é esperado: todos os **membros ativos** dos Eagles
+ *     na data do encontro. Visitantes e participantes recorrentes entram na
+ *     contagem de presentes se vierem, mas nunca levam falta.
+ *   - **Encontro de subgrupo:** evento vinculado a um subgrupo (`groupId != null`).
+ *     Quem é esperado: quem estava naquele subgrupo na data do encontro (pelo
+ *     histórico de subgrupos).
  *   - **Chamada feita:** o evento tem ao menos um registro de presença. Evento
  *     sem chamada não conta para ninguém: não há como saber quem veio.
- *   - **Esperado num encontro de PG:** quem estava naquele PG NA DATA do
- *     encontro (pelo histórico de PGs). Mudar de PG não puxa faltas antigas.
- *   - **Frequência em %:** só nos encontros do PG da pessoa. Em evento da
- *     equipe toda não há como saber quem era esperado (reunião do conselho,
- *     Outside...), então ali só se contam presenças, sem %.
  *   - **Veio:** presença "presente" ou "atrasado".
  *   - **RN-15:** não responder NÃO é falta, e responder "não vou" também não
  *     muda nada na conta. A resposta só aparece como contexto ("avisou").
@@ -38,13 +44,26 @@ import { chavesQueConfirmam } from '$shared/rsvp';
 // Dados de entrada (já carregados)
 // ---------------------------------------------------------------------------
 
+export const STATUS_MEMBRO = new Set(['membro', 'conselheiro', 'lider']);
+
 export type EventoF = {
 	id: string;
 	titulo: string;
 	groupId: string | null;
+	tipoId?: string | null;
+	tipoSlug?: string | null;
 	tipoNome: string | null;
 	inicio: Date;
 	confirmam: Set<string>;
+};
+
+export type PessoaF = {
+	id: string;
+	nome: string;
+	/** Membro ativo dos Eagles hoje (usado quando não há histórico de estágio). */
+	ehMembro?: boolean;
+	/** Data em que entrou como membro, quando conhecida e sem histórico de estágio. */
+	membroDesde?: Date | null;
 };
 
 export type DadosFrequencia = {
@@ -53,11 +72,13 @@ export type DadosFrequencia = {
 	presencas: Array<{ eventId: string; personId: string; status: string }>;
 	/** Resposta ATUAL de cada pessoa em cada evento. */
 	respostas: Array<{ eventId: string; personId: string; option: string }>;
-	/** Mudanças de PG da equipe (histórico), em qualquer ordem. */
+	/** Mudanças de subgrupo da equipe (histórico), em qualquer ordem. */
 	mudancas: Array<{ personId: string; para: string | null; em: Date }>;
-	/** PG atual de cada pessoa, para quem não tem histórico. */
+	/** Subgrupo atual de cada pessoa, para quem não tem histórico. */
 	atuais: Array<{ personId: string; groupId: string; desde: Date }>;
-	pessoas: Array<{ id: string; nome: string }>;
+	/** Histórico de estágio na jornada (visitante → recorrente → membro). */
+	estagios?: Array<{ personId: string; de: string | null; para: string; em: Date }>;
+	pessoas: PessoaF[];
 };
 
 const VEIO = new Set(['present', 'late']);
@@ -70,7 +91,8 @@ const mesDe = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSta
 // ---------------------------------------------------------------------------
 
 type Indice = {
-	pgNaData: (personId: string, data: Date) => string | null;
+	grupoNaData: (personId: string, data: Date) => string | null;
+	membroNaData: (personId: string, data: Date) => boolean;
 	veio: (eventId: string, personId: string) => boolean;
 	chamadaFeita: (eventId: string) => boolean;
 	resposta: (eventId: string, personId: string) => string | null;
@@ -87,6 +109,15 @@ export function indexar(dados: DadosFrequencia): Indice {
 	for (const lista of mudancasPorPessoa.values()) lista.sort((a, b) => +a.em - +b.em);
 	const atual = new Map(dados.atuais.map((a) => [a.personId, a]));
 
+	const estagiosPorPessoa = new Map<string, Array<{ de: string | null; para: string; em: Date }>>();
+	for (const s of dados.estagios ?? []) {
+		const lista = estagiosPorPessoa.get(s.personId) ?? [];
+		lista.push({ de: s.de, para: s.para, em: s.em });
+		estagiosPorPessoa.set(s.personId, lista);
+	}
+	for (const lista of estagiosPorPessoa.values()) lista.sort((a, b) => +a.em - +b.em);
+	const pessoasMap = new Map(dados.pessoas.map((p) => [p.id, p]));
+
 	const status = new Map<string, string>();
 	const comChamada = new Set<string>();
 	const presentes = new Map<string, string[]>();
@@ -99,18 +130,38 @@ export function indexar(dados: DadosFrequencia): Indice {
 	const respostas = new Map(dados.respostas.map((r) => [`${r.eventId}|${r.personId}`, r.option]));
 
 	return {
-		pgNaData(personId, data) {
+		grupoNaData(personId, data) {
 			const lista = mudancasPorPessoa.get(personId);
 			if (lista && lista.length > 0) {
-				let pg: string | null = null;
+				let g: string | null = null;
 				for (const m of lista) {
 					if (+m.em > +data) break;
-					pg = m.para;
+					g = m.para;
 				}
-				return pg;
+				return g;
 			}
 			const a = atual.get(personId);
 			return a && +a.desde <= +data ? a.groupId : null;
+		},
+		membroNaData(personId, data) {
+			const lista = estagiosPorPessoa.get(personId);
+			if (lista && lista.length > 0) {
+				let estagio: string | null = null;
+				let encontrouAteData = false;
+				for (const m of lista) {
+					if (+m.em > +data) break;
+					estagio = m.para;
+					encontrouAteData = true;
+				}
+				if (encontrouAteData) return estagio !== null && STATUS_MEMBRO.has(estagio);
+				const primeiro = lista[0]!;
+				if (primeiro.de !== null) return STATUS_MEMBRO.has(primeiro.de);
+				return false;
+			}
+			const p = pessoasMap.get(personId);
+			if (!p || !p.ehMembro) return false;
+			if (p.membroDesde && +p.membroDesde > +data) return false;
+			return true;
 		},
 		veio: (e, p) => VEIO.has(status.get(`${e}|${p}`) ?? ''),
 		chamadaFeita: (e) => comChamada.has(e),
@@ -120,7 +171,7 @@ export function indexar(dados: DadosFrequencia): Indice {
 }
 
 // ---------------------------------------------------------------------------
-// Um PG
+// Tipos de retorno compartilhados
 // ---------------------------------------------------------------------------
 
 export type ResumoConfirmacao = {
@@ -136,7 +187,7 @@ export type ResumoConfirmacao = {
 	vieramSemConfirmar: number;
 };
 
-export type FrequenciaPessoaNoPg = {
+export type FrequenciaPessoa = {
 	id: string;
 	nome: string;
 	esperados: number;
@@ -149,7 +200,7 @@ export type FrequenciaPessoaNoPg = {
 	ultimaPresenca: Date | null;
 };
 
-export type FrequenciaPg = {
+export type FrequenciaResumo = {
 	chamadas: number;
 	semChamada: number;
 	/** Média de presentes por chamada (todos que vieram, esperados ou não). */
@@ -157,18 +208,17 @@ export type FrequenciaPg = {
 	taxaPresenca: number | null;
 	confirmacao: ResumoConfirmacao;
 	evolucao: Array<{ mes: string; chamadas: number; taxa: number | null }>;
-	pessoas: FrequenciaPessoaNoPg[];
+	pessoas: FrequenciaPessoa[];
 };
 
-export function frequenciaDoPg(
-	grupoId: string,
+function calcularResumo(
+	eventos: EventoF[],
+	esperadosNoEvento: (e: EventoF) => PessoaF[],
 	dados: DadosFrequencia,
-	indice: Indice = indexar(dados)
-): FrequenciaPg {
-	const eventos = dados.eventos
-		.filter((e) => e.groupId === grupoId)
-		.sort((a, b) => +a.inicio - +b.inicio);
-	const comChamada = eventos.filter((e) => indice.chamadaFeita(e.id));
+	indice: Indice
+): FrequenciaResumo {
+	const ordenados = [...eventos].sort((a, b) => +a.inicio - +b.inicio);
+	const comChamada = ordenados.filter((e) => indice.chamadaFeita(e.id));
 
 	const porPessoa = new Map<
 		string,
@@ -191,7 +241,7 @@ export function frequenciaDoPg(
 	let somaPresentes = 0;
 
 	for (const e of comChamada) {
-		const esperados = dados.pessoas.filter((p) => indice.pgNaData(p.id, e.inicio) === grupoId);
+		const esperados = esperadosNoEvento(e);
 		const presentes = indice.presentesNoEvento(e.id);
 		somaPresentes += presentes.length;
 
@@ -261,7 +311,7 @@ export function frequenciaDoPg(
 
 	return {
 		chamadas: comChamada.length,
-		semChamada: eventos.length - comChamada.length,
+		semChamada: ordenados.length - comChamada.length,
 		presencaMedia:
 			comChamada.length > 0 ? Math.round((somaPresentes / comChamada.length) * 10) / 10 : null,
 		taxaPresenca: pct(somaVieram, somaEsperados),
@@ -274,12 +324,59 @@ export function frequenciaDoPg(
 }
 
 // ---------------------------------------------------------------------------
-// Eventos da equipe toda (sem PG): só contagem, sem %
+// Equipe toda (PGs e outros encontros abertos): esperados = membros ativos
 // ---------------------------------------------------------------------------
 
-export function eventosDaEquipe(dados: DadosFrequencia, indice: Indice = indexar(dados)) {
+export function frequenciaDaEquipe(
+	dados: DadosFrequencia,
+	indice: Indice = indexar(dados),
+	filtro: { tipoId?: string | null; tipoSlug?: string | null } = {}
+): FrequenciaResumo {
+	const eventos = dados.eventos.filter((e) => {
+		if (e.groupId !== null) return false;
+		if (filtro.tipoId) return e.tipoId === filtro.tipoId;
+		if (filtro.tipoSlug) return e.tipoSlug === filtro.tipoSlug;
+		return true;
+	});
+	return calcularResumo(
+		eventos,
+		(e) => dados.pessoas.filter((p) => indice.membroNaData(p.id, e.inicio)),
+		dados,
+		indice
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Um subgrupo: esperados = integrantes do subgrupo na data do encontro
+// ---------------------------------------------------------------------------
+
+export function frequenciaDoSubgrupo(
+	grupoId: string,
+	dados: DadosFrequencia,
+	indice: Indice = indexar(dados)
+): FrequenciaResumo {
+	const eventos = dados.eventos.filter((e) => e.groupId === grupoId);
+	return calcularResumo(
+		eventos,
+		(e) => dados.pessoas.filter((p) => indice.grupoNaData(p.id, e.inicio) === grupoId),
+		dados,
+		indice
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Outros eventos da equipe toda (resumo por tipo)
+// ---------------------------------------------------------------------------
+
+export function eventosDaEquipe(
+	dados: DadosFrequencia,
+	indice: Indice = indexar(dados),
+	excluirTipoId?: string | null
+) {
 	const porTipo = new Map<string, { eventos: number; chamadas: number; presentes: number }>();
-	for (const e of dados.eventos.filter((x) => x.groupId === null)) {
+	for (const e of dados.eventos.filter(
+		(x) => x.groupId === null && (!excluirTipoId || x.tipoId !== excluirTipoId)
+	)) {
 		const chave = e.tipoNome ?? 'Outros';
 		const t = porTipo.get(chave) ?? { eventos: 0, chamadas: 0, presentes: 0 };
 		t.eventos += 1;
@@ -327,8 +424,12 @@ export function frequenciaDaPessoa(
 		const chamada = indice.chamadaFeita(e.id);
 		const veio = chamada ? indice.veio(e.id, personId) : null;
 		const resposta = indice.resposta(e.id, personId);
-		const doMeuPg = e.groupId !== null && indice.pgNaData(personId, e.inicio) === e.groupId;
-		const conta = doMeuPg && chamada;
+		const ehPgEsperado =
+			e.groupId === null && e.tipoSlug === 'pg' && indice.membroNaData(personId, e.inicio);
+		const doMeuSubgrupo =
+			e.groupId !== null && indice.grupoNaData(personId, e.inicio) === e.groupId;
+		const esperado = ehPgEsperado || doMeuSubgrupo;
+		const conta = esperado && chamada;
 
 		if (conta) {
 			esperados += 1;
@@ -343,7 +444,7 @@ export function frequenciaDaPessoa(
 		}
 
 		// Na linha do tempo, só o que diz respeito à pessoa.
-		if (doMeuPg || veio || resposta !== null) {
+		if (esperado || veio || resposta !== null) {
 			linha.push({
 				id: e.id,
 				titulo: e.titulo,
@@ -390,6 +491,8 @@ export async function carregarDados(
 			groupId: event.groupId,
 			inicio: event.startsAt,
 			rsvpOptions: event.rsvpOptions,
+			tipoId: eventType.id,
+			tipoSlug: eventType.slug,
 			tipoNome: eventType.name
 		})
 		.from(event)
@@ -405,55 +508,87 @@ export async function carregarDados(
 		.orderBy(asc(event.startsAt));
 
 	const ids = eventos.map((e) => e.id);
-	const [presencas, respostas, mudancas, atuais, pessoas] = await Promise.all([
-		ids.length
-			? banco
-					.select({
-						eventId: presence.eventId,
-						personId: presence.personId,
-						status: presence.status
-					})
-					.from(presence)
-					.where(inArray(presence.eventId, ids))
-			: Promise.resolve([]),
-		ids.length
-			? banco
-					.select({
-						eventId: eventRegistration.eventId,
-						personId: eventRegistration.personId,
-						option: eventRegistration.option
-					})
-					.from(eventRegistration)
-					.where(inArray(eventRegistration.eventId, ids))
-			: Promise.resolve([]),
-		banco
-			.select({
-				personId: groupMemberHistory.personId,
-				para: groupMemberHistory.toGroupId,
-				em: groupMemberHistory.occurredAt
-			})
-			.from(groupMemberHistory)
-			.where(eq(groupMemberHistory.teamId, teamId)),
-		banco
-			.select({
-				personId: groupMember.personId,
-				groupId: groupMember.groupId,
-				desde: groupMember.joinedAt
-			})
-			.from(groupMember)
-			.innerJoin(group, eq(group.id, groupMember.groupId))
-			.where(eq(group.teamId, teamId)),
-		banco
-			.select({ id: person.id, nome: person.fullName })
-			.from(person)
-			.where(and(eq(person.teamId, teamId), isNull(person.deletedAt), naoEhMaster(person.id)))
-	]);
+	const [presencas, respostas, mudancas, atuais, pessoasRaw, papeisMembro, estagios] =
+		await Promise.all([
+			ids.length
+				? banco
+						.select({
+							eventId: presence.eventId,
+							personId: presence.personId,
+							status: presence.status
+						})
+						.from(presence)
+						.where(inArray(presence.eventId, ids))
+				: Promise.resolve([]),
+			ids.length
+				? banco
+						.select({
+							eventId: eventRegistration.eventId,
+							personId: eventRegistration.personId,
+							option: eventRegistration.option
+						})
+						.from(eventRegistration)
+						.where(inArray(eventRegistration.eventId, ids))
+				: Promise.resolve([]),
+			banco
+				.select({
+					personId: groupMemberHistory.personId,
+					para: groupMemberHistory.toGroupId,
+					em: groupMemberHistory.occurredAt
+				})
+				.from(groupMemberHistory)
+				.where(eq(groupMemberHistory.teamId, teamId)),
+			banco
+				.select({
+					personId: groupMember.personId,
+					groupId: groupMember.groupId,
+					desde: groupMember.joinedAt
+				})
+				.from(groupMember)
+				.innerJoin(group, eq(group.id, groupMember.groupId))
+				.where(eq(group.teamId, teamId)),
+			banco
+				.select({
+					id: person.id,
+					nome: person.fullName,
+					status: personProfile.status,
+					joinedAt: personProfile.joinedAt
+				})
+				.from(person)
+				.leftJoin(personProfile, eq(personProfile.personId, person.id))
+				.where(and(eq(person.teamId, teamId), isNull(person.deletedAt), naoEhMaster(person.id))),
+			banco
+				.select({ personId: personRole.personId })
+				.from(personRole)
+				.innerJoin(role, eq(role.id, personRole.roleId))
+				.where(and(eq(role.teamId, teamId), inArray(role.key, ['membro', 'conselheiro', 'lider']))),
+			banco
+				.select({
+					personId: personStatusHistory.personId,
+					de: personStatusHistory.fromStatus,
+					para: personStatusHistory.toStatus,
+					em: personStatusHistory.occurredAt
+				})
+				.from(personStatusHistory)
+				.innerJoin(person, eq(person.id, personStatusHistory.personId))
+				.where(eq(person.teamId, teamId))
+		]);
+
+	const comPapelMembro = new Set(papeisMembro.map((r) => r.personId));
+	const pessoas: PessoaF[] = pessoasRaw.map((p) => ({
+		id: p.id,
+		nome: p.nome,
+		ehMembro: p.status ? STATUS_MEMBRO.has(p.status) : comPapelMembro.has(p.id),
+		membroDesde: p.joinedAt ?? null
+	}));
 
 	return {
 		eventos: eventos.map((e) => ({
 			id: e.id,
 			titulo: e.titulo,
 			groupId: e.groupId,
+			tipoId: e.tipoId,
+			tipoSlug: e.tipoSlug,
 			tipoNome: e.tipoNome,
 			inicio: e.inicio,
 			confirmam: chavesQueConfirmam(lerOpcoes(e.rsvpOptions))
@@ -462,6 +597,7 @@ export async function carregarDados(
 		respostas,
 		mudancas,
 		atuais,
+		estagios,
 		pessoas
 	};
 }

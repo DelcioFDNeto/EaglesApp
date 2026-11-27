@@ -19,11 +19,11 @@ export const PERMISSIONS = {
 	'person.export': 'Exportar lista de pessoas',
 	'person.invite': 'Emitir convite de acesso',
 
-	// --- Grupos / PGs --------------------------------------------------------
-	'group.view': 'Ver grupos',
-	'group.manage': 'Criar, editar e arquivar grupos',
-	'group.update': 'Editar nome e descrição do grupo',
-	'group.assign_member': 'Transferir membros entre grupos',
+	// --- Subgrupos -----------------------------------------------------------
+	'group.view': 'Ver subgrupos',
+	'group.manage': 'Criar, editar e arquivar subgrupos',
+	'group.update': 'Editar nome e descrição do subgrupo',
+	'group.assign_member': 'Transferir membros entre subgrupos',
 
 	// --- Eventos -------------------------------------------------------------
 	'event.view': 'Ver eventos',
@@ -41,7 +41,7 @@ export const PERMISSIONS = {
 
 	// --- Financeiro ----------------------------------------------------------
 	'finance.view_own': 'Ver as próprias contribuições',
-	'finance.view_group': 'Ver o financeiro do grupo',
+	'finance.view_group': 'Ver o financeiro por subgrupo',
 	'finance.view_all': 'Ver todo o financeiro',
 	'finance.create': 'Lançar movimentações',
 	'finance.approve': 'Aprovar despesas',

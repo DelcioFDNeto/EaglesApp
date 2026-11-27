@@ -6,9 +6,15 @@
 	import { api } from '$lib/api';
 
 	let eventos: any[] = $state([]);
+	let tipos: Array<{ id: string; name: string; slug: string; color: string | null }> = $state([]);
+	let tipoFiltro = $state('');
 	let podeCriar = $state(false);
 	let carregando = $state(true);
 	let erro = $state<string | undefined>(undefined);
+
+	const eventosFiltrados = $derived(
+		tipoFiltro ? eventos.filter((e) => e.eventType?.id === tipoFiltro) : eventos
+	);
 
 	const STATUS_EVENTO: Record<string, string> = {
 		scheduled: 'Agendado',
@@ -25,6 +31,7 @@
 			if (res.ok) {
 				const data = await res.json();
 				eventos = data.eventos ?? [];
+				tipos = data.tipos ?? [];
 				podeCriar = Boolean(data.podeCriar);
 			} else {
 				const data = await res.json().catch(() => ({}));
@@ -65,7 +72,7 @@
 		<header>
 			<h1>Eventos</h1>
 			<p class="sub">
-				Encontros, PGs e compromissos dos Eagles. Toque para ver detalhes e confirmar presença.
+				PGs, encontros e compromissos dos Eagles. Toque para ver detalhes e confirmar presença.
 			</p>
 			{#if podeCriar}
 				<div class="acoes-cabecalho">
@@ -79,6 +86,32 @@
 			<Aviso tom="erro">{erro}</Aviso>
 		{/if}
 
+		{#if !carregando && tipos.length > 0}
+			<div class="filtros-tipo" role="group" aria-label="Filtrar por tipo de evento">
+				<button
+					type="button"
+					class="pill"
+					class:ativa={tipoFiltro === ''}
+					aria-pressed={tipoFiltro === ''}
+					onclick={() => (tipoFiltro = '')}
+				>
+					Todos
+				</button>
+				{#each tipos as t (t.id)}
+					<button
+						type="button"
+						class="pill"
+						class:ativa={tipoFiltro === t.id}
+						aria-pressed={tipoFiltro === t.id}
+						onclick={() => (tipoFiltro = t.id)}
+					>
+						<span class="ponto" style="--cor: {t.color ?? '#A91825'}" aria-hidden="true"></span>
+						{t.name}
+					</button>
+				{/each}
+			</div>
+		{/if}
+
 		{#if carregando}
 			<div class="carregando">
 				<Marca tamanho={44} />
@@ -90,13 +123,20 @@
 				<h2>Ainda não há eventos</h2>
 				<p>
 					{podeCriar
-						? 'Crie o primeiro encontro para as pessoas poderem confirmar presença.'
+						? 'Crie o primeiro PG ou encontro para as pessoas poderem confirmar presença.'
 						: 'Não há encontros cadastrados no momento.'}
 				</p>
 			</div>
+		{:else if eventosFiltrados.length === 0}
+			<div class="vazio">
+				<Marca tamanho={44} />
+				<h2>Nenhum evento deste tipo</h2>
+				<p>Ainda não há encontros cadastrados com o filtro selecionado.</p>
+				<Botao variante="secundario" onclick={() => (tipoFiltro = '')}>Ver todos</Botao>
+			</div>
 		{:else}
 			<ul class="lista-eventos">
-				{#each eventos as e (e.id)}
+				{#each eventosFiltrados as e (e.id)}
 					<li>
 						<a class="evento-item" href={`/eventos/${e.id}`}>
 							<div class="evento-info">
@@ -105,6 +145,9 @@
 										<span class="tipo" style="--cor: {e.eventType.color ?? '#A91825'}">
 											{e.eventType.name}
 										</span>
+									{/if}
+									{#if e.groupName}
+										<span class="subgrupo-tag">{e.groupName}</span>
 									{/if}
 									<span class="status status-{e.status}">{rotuloStatus(e.status)}</span>
 								</div>
@@ -199,6 +242,56 @@
 		min-height: var(--toque-min);
 		display: inline-flex;
 		align-items: center;
+	}
+
+	.filtros-tipo {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--esp-2);
+	}
+
+	.pill {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--esp-2);
+		min-height: 36px;
+		padding: 0 var(--esp-3);
+		border-radius: var(--raio-cheio);
+		border: 1px solid var(--cor-linha-forte);
+		background: var(--cor-superficie);
+		color: var(--cor-texto-2);
+		font: inherit;
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			border-color var(--transicao),
+			background-color var(--transicao),
+			color var(--transicao);
+	}
+
+	.pill.ativa {
+		background: var(--cor-marca-suave);
+		border-color: var(--cor-marca);
+		color: var(--cor-marca);
+	}
+
+	.ponto {
+		width: 8px;
+		height: 8px;
+		border-radius: var(--raio-cheio);
+		background: var(--cor);
+		flex: none;
+	}
+
+	.subgrupo-tag {
+		font-size: var(--texto-xs);
+		font-weight: 600;
+		padding: 1px 8px;
+		border-radius: var(--raio-cheio);
+		background: var(--cor-superficie-2);
+		color: var(--cor-texto-2);
+		border: 1px solid var(--cor-linha);
 	}
 
 	.lista-eventos {

@@ -89,7 +89,7 @@ export const POST = async ({ request, locals }) => {
 
 	const { actor } = auth;
 	if (!can(actor, 'group.manage')) {
-		return json({ erro: 'Apenas líderes podem criar grupos.' }, { status: 403 });
+		return json({ erro: 'Apenas líderes podem criar subgrupos.' }, { status: 403 });
 	}
 
 	let corpo: unknown;

@@ -45,8 +45,7 @@
 
 	async function criarGrupo() {
 		if (!novoNome.trim()) return;
-		// Código interno do PG, tirado do nome: "PG Azul" → "pg-azul". A pessoa
-		// não precisa saber que ele existe.
+		// Código interno do subgrupo, tirado do nome: "Subgrupo A" → "subgrupo-a".
 		const base =
 			novoNome
 				.trim()
@@ -55,7 +54,7 @@
 				.toLowerCase()
 				.replace(/[^a-z0-9]+/g, '-')
 				.replace(/^-+|-+$/g, '')
-				.slice(0, 45) || 'pg';
+				.slice(0, 45) || 'subgrupo';
 		let slug = base;
 		for (let n = 2; grupos.some((g) => g.slug === slug); n++) slug = `${base}-${n}`;
 		criando = true;
@@ -70,18 +69,18 @@
 			});
 			const data = await res.json().catch(() => ({}));
 			if (res.ok) {
-				mensagem = 'Grupo criado com sucesso.';
+				mensagem = 'Subgrupo criado com sucesso.';
 				novoNome = '';
 				novaDescricao = '';
 				await carregarGrupos();
 			} else {
-				erro = data.erro ?? 'Não foi possível criar o grupo.';
+				erro = data.erro ?? 'Não foi possível criar o subgrupo.';
 			}
 		} catch (e: any) {
 			erro =
 				e.message === 'sem_conexao'
 					? 'Você está offline. Tente novamente quando houver conexão.'
-					: 'Erro ao criar grupo.';
+					: 'Erro ao criar subgrupo.';
 		} finally {
 			criando = false;
 		}
@@ -89,15 +88,16 @@
 </script>
 
 <svelte:head>
-	<title>Grupos · Eagles</title>
+	<title>Subgrupos · Eagles</title>
 </svelte:head>
 
 <main class="conteudo">
 	<div class="pilha">
 		<header>
-			<h1>Grupos (PGs)</h1>
+			<h1>Subgrupos</h1>
 			<p class="sub">
-				Cada membro participa de um PG por vez. Toque em um grupo para ver os integrantes.
+				Cada membro pode participar de um subgrupo por vez. Toque em um subgrupo para ver os
+				integrantes.
 			</p>
 		</header>
 
@@ -111,21 +111,21 @@
 		{#if podeGerenciar}
 			<label class="alternar">
 				<input type="checkbox" bind:checked={mostrarArquivados} onchange={carregarGrupos} />
-				<span>Mostrar PGs arquivados</span>
+				<span>Mostrar subgrupos arquivados</span>
 			</label>
 		{/if}
 
 		{#if carregando}
 			<div class="carregando">
 				<Marca tamanho={44} />
-				<p>Carregando grupos…</p>
+				<p>Carregando subgrupos…</p>
 			</div>
 		{:else}
 			{#if grupos.length === 0}
 				<div class="vazio">
 					<Marca tamanho={44} />
-					<h2>Ainda não há grupos</h2>
-					<p>Nenhum PG foi cadastrado ainda. A liderança pode criar o primeiro abaixo.</p>
+					<h2>Ainda não há subgrupos</h2>
+					<p>Nenhum subgrupo foi cadastrado ainda. A liderança pode criar o primeiro abaixo.</p>
 				</div>
 			{:else}
 				<ul class="lista-grupos">
@@ -154,16 +154,16 @@
 
 			{#if podeGerenciar}
 				<section class="criar-grupo">
-					<h2>Criar novo grupo</h2>
+					<h2>Criar novo subgrupo</h2>
 					<form
 						onsubmit={(e) => {
 							e.preventDefault();
 							criarGrupo();
 						}}
 					>
-						<Campo id="nome" rotulo="Nome do grupo" bind:valor={novoNome} obrigatorio />
+						<Campo id="nome" rotulo="Nome do subgrupo" bind:valor={novoNome} obrigatorio />
 						<Campo id="descricao" rotulo="Descrição" bind:valor={novaDescricao} />
-						<Botao tipo="submit" largura="cheia" carregando={criando}>Criar grupo</Botao>
+						<Botao tipo="submit" largura="cheia" carregando={criando}>Criar subgrupo</Botao>
 					</form>
 				</section>
 			{/if}

@@ -238,7 +238,7 @@ describe('M04 — grupos: editar, arquivar e transferir', () => {
 
 			const semPg = await transferir(tk.conselheiroA!, [id.a2!], null);
 			expect(semPg.status).toBe(403);
-			expect((await semPg.json()).erro).toContain('líderes');
+			expect((await semPg.json()).erro).toContain('equipe toda');
 
 			// Tudo ou nada: com a líder na lista, nem Rita sai do lugar.
 			const lote = await transferir(tk.conselheiroA!, [id.a2!, id.liderNoA!], pg.C!);
@@ -292,16 +292,16 @@ describe('M04 — grupos: editar, arquivar e transferir', () => {
 			});
 		});
 
-		it('arquivar exige PG vazio e sem eventos marcados', async () => {
+		it('arquivar exige subgrupo vazio e sem eventos marcados', async () => {
 			const cheio = await editarPg(tk.lider!, pg.C!, { arquivado: true });
 			expect(cheio.status).toBe(409);
-			expect((await cheio.json()).codigo).toBe('pg_com_integrantes');
+			expect((await cheio.json()).codigo).toBe('subgrupo_com_integrantes');
 
 			await transferir(tk.lider!, [id.a2!], pg.A!);
 			const criado = await eventosRoute.POST(
 				chamar(tk.lider!, {
 					eventTypeId: tipoId,
-					title: 'PG C',
+					title: 'Encontro C',
 					startsAt: new Date(Date.now() + 86_400_000).toISOString(),
 					groupId: pg.C
 				})
@@ -310,7 +310,7 @@ describe('M04 — grupos: editar, arquivar e transferir', () => {
 
 			const comEvento = await editarPg(tk.lider!, pg.C!, { arquivado: true });
 			expect(comEvento.status).toBe(409);
-			expect((await comEvento.json()).codigo).toBe('pg_com_eventos');
+			expect((await comEvento.json()).codigo).toBe('subgrupo_com_eventos');
 
 			await ctx.db
 				.update(eventTable)

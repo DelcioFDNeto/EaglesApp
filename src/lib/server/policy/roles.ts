@@ -106,9 +106,9 @@ export const ROLE_SEEDS: RoleSeed[] = [
 	{
 		key: 'conselheiro',
 		name: 'Conselheiro',
-		description: 'Cuida de um ou mais grupos e das pessoas neles.',
+		description: 'Cuida da equipe dos Eagles, dos PGs, escalas e pessoas.',
 		isSystem: true,
-		defaultScope: 'group',
+		defaultScope: 'global',
 		permissions: CONSELHEIRO_PERMISSIONS
 	},
 	{

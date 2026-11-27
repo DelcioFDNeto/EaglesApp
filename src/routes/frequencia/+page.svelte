@@ -11,14 +11,23 @@
 		{ dias: 90, rotulo: '3 meses' },
 		{ dias: 365, rotulo: '12 meses' }
 	];
-	/** Valor do seletor que pede a visão da equipe (só líderes). */
-	const EQUIPE = '';
 
 	let dados = $state<any>(null);
 	let carregando = $state(true);
 	let erro = $state<string | undefined>(undefined);
 	let periodo = $state<Periodo>(90);
-	let grupo = $state<string>(EQUIPE);
+	/** '' (padrão: PG da equipe) | 'tipo:<id>' | 'tipo:todos' | 'grupo:<id>' */
+	let selecao = $state<string>('');
+
+	const tituloEscopo = $derived(
+		dados?.escopo === 'subgrupo'
+			? (dados?.grupo?.nome ?? 'Subgrupo')
+			: (dados?.tipoSelecionado?.nome ?? 'Todos os eventos da equipe')
+	);
+
+	const subgruposComEventos = $derived(
+		(dados?.porSubgrupo ?? []).filter((g: any) => g.chamadas > 0 || g.semChamada > 0)
+	);
 
 	onMount(carregar);
 
@@ -32,7 +41,9 @@
 		const ate = new Date();
 		const de = new Date(+ate - periodo * 86_400_000);
 		const qs = new URLSearchParams({ de: iso(de), ate: iso(ate) });
-		if (grupo) qs.set('grupo', grupo);
+		if (selecao.startsWith('grupo:')) qs.set('grupo', selecao.slice(6));
+		else if (selecao.startsWith('tipo:')) qs.set('tipo', selecao.slice(5));
+
 		try {
 			const res = await api.get(`/api/frequencia?${qs}`);
 			const d = await res.json().catch(() => ({}));
@@ -41,15 +52,17 @@
 				return;
 			}
 			dados = d;
-			// Conselheiro sem PG escolhido: o servidor pede para escolher.
+			// Papel restrito a subgrupo sem escolha prévia: o servidor pede para escolher.
 			if (!res.ok) {
-				if (!grupo && d.grupos?.length) {
-					grupo = d.grupos[0].id;
+				if (!selecao && d.grupos?.length) {
+					selecao = `grupo:${d.grupos[0].id}`;
 					return carregar();
 				}
 				erro = d.erro;
-			} else if (d.grupo && !grupo) {
-				grupo = d.grupo.id;
+			} else if (!selecao) {
+				if (d.escopo === 'subgrupo' && d.grupo) selecao = `grupo:${d.grupo.id}`;
+				else if (d.tipoSelecionado) selecao = `tipo:${d.tipoSelecionado.id}`;
+				else selecao = 'tipo:todos';
 			}
 		} catch {
 			erro = 'Sem conexão. Não foi possível carregar a frequência.';
@@ -75,20 +88,31 @@
 		<header>
 			<h1>Frequência</h1>
 			<p class="sub">
-				Para cuidar de quem está se afastando, não para cobrar. Conta só os encontros em que a
-				chamada foi feita, e não responder nunca conta como falta.
+				Para cuidar de quem está se afastando, não para cobrar. Nos PGs e encontros abertos, contam
+				os membros ativos dos Eagles; não responder nunca conta como falta.
 			</p>
 		</header>
 
 		<div class="filtros" role="group" aria-label="Filtros">
-			{#if dados?.grupos?.length > 1 || dados?.podeVerEquipe}
-				<label class="filtro-pg">
-					<span class="visualmente-oculto">PG</span>
-					<select bind:value={grupo} onchange={carregar}>
-						{#if dados?.podeVerEquipe}<option value={EQUIPE}>Todos os PGs</option>{/if}
-						{#each dados?.grupos ?? [] as g (g.id)}
-							<option value={g.id}>{g.nome}</option>
-						{/each}
+			{#if dados?.podeVerEquipe || (dados?.grupos?.length ?? 0) > 1}
+				<label class="filtro-escopo">
+					<span class="visualmente-oculto">Encontros</span>
+					<select bind:value={selecao} onchange={carregar}>
+						{#if dados?.podeVerEquipe}
+							<optgroup label="Equipe toda (membros ativos)">
+								{#each dados?.tipos ?? [] as t (t.id)}
+									<option value={`tipo:${t.id}`}>{t.nome}</option>
+								{/each}
+								<option value="tipo:todos">Todos os eventos da equipe</option>
+							</optgroup>
+						{/if}
+						{#if (dados?.grupos?.length ?? 0) > 0}
+							<optgroup label="Subgrupos">
+								{#each dados?.grupos ?? [] as g (g.id)}
+									<option value={`grupo:${g.id}`}>{g.nome}</option>
+								{/each}
+							</optgroup>
+						{/if}
 					</select>
 				</label>
 			{/if}
@@ -117,17 +141,19 @@
 				<Marca tamanho={44} />
 				<p>Carregando…</p>
 			</div>
-		{:else if dados?.escopo === 'pg'}
+		{:else if dados?.escopo === 'equipe' || dados?.escopo === 'subgrupo'}
 			{@const c = dados.confirmacao}
 			<section
 				class="indicadores"
-				aria-label="Resumo de {dados.grupo.nome}"
+				aria-label="Resumo de {tituloEscopo}"
 				class:recarregando={carregando}
 			>
 				<div class="indicador">
 					<span class="rotulo">Presença</span>
 					<strong>{pct(dados.taxaPresenca)}</strong>
-					<span class="detalhe">de quem era esperado</span>
+					<span class="detalhe">
+						{dados.escopo === 'subgrupo' ? 'de quem era do subgrupo' : 'dos membros ativos'}
+					</span>
 				</div>
 				<div class="indicador">
 					<span class="rotulo">Chamadas feitas</span>
@@ -159,7 +185,7 @@
 					<h2>Nenhuma chamada neste período</h2>
 					<p>
 						A frequência aparece depois que alguém registrar quem veio aos encontros de
-						{dados.grupo.nome}. Abra o encontro e use a lista de chamada.
+						{tituloEscopo}. Abra o encontro e use a lista de chamada.
 					</p>
 				</div>
 			{:else}
@@ -176,7 +202,9 @@
 					</section>
 
 					<section class="bloco" aria-labelledby="titulo-pessoas">
-						<h2 id="titulo-pessoas">Pessoas</h2>
+						<h2 id="titulo-pessoas">
+							{dados.escopo === 'subgrupo' ? 'Integrantes' : 'Membros ativos'}
+						</h2>
 						<p class="legenda">Em ordem alfabética. Toque no nome para ver a caminhada.</p>
 						<ul class="medidores">
 							{#each dados.pessoas as p (p.id)}
@@ -229,20 +257,48 @@
 					</section>
 				</div>
 			{/if}
-		{:else if dados?.escopo === 'equipe'}
-			<section class="bloco" aria-labelledby="titulo-por-pg" class:recarregando={carregando}>
-				<h2 id="titulo-por-pg">Por PG</h2>
-				{#if dados.porPg.length === 0}
-					<p class="legenda">Nenhum PG ainda.</p>
-				{:else}
+
+			{#if dados.escopo === 'equipe' && dados.eventosDaEquipe?.length > 0}
+				<section class="bloco" aria-labelledby="titulo-outros">
+					<h2 id="titulo-outros">Outros eventos da equipe</h2>
+					<p class="legenda">
+						Resumo dos demais tipos de encontro no período. Escolha o tipo no filtro acima para ver
+						em detalhe.
+					</p>
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">Tipo</th>
+								<th scope="col">Eventos</th>
+								<th scope="col">Com chamada</th>
+								<th scope="col">Pessoas por evento</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each dados.eventosDaEquipe as t (t.tipo)}
+								<tr>
+									<td>{t.tipo}</td>
+									<td>{t.eventos}</td>
+									<td>{t.chamadas}</td>
+									<td>{num(t.presencaMedia)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</section>
+			{/if}
+
+			{#if dados.escopo === 'equipe' && subgruposComEventos.length > 0}
+				<section class="bloco" aria-labelledby="titulo-subgrupos" class:recarregando={carregando}>
+					<h2 id="titulo-subgrupos">Encontros por subgrupo</h2>
 					<ul class="medidores">
-						{#each dados.porPg as g (g.grupo.id)}
+						{#each subgruposComEventos as g (g.grupo.id)}
 							<li>
 								<div class="linha-nome">
 									<button
 										type="button"
 										class="link"
-										onclick={() => ((grupo = g.grupo.id), carregar())}
+										onclick={() => ((selecao = `grupo:${g.grupo.id}`), carregar())}
 									>
 										{g.grupo.nome}
 									</button>
@@ -267,35 +323,6 @@
 							</li>
 						{/each}
 					</ul>
-				{/if}
-			</section>
-
-			{#if dados.eventosDaEquipe.length > 0}
-				<section class="bloco" aria-labelledby="titulo-equipe">
-					<h2 id="titulo-equipe">Eventos da equipe toda</h2>
-					<p class="legenda">
-						Sem porcentagem: nesses eventos não dá para saber quem era esperado.
-					</p>
-					<table>
-						<thead>
-							<tr>
-								<th scope="col">Tipo</th>
-								<th scope="col">Eventos</th>
-								<th scope="col">Com chamada</th>
-								<th scope="col">Pessoas por evento</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each dados.eventosDaEquipe as t (t.tipo)}
-								<tr>
-									<td>{t.tipo}</td>
-									<td>{t.eventos}</td>
-									<td>{t.chamadas}</td>
-									<td>{num(t.presencaMedia)}</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
 				</section>
 			{/if}
 		{/if}

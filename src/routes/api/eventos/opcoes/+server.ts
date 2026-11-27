@@ -31,9 +31,14 @@ export const GET = async ({ request, locals }) => {
 		return json({ erro: 'Sem permissão para criar ou editar eventos.' }, { status: 403 });
 	}
 
-	const [tipos, grupos] = await Promise.all([
+	const [tiposRaw, grupos] = await Promise.all([
 		banco
-			.select({ id: eventType.id, name: eventType.name, color: eventType.color })
+			.select({
+				id: eventType.id,
+				name: eventType.name,
+				slug: eventType.slug,
+				color: eventType.color
+			})
 			.from(eventType)
 			.where(and(eq(eventType.teamId, actor.teamId), eq(eventType.active, true)))
 			.orderBy(asc(eventType.name)),
@@ -49,6 +54,9 @@ export const GET = async ({ request, locals }) => {
 			)
 			.orderBy(asc(group.name))
 	]);
+	const tipos = [...tiposRaw].sort((a, b) =>
+		a.slug === 'pg' ? -1 : b.slug === 'pg' ? 1 : a.name.localeCompare(b.name, 'pt-BR')
+	);
 
 	const filtroEscopo = global
 		? undefined

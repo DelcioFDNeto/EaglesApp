@@ -313,6 +313,9 @@
 							{evento.eventType.name}
 						</span>
 					{/if}
+					{#if evento.grupoNome}
+						<span class="status status-completed">{evento.grupoNome}</span>
+					{/if}
 					<span class="status status-{evento.status}">
 						{STATUS_EVENTO[evento.status] ?? evento.status}
 					</span>
@@ -617,8 +620,13 @@
 						<div class="subbloco">
 							<h3>Chamada</h3>
 							<p class="subitem">
-								Integrantes do PG e quem respondeu. Marque quem veio: depois da chamada, quem é do
-								PG e não foi marcado conta como falta neste encontro.
+								{#if evento.groupId}
+									Integrantes do subgrupo e quem respondeu. Marque quem veio: depois da chamada,
+									quem é do subgrupo e não foi marcado conta como falta neste encontro.
+								{:else}
+									Membros ativos dos Eagles e quem respondeu. Marque quem veio: depois da chamada,
+									quem é membro ativo e não foi marcado conta como falta neste encontro.
+								{/if}
 							</p>
 							<ul class="lista">
 								{#each paraChamada as p (p.id)}

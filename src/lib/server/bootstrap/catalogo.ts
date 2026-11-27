@@ -1,13 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import type { Database } from '../db';
-import { featureFlag, permission, role, rolePermission, team } from '../db/schema';
+import { eventType, featureFlag, permission, role, rolePermission, team } from '../db/schema';
 import { ALL_PERMISSIONS, PERMISSIONS } from '../policy/permissions';
 import { ROLE_SEEDS } from '../policy/roles';
 
 /**
  * O mínimo para um banco recém-migrado funcionar: a equipe, o catálogo de
- * permissões, os papéis do sistema e as funcionalidades opcionais (todas
- * DESLIGADAS, RN-29).
+ * permissões, os papéis do sistema, o tipo de evento padrão (PG — Pequeno
+ * Grupo) e as funcionalidades opcionais (todas DESLIGADAS, RN-29).
  *
  * As migrações criam só a estrutura; sem isto ninguém tem papel, e sem papel
  * todo acesso é negado. Usado pelo primeiro acesso em produção
@@ -17,6 +17,15 @@ import { ROLE_SEEDS } from '../policy/roles';
  * liderança tenha feito nos papéis pela tela de administração — só acrescenta
  * o que falta.
  */
+
+export const TIPO_EVENTO_PG = {
+	slug: 'pg',
+	name: 'PG (Pequeno Grupo)',
+	description: 'Reunião de membros e visitantes para mensagem bíblica, comida e confraternização.',
+	color: '#A91825'
+} as const;
+
+export const TIPOS_EVENTO_PADRAO = [TIPO_EVENTO_PG] as const;
 
 export const FUNCIONALIDADES = [
 	['checkin_qrcode', 'Check-in por QR Code nos encontros'],
@@ -89,6 +98,20 @@ export async function garantirCatalogo(
 
 		papeis[semente.key] = existente.id;
 	}
+
+	await db
+		.insert(eventType)
+		.values(
+			TIPOS_EVENTO_PADRAO.map((t) => ({
+				teamId,
+				slug: t.slug,
+				name: t.name,
+				description: t.description,
+				color: t.color,
+				active: true
+			}))
+		)
+		.onConflictDoNothing();
 
 	await db
 		.insert(featureFlag)

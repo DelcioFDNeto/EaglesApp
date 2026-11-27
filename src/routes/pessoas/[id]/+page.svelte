@@ -29,7 +29,7 @@
 
 	/** O que muda no acesso, dito antes de confirmar. */
 	function efeitoNoAcesso(de: string, para: Estagio): string | null {
-		if (para === 'membro') return 'Passa a ver o grupo, as escalas e o próprio financeiro.';
+		if (para === 'membro') return 'Passa a ver os subgrupos, as escalas e o próprio financeiro.';
 		if (de === 'membro' || de === 'conselheiro' || de === 'lider') {
 			return 'Perde o acesso de membro: volta a ver só os eventos.';
 		}
@@ -188,16 +188,16 @@
 				motivoPg = '';
 				await carregar();
 			} else {
-				erro = d.erro ?? 'Não foi possível mudar de PG.';
+				erro = d.erro ?? 'Não foi possível mudar de subgrupo.';
 			}
 		} catch {
-			erro = 'Sem conexão. A pessoa continua no mesmo PG.';
+			erro = 'Sem conexão. A pessoa continua no mesmo subgrupo.';
 		} finally {
 			mudandoPg = false;
 		}
 	}
 
-	/** Estágios e PGs numa linha do tempo só, do mais recente ao mais antigo. */
+	/** Estágios e subgrupos numa linha do tempo só, do mais recente ao mais antigo. */
 	const linhaDoTempo = $derived(
 		[
 			...historico.map((h) => ({
@@ -210,9 +210,13 @@
 			...historicoGrupos.map((g) => ({
 				id: `g-${g.id}`,
 				em: g.em as string,
-				titulo: g.para ? (g.de ? `Mudou para o ${g.para}` : `Entrou no ${g.para}`) : 'Saiu dos PGs',
+				titulo: g.para
+					? g.de
+						? `Mudou para ${g.para}`
+						: `Entrou em ${g.para}`
+					: 'Saiu dos subgrupos',
 				detalhe: [
-					g.de && g.para ? `vindo do ${g.de}` : g.de ? `estava no ${g.de}` : null,
+					g.de && g.para ? `vindo de ${g.de}` : g.de ? `estava em ${g.de}` : null,
 					g.por ? `por ${g.por}` : null,
 					g.origem === 'ia' ? 'sugestão da IA aceita' : null
 				],
@@ -302,7 +306,7 @@
 					{#if pessoa.lider}<span class="chip">Líder</span>{/if}
 				</div>
 				<p class="sub">
-					{pessoa.grupo ? pessoa.grupo.nome : 'Sem PG'}
+					{pessoa.grupo ? pessoa.grupo.nome : 'Sem subgrupo'}
 					{#if pessoa.dataEntrada}· nos Eagles desde {data(pessoa.dataEntrada)}{/if}
 				</p>
 			</header>
@@ -354,13 +358,13 @@
 					<p class="sub">Últimos 3 meses. Só conta encontro com chamada feita.</p>
 
 					{#if frequencia.pg.esperados === 0}
-						<p class="sub">Nenhum encontro do PG com chamada neste período.</p>
+						<p class="sub">Nenhum PG com chamada neste período.</p>
 					{:else}
 						<div class="freq-resumo">
 							<strong>{frequencia.pg.taxa}%</strong>
 							<span>
 								veio a {frequencia.pg.presencas} de {frequencia.pg.esperados}
-								{frequencia.pg.esperados === 1 ? 'encontro' : 'encontros'} do PG
+								{frequencia.pg.esperados === 1 ? 'encontro' : 'encontros'}
 							</span>
 						</div>
 						<div
@@ -369,7 +373,7 @@
 							aria-valuemin="0"
 							aria-valuemax="100"
 							aria-valuenow={frequencia.pg.taxa}
-							aria-label="Presença nos encontros do PG"
+							aria-label="Presença nos PGs"
 						>
 							<div style="width: {frequencia.pg.taxa}%"></div>
 						</div>
@@ -383,7 +387,7 @@
 					{/if}
 
 					{#if frequencia.evolucao.length >= 2}
-						<GraficoMensal titulo="Presença no PG por mês" pontos={frequencia.evolucao} />
+						<GraficoMensal titulo="Presença nos PGs por mês" pontos={frequencia.evolucao} />
 					{/if}
 
 					{#if frequencia.recentes.length > 0}
@@ -415,20 +419,20 @@
 				</section>
 			{/if}
 
-			<!-- PG -->
+			<!-- Subgrupo -->
 			{#if podeMudarPg}
 				<section class="bloco" aria-labelledby="titulo-pg">
-					<h2 id="titulo-pg">PG</h2>
-					<p class="sub">Hoje: {pessoa.grupo ? pessoa.grupo.nome : 'sem PG'}</p>
+					<h2 id="titulo-pg">Subgrupo</h2>
+					<p class="sub">Hoje: {pessoa.grupo ? pessoa.grupo.nome : 'sem subgrupo'}</p>
 					<div class="campo-texto">
 						<label for="novo-pg">Mudar para</label>
 						<select id="novo-pg" bind:value={novoPg}>
-							<option value="" disabled>Escolha o PG</option>
+							<option value="" disabled>Escolha o subgrupo</option>
 							{#each permissoes.mudarDePg?.destinos ?? [] as g (g.id)}
 								<option value={g.id}>{g.nome}</option>
 							{/each}
 							{#if permissoes.mudarDePg?.podeTirarDeTodos}
-								<option value={SEM_PG}>Tirar de todos os PGs</option>
+								<option value={SEM_PG}>Tirar de todos os subgrupos</option>
 							{/if}
 						</select>
 					</div>
@@ -438,7 +442,7 @@
 							<textarea id="motivo-pg" bind:value={motivoPg} rows="2" maxlength="500"></textarea>
 						</div>
 						<div class="botoes">
-							<Botao carregando={mudandoPg} onclick={mudarPg}>Mudar de PG</Botao>
+							<Botao carregando={mudandoPg} onclick={mudarPg}>Mudar de subgrupo</Botao>
 							<Botao variante="texto" desabilitado={mudandoPg} onclick={() => (novoPg = '')}>
 								Cancelar
 							</Botao>

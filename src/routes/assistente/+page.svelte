@@ -351,7 +351,7 @@
 							<Campo
 								id="ia-publico"
 								rotulo="Público (opcional)"
-								placeholder="Ex.: PG Azul"
+								placeholder="Ex.: Subgrupo A"
 								bind:valor={avisoPublico}
 							/>
 						</div>
@@ -487,7 +487,7 @@
 										<strong>Proposta de divisão equilibrada de grupos</strong>
 										<p class="desc">
 											Distribui pessoas equilibrando tamanho e frequência. Gera uma proposta
-											pendente que só altera os PGs após sua confirmação explícita.
+											pendente que só altera os subgrupos após sua confirmação explícita.
 										</p>
 									</div>
 									<Botao

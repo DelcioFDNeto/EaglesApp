@@ -3,14 +3,14 @@
 ```
 Navegador / PWA / APK ──HTTPS──▶ Firebase Hosting   (SPA estático: build/)
         │
-        └──────────HTTPS──▶ Easypanel (Traefik + Let's Encrypt) na VPS 164.152.195.199
-                                 └──▶ api:3000  (adapter-node: build-api/)
+        └──────────HTTPS──▶ Caddy (nexus-itam-cluster-caddy-1 + Let's Encrypt) na VPS 164.152.195.199
+                                 └──▶ eagles_eagles-api-api-1:3000  (adapter-node: build-api/, via Easypanel Compose)
                                         └──▶ db:5432 (Postgres 16, só na rede interna)
 ```
 
-- **Frontend**: Firebase Hosting, já publicado em `https://eagles-app-pg.web.app` (também `https://eagles-app-pg.firebaseapp.com`, projeto `eagles-app-pg`).
+- **Frontend**: Firebase Hosting, publicado em `https://eagles-app-pg.web.app` (também `https://eagles-app-pg.firebaseapp.com`, projeto `eagles-app-pg`).
 - **API**: serviço Compose no Easypanel (`docker-compose.yml` na raiz), em `https://api.164-152-195-199.sslip.io`.
-  O sslip.io é um DNS gratuito que resolve esse nome para o IP da VPS, e o proxy reverso (Caddy ou Traefik do Easypanel) emite o certificado HTTPS. Não precisa comprar domínio (ver §6 para trocar).
+  O sslip.io é um DNS gratuito que resolve esse nome para o IP da VPS, e o proxy reverso Caddy (`nexus-itam-cluster-caddy-1`) emite o certificado HTTPS via Let's Encrypt sem derrubar o `nexus-itam`. Não precisa comprar domínio (ver §6 para trocar).
 - **Autenticação**: JWT no header `Authorization`, sempre conferido contra a
   sessão no banco (sair e desconectar aparelhos valem na hora).
 
@@ -19,60 +19,31 @@ Navegador / PWA / APK ──HTTPS──▶ Firebase Hosting   (SPA estático: bu
 
 ---
 
-## Como prosseguir agora (estado atual da produção)
+## Estado atual da produção (revisão `b9ee85d`)
 
-**Já concluído:**
+**No ar e conferido:**
 
-- Projeto Firebase `eagles-app-pg` criado, `.firebaserc` atualizado e frontend publicado em `https://eagles-app-pg.web.app` (headers de cache e segurança conferidos).
-- Serviço Compose no Easypanel apontando para `docker-compose.yml` na raiz, lendo o `.env` da aba Ambiente, com build de `backup` e `npm ci` da `api` passando.
+- **Frontend (`eagles-app-pg`):** publicado em `https://eagles-app-pg.web.app` (Ciclo 4, 101 arquivos, prévia Open Graph `/og-eagles.jpg` em `1200×630`, headers de cache e segurança conferidos).
+- **API na VPS (`164.152.195.199`):** serviço Compose no Easypanel (`docker-compose.yml` na raiz) rodando `eagles_eagles-api-api-1`, `eagles_eagles-api-db-1` e `eagles_eagles-api-backup-1`, com migrações `0000`–`0011` aplicadas automaticamente.
+- **HTTPS e roteamento na VPS:** o container Caddy existente (`nexus-itam-cluster-caddy-1`, `/home/ubuntu/nexus-itam/Caddyfile`) está conectado à rede Docker `eagles_eagles-api_default` e faz proxy reverso de `api.164-152-195-199.sslip.io` para `eagles_eagles-api-api-1:3000` sem expor porta HTTP pública e mantendo o `nexus-itam` intacto.
+- **Health e CORS verificados:** `GET https://api.164-152-195-199.sslip.io/api/health` responde `200 OK` (`{"status":"ok","banco":true,"latenciaMs":...}`) e `Access-Control-Allow-Origin: https://eagles-app-pg.web.app`.
 
-**Falta fazer na VPS (`164.152.195.199`) para fechar o ar:**
+**Atenções operacionais do Caddy compartilhado na VPS:**
 
-1. **Conferir o Caddy (que já serve o `nexus-itam` nas portas 80/443) e os containers:**
+- Se o stack `nexus-itam` for recriado do zero, reconecte o Caddy à rede da API:
+  ```bash
+  docker network connect eagles_eagles-api_default nexus-itam-cluster-caddy-1
+  ```
+- Como `/home/ubuntu/nexus-itam/Caddyfile` é montado como arquivo único no container, após editá-lo valide e recarregue (ou reinicie o container se o `reload` acusar `config is unchanged` por troca de inode):
+  ```bash
+  docker exec nexus-itam-cluster-caddy-1 caddy validate --config /etc/caddy/Caddyfile
+  docker restart nexus-itam-cluster-caddy-1
+  ```
 
-   ```bash
-   cat /etc/caddy/Caddyfile
-   docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-   ```
+**Conferências recomendadas em operação:**
 
-   _(Não pare nem remova o Caddy — ele mantém o `nexus-itam` no ar.)_
-
-2. **Apontar `api.164-152-195-199.sslip.io` no `Caddyfile`** (o próprio Caddy emite o certificado Let's Encrypt):
-   - **Caso A — o Caddy já encaminha para o Easypanel/Traefik ou compartilha a rede Docker:** adicione um bloco seguindo o mesmo padrão do `nexus-itam` apontando para o serviço `api:3000` (ou para o upstream do Easypanel com o header `Host` preservado).
-   - **Caso B — o Caddy roda no host e faz `reverse_proxy 127.0.0.1:<porta>`:** verifique uma porta livre em localhost (`ss -tlnp`), exponha `ports: ["127.0.0.1:3001:3000"]` (apenas `127.0.0.1`, nunca pública) no serviço `api` do `docker-compose.yml`, reimplante no Easypanel e adicione ao `Caddyfile`:
-     ```caddyfile
-     api.164-152-195-199.sslip.io {
-         reverse_proxy 127.0.0.1:3001
-     }
-     ```
-   - Recarregue o Caddy sem derrubar o `nexus-itam`:
-     ```bash
-     sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy
-     ```
-     _(Se o Caddy estiver em container Docker, rode `docker exec <container-caddy> caddy reload --config /etc/caddy/Caddyfile`.)_
-
-3. **Confirmar que a API responde em HTTPS com CORS liberado:**
-
-   ```bash
-   curl -i -H "Origin: https://eagles-app-pg.web.app" https://api.164-152-195-199.sslip.io/api/health
-   # Esperado: HTTP/2 200, Access-Control-Allow-Origin: https://eagles-app-pg.web.app
-   # Corpo: {"status":"ok","banco":true,"latenciaMs":...}
-   ```
-
-4. **Criar o primeiro acesso Master (uma vez só)** no console do container `api` no Easypanel (ou via `docker exec`):
-
-   ```bash
-   node tools/primeiro-master.mjs --nome "Seu Nome" --email delciofarias04@gmail.com
-   ```
-
-   Abra o link impresso, defina sua senha, entre em `https://eagles-app-pg.web.app`, cadastre os 2 líderes em **Pessoas** (`/pessoas`), nomeie-os em **Liderança** (`/lideranca`) e envie os convites pelo WhatsApp.
-
-5. **Publicar atualizações do frontend e conferir backups:**
-   - Após puxar o Ciclo 3 (M04 Grupos e transferências), reimplante o serviço Compose no Easypanel (para aplicar a migração `0010_grupos_transferencia.sql`) e rode localmente:
-     ```bash
-     npm run deploy:firebase
-     ```
-   - Após ~5 minutos do deploy da VPS, confira nos logs do container `backup` as mensagens `restauração conferida` e `backup concluído`.
+- Conferir nos logs do container `eagles_eagles-api-backup-1` as mensagens `restauração conferida` e `backup concluído` (e configurar a cópia externa no Backblaze B2 conforme §7.1 se ainda não estiver ativa).
+- Validar com dados reais o fluxo completo do PG piloto (eventos, chamada e tela Frequência).
 
 ---
 
@@ -132,11 +103,25 @@ Sem `JWT_SECRET`, `POSTGRES_PASSWORD`, `FRONTEND_URL`, `PUBLIC_API_URL` ou
 
 > Se gerar as senhas no Windows sem `openssl`: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 
-### 2.3 Domínio (aba Domains)
+### 2.3 Domínio e proxy reverso
+
+Em uma VPS onde o Easypanel detém as portas 80/443 (aba **Domains**):
 
 - **Host**: `api.164-152-195-199.sslip.io`
 - **HTTPS**: ligado
 - **Service**: `api` — **Port**: `3000`
+
+Na VPS atual (`164.152.195.199`), as portas 80/443 pertencem ao container Caddy `nexus-itam-cluster-caddy-1` (`/home/ubuntu/nexus-itam/Caddyfile`), conectado à rede `eagles_eagles-api_default`, com o bloco:
+
+```caddyfile
+api.164-152-195-199.sslip.io {
+    import security_headers
+    encode zstd gzip
+    reverse_proxy eagles_eagles-api-api-1:3000 {
+        header_up X-Real-IP {remote_host}
+    }
+}
+```
 
 ### 2.4 Deploy e verificação
 
@@ -203,10 +188,12 @@ Regras da liderança, garantidas no servidor e no banco:
 | Último líder        | Não sai sem indicar sucessor (o Master pode encerrar mesmo assim)                                                      |
 | Nível máximo        | Ninguém além de líderes e Master gerencia papéis; só o Master altera o papel de líder                                  |
 
+> **Se o desenvolvedor Master também for um dos 2 líderes:** o Master é uma conta técnica invisível para o resto da equipe (`naoEhMaster`) e não pode ser nomeado líder. Mantenha o Master em uma conta técnica separada (por exemplo, nome `"Administração do Sistema"` com alias `+master` no Gmail, que chega na mesma caixa de entrada) e cadastre a pessoa real (nome real, telefone e e-mail principal) como um dos 2 líderes em **Pessoas** e **Liderança**. Assim o sistema nunca confunde a identidade técnica com o perfil de liderança.
+
 ### 2.7 Daí em diante: convites pelo app
 
-Líderes (e os conselheiros, no próprio PG) cadastram e convidam pessoas em
-**Início → Pessoas e convites** (`/pessoas`):
+Líderes e conselheiros cadastram e convidam pessoas em
+**Início → Pessoas** (`/pessoas`):
 
 1. **Cadastrar pessoa**: só o nome é obrigatório; o telefone com DDD vira o
    login dela e o destino do convite.
@@ -294,8 +281,8 @@ O sslip.io depende de um serviço de terceiros e não tem garantia. Com um
 domínio (ex.: `api.eagles.com.br` apontando para `164.152.195.199`), troque em
 três lugares e faça deploy dos dois lados:
 
-1. Easypanel → Domains do serviço;
-2. Easypanel → Environment → `PUBLIC_API_URL`;
+1. Proxy reverso na VPS (`/home/ubuntu/nexus-itam/Caddyfile` + `docker restart nexus-itam-cluster-caddy-1`, ou Easypanel → Domains se o Traefik gerir 80/443);
+2. Easypanel → Environment → `PUBLIC_API_URL` (e redeploy da API);
 3. `.env.production` → `PUBLIC_API_URL` → `npm run deploy:firebase`.
 
 ---
@@ -390,7 +377,7 @@ no logout. Código em `src/lib/cache/`.
 - Segredos só no Easypanel, nunca no repositório. `.env.production` é público por natureza.
 - Trocar `JWT_SECRET` desconecta todo mundo (todos os tokens deixam de valer).
 - O Postgres não tem porta publicada: só a API o alcança.
-- Atrás do Traefik, a API usa o IP real do cliente (`X-Forwarded-For`,
+- Atrás do proxy reverso (Caddy ou Traefik), a API usa o IP real do cliente (`X-Forwarded-For`,
   `XFF_DEPTH=1`) para o limite de tentativas. Se um dia houver outro proxy na
   frente (ex.: Cloudflare), aumente `XFF_DEPTH` para 2.
 - Links de redefinição de senha valem 15 minutos, são de uso único e o banco guarda só o hash.

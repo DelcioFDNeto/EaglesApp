@@ -1,13 +1,14 @@
 import { json } from '@sveltejs/kit';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '$server/db';
-import { group } from '$server/db/schema';
+import { eventType, group } from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
 import {
 	carregarDados,
 	eventosDaEquipe,
-	frequenciaDoPg,
+	frequenciaDaEquipe,
+	frequenciaDoSubgrupo,
 	indexar,
 	lerPeriodo
 } from '$server/presenca/frequencia';
@@ -15,14 +16,18 @@ import {
 /**
  * Relatório de frequência (RF-06.3, RF-06.4).
  *
- *   ?grupo=<id>  — um PG: resumo, confirmação × presença, evolução por mês e
- *                  as pessoas do PG (em ordem alfabética, nunca ranking).
- *   sem grupo    — visão da equipe (só `attendance.report` global): um resumo
- *                  por PG, sem nomes, e os eventos da equipe toda por tipo.
- *   ?de=&ate=    — período (AAAA-MM-DD). Padrão: últimos 90 dias.
+ *   sem grupo      — visão da equipe (líderes e conselheiros com `attendance.report`
+ *                    global): frequência dos PGs (ou do `?tipo=` escolhido) calculada
+ *                    sobre os membros ativos dos Eagles em ordem alfabética (nunca
+ *                    ranking), mais resumo dos outros eventos da equipe e por subgrupo.
+ *   ?tipo=<id>     — filtra os eventos da equipe por tipo (`todos` = todos os tipos).
+ *                    Sem `?tipo=`, o padrão é o tipo `pg` (PG — Pequeno Grupo).
+ *   ?grupo=<id>    — encontros vinculados a um subgrupo específico: resumo,
+ *                    confirmação × presença, evolução por mês e integrantes.
+ *   ?de=&ate=      — período (AAAA-MM-DD). Padrão: últimos 90 dias.
  *
- * Exige `attendance.report`: global, ou no PG pedido (conselheiro). Quem não
- * cuida do PG não vê a frequência de ninguém dele (persona "o fiscal").
+ * Exige `attendance.report` (global, ou no subgrupo pedido). Membros comuns
+ * recebem 403 (persona negativa "o fiscal").
  */
 export const GET = async ({ request, url, locals }) => {
 	const banco = db();
@@ -41,53 +46,90 @@ export const GET = async ({ request, url, locals }) => {
 		return json({ erro: 'Período inválido (máximo de 2 anos).' }, { status: 400 });
 	}
 
-	// PGs que a pessoa pode escolher no filtro.
-	const grupos = await banco
-		.select({ id: group.id, nome: group.name })
-		.from(group)
-		.where(
-			and(
-				eq(group.teamId, actor.teamId),
-				isNull(group.archivedAt),
-				global ? undefined : inArray(group.id, doEscopo)
+	const [grupos, tiposRaw] = await Promise.all([
+		banco
+			.select({ id: group.id, nome: group.name })
+			.from(group)
+			.where(
+				and(
+					eq(group.teamId, actor.teamId),
+					isNull(group.archivedAt),
+					global ? undefined : inArray(group.id, doEscopo)
+				)
 			)
-		)
-		.orderBy(asc(group.name));
+			.orderBy(asc(group.name)),
+		banco
+			.select({ id: eventType.id, nome: eventType.name, slug: eventType.slug })
+			.from(eventType)
+			.where(eq(eventType.teamId, actor.teamId))
+			.orderBy(asc(eventType.name))
+	]);
+
+	// Tipo "PG (Pequeno Grupo)" vem sempre primeiro no filtro.
+	const tipos = [...tiposRaw].sort((a, b) =>
+		a.slug === 'pg' ? -1 : b.slug === 'pg' ? 1 : a.nome.localeCompare(b.nome, 'pt-BR')
+	);
 
 	let grupoId = url?.searchParams.get('grupo') ?? null;
-	// Conselheiro de um PG só: é esse o relatório dele.
+	// Papel restrito a um único subgrupo: mostra direto o relatório dele.
 	if (!grupoId && !global && grupos.length === 1) grupoId = grupos[0]!.id;
 
 	const dados = await carregarDados(banco, actor.teamId, periodo);
 	const indice = indexar(dados);
-	const base = { periodo, grupos, podeVerEquipe: global };
+	const base = { periodo, grupos, tipos, podeVerEquipe: global };
 
 	if (grupoId) {
-		if (!isUuid(grupoId)) return json({ erro: 'PG inválido.' }, { status: 400 });
+		if (!isUuid(grupoId)) return json({ erro: 'Subgrupo inválido.' }, { status: 400 });
 		const [g] = await banco
 			.select({ id: group.id, nome: group.name })
 			.from(group)
 			.where(and(eq(group.id, grupoId), eq(group.teamId, actor.teamId)))
 			.limit(1);
-		if (!g) return json({ erro: 'PG não encontrado.' }, { status: 404 });
+		if (!g) return json({ erro: 'Subgrupo não encontrado.' }, { status: 404 });
 		if (!can(actor, 'attendance.report', { groupId: g.id })) {
-			return json({ erro: 'Sem permissão para ver a frequência deste PG.' }, { status: 403 });
+			return json({ erro: 'Sem permissão para ver a frequência deste subgrupo.' }, { status: 403 });
 		}
-		return json({ ...base, escopo: 'pg', grupo: g, ...frequenciaDoPg(g.id, dados, indice) });
+		return json({
+			...base,
+			escopo: 'subgrupo',
+			grupo: g,
+			...frequenciaDoSubgrupo(g.id, dados, indice)
+		});
 	}
 
 	if (!global) {
-		return json({ erro: 'Escolha o PG.', ...base }, { status: 400 });
+		return json({ erro: 'Escolha o subgrupo.', ...base }, { status: 400 });
 	}
+
+	const tipoParam = url?.searchParams.get('tipo');
+	let tipoSelecionado: { id: string; nome: string; slug: string } | null = null;
+	if (tipoParam === 'todos') {
+		tipoSelecionado = null;
+	} else if (tipoParam) {
+		if (!isUuid(tipoParam)) return json({ erro: 'Tipo de evento inválido.' }, { status: 400 });
+		const encontrado = tipos.find((t) => t.id === tipoParam);
+		if (!encontrado) return json({ erro: 'Tipo de evento não encontrado.' }, { status: 404 });
+		tipoSelecionado = encontrado;
+	} else {
+		tipoSelecionado = tipos.find((t) => t.slug === 'pg') ?? null;
+	}
+
+	const resumoEquipe = frequenciaDaEquipe(
+		dados,
+		indice,
+		tipoSelecionado ? { tipoId: tipoSelecionado.id } : {}
+	);
 
 	return json({
 		...base,
 		escopo: 'equipe',
-		// Resumo por PG, sem a lista de pessoas: a visão geral não expõe ninguém.
-		porPg: grupos.map((g) => {
-			const { pessoas, ...resumo } = frequenciaDoPg(g.id, dados, indice);
+		tipoSelecionado,
+		...resumoEquipe,
+		// Resumo por subgrupo (sem nomes individuais), quando houver encontros vinculados a subgrupos.
+		porSubgrupo: grupos.map((g) => {
+			const { pessoas, ...resumo } = frequenciaDoSubgrupo(g.id, dados, indice);
 			return { grupo: g, pessoasAcompanhadas: pessoas.length, ...resumo };
 		}),
-		eventosDaEquipe: eventosDaEquipe(dados, indice)
+		eventosDaEquipe: eventosDaEquipe(dados, indice, tipoSelecionado?.id ?? null)
 	});
 };

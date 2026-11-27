@@ -183,7 +183,7 @@ async function primeirosPassos(banco: Database, actor: Actor) {
 
 	const existe = async (consulta: Promise<unknown[]>) => (await consulta).length > 0;
 
-	const [pg, tipoEvento, pessoas, evento] = await Promise.all([
+	const [subgrupo, tipoEvento, pessoas, evento] = await Promise.all([
 		can(actor, 'group.manage')
 			? existe(
 					banco
@@ -225,5 +225,5 @@ async function primeirosPassos(banco: Database, actor: Actor) {
 			: null
 	]);
 
-	return { pg, tipoEvento, pessoas, evento };
+	return { subgrupo, pg: subgrupo, tipoEvento, pessoas, evento };
 }

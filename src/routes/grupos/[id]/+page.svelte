@@ -99,7 +99,7 @@
 	async function salvarEdicao(e: SubmitEvent) {
 		e.preventDefault();
 		if (!edNome.trim()) {
-			erro = 'Dê um nome ao PG.';
+			erro = 'Dê um nome ao subgrupo.';
 			return;
 		}
 		salvando = true;
@@ -136,7 +136,7 @@
 				confirmandoArquivo = false;
 				await carregar();
 			} else {
-				erro = d.erro ?? 'Não foi possível mudar o PG.';
+				erro = d.erro ?? 'Não foi possível mudar o subgrupo.';
 			}
 		} catch {
 			erro = 'Sem conexão. Nada mudou.';
@@ -184,23 +184,29 @@
 	}
 
 	function descreverMovimento(mv: any) {
-		if (mv.tipo === 'chegou') return mv.outroGrupo ? `chegou do ${mv.outroGrupo}` : 'chegou';
-		return mv.outroGrupo ? `foi para o ${mv.outroGrupo}` : 'saiu dos PGs';
+		if (mv.tipo === 'chegou') return mv.outroGrupo ? `chegou de ${mv.outroGrupo}` : 'chegou';
+		return mv.outroGrupo ? `foi para ${mv.outroGrupo}` : 'saiu dos subgrupos';
 	}
 </script>
 
 <svelte:head>
-	<title>{grupo?.name || 'Grupo'} · Eagles</title>
+	<title>{grupo?.name || 'Subgrupo'} · Eagles</title>
 </svelte:head>
 
 <main class="conteudo">
 	<div class="pilha">
-		<a href="/grupos" class="voltar">← Grupos</a>
+		<a href="/grupos" class="voltar">← Subgrupos</a>
 
 		{#if editando}
 			<form class="painel" onsubmit={salvarEdicao}>
-				<h1>Editar PG</h1>
-				<Campo id="nome-pg" rotulo="Nome do PG" bind:valor={edNome} obrigatorio maxlength="100" />
+				<h1>Editar subgrupo</h1>
+				<Campo
+					id="nome-pg"
+					rotulo="Nome do subgrupo"
+					bind:valor={edNome}
+					obrigatorio
+					maxlength="100"
+				/>
 				<div class="campo-texto">
 					<label for="desc-pg">Descrição</label>
 					<textarea id="desc-pg" bind:value={edDescricao} rows="3" maxlength="500"></textarea>
@@ -222,7 +228,7 @@
 				{#if grupo && (permissoes.podeEditar || permissoes.podeArquivar)}
 					<div class="botoes">
 						{#if permissoes.podeEditar}
-							<Botao variante="secundario" onclick={abrirEdicao}>Editar PG</Botao>
+							<Botao variante="secundario" onclick={abrirEdicao}>Editar subgrupo</Botao>
 						{/if}
 						{#if permissoes.podeArquivar}
 							{#if grupo.arquivado}
@@ -231,11 +237,11 @@
 									carregando={arquivando}
 									onclick={() => alternarArquivo(false)}
 								>
-									Reativar PG
+									Reativar subgrupo
 								</Botao>
 							{:else if !confirmandoArquivo}
 								<Botao variante="texto" onclick={() => (confirmandoArquivo = true)}>
-									Arquivar PG
+									Arquivar subgrupo
 								</Botao>
 							{/if}
 						{/if}
@@ -248,9 +254,9 @@
 			<div class="confirmar" role="group" aria-labelledby="titulo-arquivar">
 				<h2 id="titulo-arquivar">Arquivar {grupo.name}?</h2>
 				<p class="sub">
-					O PG sai das listas e não recebe mais ninguém. Os eventos e o histórico de quem passou por
-					ele ficam guardados, e você pode reativá-lo depois. Só dá para arquivar um PG vazio e sem
-					eventos marcados.
+					O subgrupo sai das listas e não recebe mais ninguém. Os eventos e o histórico de quem
+					passou por ele ficam guardados, e você pode reativá-lo depois. Só dá para arquivar um
+					subgrupo vazio e sem eventos marcados.
 				</p>
 				<div class="botoes">
 					<Botao
@@ -294,13 +300,13 @@
 			<div class="cabecalho-secao">
 				<h2>Integrantes</h2>
 				{#if permissoes.podeTransferir && membros.length > 0}
-					<span class="dica">Marque quem vai mudar de PG</span>
+					<span class="dica">Marque quem vai mudar de subgrupo</span>
 				{/if}
 			</div>
 
 			{#if membros.length === 0}
 				<div class="vazio">
-					<p>Este grupo ainda não tem integrantes vinculados.</p>
+					<p>Este subgrupo ainda não tem integrantes vinculados.</p>
 				</div>
 			{:else}
 				<ul class="lista-membros">
@@ -312,7 +318,7 @@
 									class="marcar"
 									checked={selecionados.includes(m.id)}
 									onchange={() => alternarSelecao(m.id)}
-									aria-label={`Selecionar ${m.nome} para mudar de PG`}
+									aria-label={`Selecionar ${m.nome} para mudar de subgrupo`}
 								/>
 							{/if}
 							<div class="membro-info">
@@ -351,14 +357,14 @@
 							{selecionados.length === 1 ? 'pessoa' : 'pessoas'}
 						</h2>
 						<div class="campo-texto">
-							<label for="destino">Para qual PG</label>
+							<label for="destino">Para qual subgrupo</label>
 							<select id="destino" bind:value={destino}>
-								<option value="" disabled>Escolha o PG</option>
+								<option value="" disabled>Escolha o subgrupo</option>
 								{#each destinos as g (g.id)}
 									<option value={g.id}>{g.name}</option>
 								{/each}
 								{#if permissoes.podeTirarDeTodos}
-									<option value={SEM_PG}>Tirar de todos os PGs</option>
+									<option value={SEM_PG}>Tirar de todos os subgrupos</option>
 								{/if}
 							</select>
 						</div>

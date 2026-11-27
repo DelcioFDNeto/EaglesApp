@@ -39,3 +39,14 @@ Senha com **Argon2id** (`m=19456, t=2, p=1`, parâmetros OWASP). TOTP opcional, 
 - **Negativa:** uma consulta ao banco por requisição autenticada. Irrelevante nesta escala e mitigável com cache curto em memória se necessário.
 - **Operacional:** a liderança precisa emitir convites. Para o lote inicial, o M02 terá emissão em massa a partir da importação de planilha.
 - **Menores:** conta de acesso para menor de idade só é emitida com o consentimento previsto no [ADR 0003](0003-dados-de-menores.md).
+
+---
+
+## Atualização de implementação (27/11/2026)
+
+Com a separação entre SPA estático (Firebase Hosting / Capacitor) e API Node na VPS, o mecanismo de transporte da sessão foi adaptado sem abrir mão da **revogação imediata no banco** (revisão `b9ee85d`):
+
+- **Transporte e revogação:** o login retorna um JWT assinado com `JWT_SECRET` enviado em `Authorization: Bearer <token>`, mas **toda requisição autenticada valida o `sid` contra a tabela `session` no PostgreSQL** (`src/lib/server/auth/middleware.ts` e `src/lib/server/auth/session.ts`). Isso mantém a revogação imediata no logout e em "desconectar outros aparelhos", evitando o problema de JWT stateless rejeitado neste ADR.
+- **Duração e proteção de senha:** sessão de 30 dias, hash Argon2id com parâmetros OWASP, rate limit pré-hash por IP (`X-Forwarded-For`, `XFF_DEPTH=1`) e bloqueio progressivo por conta persistido no banco (5 tentativas → 15 min, dobrando até 24 h).
+- **Convites e recuperação:** convites de uso único (7 dias) via WhatsApp funcionam em `/pessoas` e `/convite`; "Esqueci minha senha" via SMTP (token de 15 minutos, apenas hash no banco) funciona em `/esqueci-senha` e `/resetar-senha`.
+- **Lacunas mantidas abertas:** TOTP (2FA), reautenticação obrigatória para ações sensíveis (financeiro/RBAC/exclusões) e emissão em massa de convites via importação de planilha ainda não foram implementados.

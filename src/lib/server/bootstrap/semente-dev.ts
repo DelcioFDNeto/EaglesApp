@@ -26,8 +26,16 @@ import { garantirCatalogo } from './catalogo';
 export const SENHA_DEV = 'eagles-desenvolvimento';
 
 const GRUPOS = [
-	{ slug: 'pg-a', nome: 'PG A — Quinta à noite', descricao: 'Encontro semanal na casa da Marina.' },
-	{ slug: 'pg-b', nome: 'PG B — Sábado à tarde', descricao: 'Encontro quinzenal no salão.' }
+	{
+		slug: 'subgrupo-a',
+		nome: 'Subgrupo A',
+		descricao: 'Subgrupo de acompanhamento e organização A.'
+	},
+	{
+		slug: 'subgrupo-b',
+		nome: 'Subgrupo B',
+		descricao: 'Subgrupo de acompanhamento e organização B.'
+	}
 ] as const;
 
 type Semente = {
@@ -46,25 +54,30 @@ const PESSOAS: Semente[] = [
 		nome: 'Pedro Henrique Vasconcelos',
 		papel: 'conselheiro',
 		email: 'pedro@eagles.local',
-		grupo: 'pg-a'
+		grupo: 'subgrupo-a'
 	},
 	{
 		nome: 'Marina Souza Albuquerque',
 		papel: 'conselheiro',
 		email: 'marina@eagles.local',
-		grupo: 'pg-b'
+		grupo: 'subgrupo-b'
 	},
-	{ nome: 'João Vitor Cavalcanti', papel: 'membro', email: 'joao@eagles.local', grupo: 'pg-a' },
+	{
+		nome: 'João Vitor Cavalcanti',
+		papel: 'membro',
+		email: 'joao@eagles.local',
+		grupo: 'subgrupo-a'
+	},
 	{
 		nome: 'Letícia Ferreira dos Santos',
 		papel: 'membro',
 		email: 'leticia@eagles.local',
-		grupo: 'pg-b'
+		grupo: 'subgrupo-b'
 	},
 	// Sem conta: entram por convite, que é o caminho real (ADR 0004).
-	{ nome: 'Rafael Monteiro', papel: 'membro', telefone: '91988880001', grupo: 'pg-a' },
-	{ nome: 'Camila Rodrigues Nascimento', papel: 'membro', grupo: 'pg-a' },
-	{ nome: 'Gustavo Lima', papel: 'membro', grupo: 'pg-b' },
+	{ nome: 'Rafael Monteiro', papel: 'membro', telefone: '91988880001', grupo: 'subgrupo-a' },
+	{ nome: 'Camila Rodrigues Nascimento', papel: 'membro', grupo: 'subgrupo-a' },
+	{ nome: 'Gustavo Lima', papel: 'membro', grupo: 'subgrupo-b' },
 	{ nome: 'Isabela Martins Carvalho', papel: 'visitante' },
 	{ nome: 'Thiago Barbosa', papel: 'visitante' }
 ];
@@ -135,12 +148,10 @@ export async function semearDesenvolvimento(db: Database) {
 			personId: id,
 			roleId: papeis[p.papel]!,
 			scopeType:
-				p.papel === 'master' || p.papel === 'lider'
+				p.papel === 'master' || p.papel === 'lider' || p.papel === 'conselheiro'
 					? 'global'
-					: p.papel === 'conselheiro'
-						? 'group'
-						: 'self',
-			scopeId: p.papel === 'conselheiro' ? idGrupo[p.grupo!]! : null
+					: 'self',
+			scopeId: null
 		});
 
 		if (p.grupo) {

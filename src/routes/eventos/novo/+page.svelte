@@ -23,11 +23,12 @@
 				return;
 			}
 			opcoes = d;
+			const tipoPg = (d.tipos ?? []).find((t: any) => t.slug === 'pg');
 			inicial = {
 				title: '',
-				// Com um tipo só, já vem escolhido; com vários, a pessoa escolhe.
-				eventTypeId: d.tipos.length === 1 ? d.tipos[0].id : '',
-				// Conselheiro de um PG só: o PG dele já vem escolhido.
+				// Se existir o tipo "PG (Pequeno Grupo)", já vem selecionado por ser o encontro principal.
+				eventTypeId: tipoPg?.id ?? (d.tipos.length === 1 ? d.tipos[0].id : ''),
+				// Papel restrito a um único subgrupo: o subgrupo dele já vem escolhido.
 				groupId: !d.podeSemGrupo && d.grupos.length === 1 ? d.grupos[0].id : '',
 				inicio: '',
 				fim: '',

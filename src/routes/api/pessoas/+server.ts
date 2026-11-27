@@ -18,7 +18,7 @@ import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can, groupsWhere, type Actor } from '$server/policy/policy';
 import { audit } from '$server/audit/log';
 import { contatoEmUso, contatoSchema, MENSAGEM_CONTATO_EM_USO } from '$server/pessoas/contato';
-import { naoEhMaster } from '$server/lideranca/regras';
+import { ehLider, ehMaster, naoEhMaster } from '$server/lideranca/regras';
 import { ESTAGIOS, papelDoEstagio, podeMudarEstagio } from '$server/pessoas/jornada';
 
 /**
@@ -123,14 +123,14 @@ export const GET = async ({ request, url, locals }) => {
 
 	return json({
 		podeCadastrar: global || grupos.length > 0,
-		// Estágios oferecidos no cadastro. Recorrente: quem edita pessoas (no PG
-		// escolhido; o POST confere). Membro: só líderes (entrada nos Eagles).
+		// Estágios oferecidos no cadastro. Recorrente: quem edita pessoas.
+		// Membro: só líderes (entrada formal nos Eagles).
 		estagiosParaCadastro: ESTAGIOS.filter(
 			(e) =>
 				e === 'visitante' ||
 				(e === 'recorrente' &&
 					(can(actor, 'person.update') || groupsWhere(actor, 'person.update').length > 0)) ||
-				(e === 'membro' && can(actor, 'person.update'))
+				(e === 'membro' && can(actor, 'person.update') && (ehLider(actor) || ehMaster(actor)))
 		),
 		gruposParaCadastro: grupos,
 		pessoas: filtradas.map((p) => {
@@ -221,7 +221,7 @@ export const POST = async ({ request, locals, getClientAddress }) => {
 			.from(group)
 			.where(and(eq(group.id, grupoId), eq(group.teamId, actor.teamId), isNull(group.archivedAt)))
 			.limit(1);
-		if (!grupo) return json({ erro: 'PG não encontrado ou arquivado.' }, { status: 404 });
+		if (!grupo) return json({ erro: 'Subgrupo não encontrado ou arquivado.' }, { status: 404 });
 	}
 
 	const emUso = await contatoEmUso(banco, { email, telefone });

@@ -35,3 +35,14 @@ Bibliotecas: Zod (validação), Argon2id (senha), pg-boss (fila no próprio Post
 - **Phoenix LiveView** — melhor performance bruta, mas poucos desenvolvedores Elixir disponíveis e o mesmo problema de dependência de socket.
 - **Flutter + API** — melhor UX nativa, mas duas bases de código, US$ 124/ano de lojas e revisão de 1–7 dias por correção.
 - **Next.js / React** — excluído pela preferência explícita do briefing.
+
+---
+
+## Atualização de implementação (27/11/2026)
+
+A decisão central (**SvelteKit 2 + Svelte 5 + TypeScript + PostgreSQL 16 + Drizzle ORM + Zod + Argon2id**) foi mantida, com quatro ajustes concretos registrados no código (revisão `b9ee85d`):
+
+1. **Estilização sem Tailwind:** os tokens de design e estilos base vivem em CSS nativo (`src/lib/styles/tokens.css` e `src/lib/styles/app.css`) com variáveis semânticas, em vez de Tailwind.
+2. **Dois alvos de build a partir do mesmo repositório:** `@sveltejs/adapter-static` gera o SPA/PWA (`build/`, publicado no Firebase Hosting e empacotável via Capacitor 6 para Android), enquanto `@sveltejs/adapter-node` gera o servidor da API (`build-api/`, rodando na VPS via `docker-compose.yml`). Por ser SPA separado da API, as telas falam com `/api/*` via cliente tipado (`src/lib/api.ts`) em vez de SvelteKit form actions SSR.
+3. **Sem `pg-boss`:** tarefas periódicas de manutenção (limpeza de sessões e tokens expirados, rotação de memória do rate limit) rodam em processo no servidor da API (`src/lib/server/manutencao.ts`), e os backups diários criptografados rodam em um serviço Docker dedicado (`deploy/backup/`).
+4. **Testes com PGlite:** os testes de integração usam Vitest + `@electric-sql/pglite` em memória rodando as migrações reais do Drizzle (`tests/integration/`), dispensando Postgres externo no CI; testes E2E com Playwright ainda não estão configurados no repositório.

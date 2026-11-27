@@ -423,6 +423,30 @@ describe('M02 — editar pessoa e jornada', () => {
 			expect(h).toMatchObject({ fromStatus: null, toStatus: 'recorrente', reason: 'Cadastro' });
 		});
 
+		it('conselheiro com escopo global move visitante ↔ recorrente na equipe toda, mas não promove nem remove membro', async () => {
+			const consGlobalId = await criar('Conselheira Global', 'conselheiro', {
+				escopo: 'global',
+				estagio: 'membro'
+			});
+			const tkConsGlobal = await tokenPara(ctx.db, consGlobalId);
+
+			const lista = await (await pessoasRoute.GET(chamar(tkConsGlobal))).json();
+			expect(lista.estagiosParaCadastro).toEqual(['visitante', 'recorrente']);
+
+			// Move visitante de qualquer subgrupo (ou sem subgrupo) para recorrente.
+			expect((await mover(tkConsGlobal, id.visitanteB!, 'recorrente')).status).toBe(200);
+			// Mas entrada e saída de membro continuam exclusivas de líderes.
+			expect((await mover(tkConsGlobal, id.visitanteB!, 'membro')).status).toBe(403);
+			expect((await mover(tkConsGlobal, id.membro!, 'recorrente')).status).toBe(403);
+			expect(
+				(
+					await pessoasRoute.POST(
+						chamar(tkConsGlobal, { nome: 'Tentativa Membro', estagio: 'membro' })
+					)
+				).status
+			).toBe(403);
+		});
+
 		it('sem estágio, nasce visitante; líder cadastra direto como membro', async () => {
 			const padrao = await pessoasRoute.POST(chamar(tk.lider!, { nome: 'Fabio Reis' }));
 			const padraoId = (await padrao.json()).pessoa.id;

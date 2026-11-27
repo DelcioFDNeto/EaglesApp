@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { event, eventType } from '$server/db/schema';
+import { event, eventType, group } from '$server/db/schema';
 import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
 import { audit } from '$server/audit/log';
@@ -67,15 +67,33 @@ export const GET = async ({ request, url, locals }) => {
 		.where(and(...where))
 		.orderBy(asc(event.startsAt));
 
-	const tipos = await banco
-		.select({ id: eventType.id, name: eventType.name, color: eventType.color })
-		.from(eventType)
-		.where(eq(eventType.teamId, actor.teamId));
+	const [tiposRaw, gruposRaw] = await Promise.all([
+		banco
+			.select({
+				id: eventType.id,
+				name: eventType.name,
+				slug: eventType.slug,
+				color: eventType.color,
+				active: eventType.active
+			})
+			.from(eventType)
+			.where(eq(eventType.teamId, actor.teamId))
+			.orderBy(asc(eventType.name)),
+		banco
+			.select({ id: group.id, name: group.name })
+			.from(group)
+			.where(eq(group.teamId, actor.teamId))
+	]);
 
+	const tipos = [...tiposRaw].sort((a, b) =>
+		a.slug === 'pg' ? -1 : b.slug === 'pg' ? 1 : a.name.localeCompare(b.name, 'pt-BR')
+	);
 	const tiposMap = new Map(tipos.map((t) => [t.id, t]));
+	const gruposMap = new Map(gruposRaw.map((g) => [g.id, g.name]));
 
 	return json({
 		podeCriar: can(actor, 'event.manage') || groupsWhere(actor, 'event.manage').length > 0,
+		tipos: tipos.filter((t) => t.active || eventos.some((e) => e.eventTypeId === t.id)),
 		eventos: eventos.map((e) => ({
 			id: e.id,
 			title: e.title,
@@ -89,6 +107,7 @@ export const GET = async ({ request, url, locals }) => {
 			rsvpOptions: e.rsvpOptions,
 			eventType: tiposMap.get(e.eventTypeId) ?? null,
 			groupId: e.groupId,
+			groupName: e.groupId ? (gruposMap.get(e.groupId) ?? null) : null,
 			responsiblePersonId: e.responsiblePersonId,
 			createdAt: e.createdAt
 		}))

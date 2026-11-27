@@ -16,9 +16,14 @@ describe('navegação', () => {
 		]);
 	});
 
-	it('membro ganha PGs e escalas, mas nada de cuidar de outros nem administrar', () => {
-		const h = hrefs('membro');
+	it('membro ganha Subgrupos e escalas, mas nada de cuidar de outros nem administrar', () => {
+		const itens = itensNavegacao(permissoesDe('membro'));
+		const h = itens.map((i) => i.href);
 		expect(h).toEqual(expect.arrayContaining(['/grupos', '/responsabilidades', '/financeiro']));
+		expect(itens.find((i) => i.href === '/grupos')).toMatchObject({
+			rotulo: 'Subgrupos',
+			rotuloCurto: 'Subgrupos'
+		});
 		expect(h).not.toContain('/pessoas');
 		expect(h).not.toContain('/admin');
 		expect(h).not.toContain('/lideranca');
