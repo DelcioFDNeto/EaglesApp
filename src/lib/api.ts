@@ -10,6 +10,7 @@
 
 import * as envPublico from '$env/static/public';
 import { buscarComCache } from '$lib/cache/sync';
+import type { AtributosPessoa } from '$shared/atributos';
 
 /**
  * Endereço da API, fixado no build a partir de `PUBLIC_API_URL`
@@ -80,6 +81,8 @@ export type Perfil = {
 	dataNascimento: string | null;
 	criadoEm: string;
 	podeAlterarStatus?: boolean;
+	podeAvaliarAtributos?: boolean;
+	atributos?: AtributosPessoa;
 	perfil: {
 		telefone: string | null;
 		whatsapp: string | null;

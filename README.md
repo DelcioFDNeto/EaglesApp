@@ -24,21 +24,21 @@ Como publicar e operar: [`DEPLOY.md`](DEPLOY.md).
 
 ## Estado atual do projeto
 
-> Conferido na revisão atual (`27/11/2026`): **65** arquivos de rota da API, **26** telas SPA, **13** migrações SQL (`0000`–`0012`), **39** tabelas no schema e **31** suítes de testes automatizados com PGlite.
+> Conferido na revisão atual (`27/11/2026`): **70** arquivos de rota da API, **27** telas SPA, **14** migrações SQL (`0000`–`0013`), **41** tabelas no schema e **33** suítes de testes automatizados com PGlite.
 
-| Módulo                          | Situação                           | Entregas principais                                                                                                                                                                                                               |
-| ------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **M01 — Fundação**              | Em produção                        | Autenticação por convite + senha Argon2id, JWT conferido em sessão revogável no banco, bloqueio progressivo, rate limit pré-hash, PWA, cache offline IndexedDB (limpo no logout), prévia WhatsApp (OG) e navegação desktop/mobile |
-| **M02 — Pessoas**               | Em produção (Ciclo 2)              | Cadastro progressivo, perfil próprio, ficha `/pessoas/[id]`, caminhada (`visitante` → `recorrente` → `membro`) com troca automática de acesso e histórico, regras de menores 16–17 anos (ADR 0003)                                |
-| **M03 — RBAC**                  | Em produção                        | Ponto único de autorização (`policy.ts`), papéis configuráveis com escopo (`global` / `group` / `self`), Master invisível, até 2 líderes com mandato de 2 anos (`/lideranca`) e conselheiros com atuação global na equipe         |
-| **M04 — Subgrupos**             | Em produção (Ciclo 3)              | Criação, edição, arquivamento/reativação pelo líder, transferência individual ou em lote com histórico imutável (`group_member_history`) e chegadas/saídas                                                                        |
-| **M05 — Eventos e PGs**         | Em produção (Ciclo 1)              | Tipo padrão **PG (Pequeno Grupo)** criado de fábrica, filtro por tipo na agenda, tipos configuráveis com cor/desativação, criação/edição/cancelamento preservando respostas, opções de RSVP configuráveis e compartilhamento      |
-| **M06 — Presença e Frequência** | Em produção (Ciclo 4)              | Histórico append-only de RSVP (`rsvp_history`), chamada completa nos PGs (todos os membros ativos + visitantes que responderam) e em encontros de subgrupo, check-in por QR Code opcional, tela `/frequencia` e ficha da pessoa   |
-| **M07 — Responsabilidades**     | Em produção                        | Tipos configuráveis com intervalo mínimo, escala manual e geração determinística em modo proposta → revisão → confirmação, histórico de trocas                                                                                    |
-| **M08 — Comunicação**           | Em produção                        | Anúncios internos por público, modelos reutilizáveis com variáveis prontos para WhatsApp e preferências com janela de silêncio (`22h–7h`)                                                                                         |
-| **M09 — Financeiro**            | Em produção                        | Livro-caixa imutável em centavos inteiros (estorno único, gatilho no banco), regras de contribuição vs. doação, aprovação opcional de despesas, visibilidade por escopo e exportação CSV                                          |
-| **M10 — Assistente de IA**      | Em produção (desligado por padrão) | Motor determinístico (custo zero) sob flag `ia_assistente`, redação de avisos, resumo de ata/tarefas, sinais de atenção, divisão de grupos com confirmação humana obrigatória (RN-27) e pseudonimização de menores                |
-| **M11 — Administração**         | Em produção                        | Chaves de funcionalidade (nascem desligadas), gestão de papéis e atribuições por escopo, trilha de auditoria imutável (`audit_log`)                                                                                               |
+| Módulo                          | Situação                           | Entregas principais                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **M01 — Fundação**              | Em produção                        | Autenticação por convite + senha Argon2id, JWT conferido em sessão revogável no banco, bloqueio progressivo, rate limit pré-hash, PWA, cache offline IndexedDB (limpo no logout), prévia WhatsApp (OG) e navegação desktop/mobile                                                                                                                                          |
+| **M02 — Pessoas e Draft**       | Em produção (Ciclo 2 + Draft)      | Cadastro progressivo, perfil próprio, ficha `/pessoas/[id]`, caminhada (`visitante` → `recorrente` → `membro`) com troca automática de acesso e histórico, regras de menores 16–17 anos (ADR 0003), perfil de atributos em 4 eixos (Físico, Bíblico, Mental, Coordenação Motora · 0–10 + medidas opcionais) e tela `/draft` com comparativo radar e balanceamento de times |
+| **M03 — RBAC**                  | Em produção                        | Ponto único de autorização (`policy.ts`), papéis configuráveis com escopo (`global` / `group` / `self`), Master invisível, até 2 líderes com mandato de 2 anos (`/lideranca`) e conselheiros com atuação global na equipe                                                                                                                                                  |
+| **M04 — Subgrupos**             | Em produção (Ciclo 3)              | Criação, edição, arquivamento/reativação pelo líder, transferência individual ou em lote com histórico imutável (`group_member_history`) e chegadas/saídas                                                                                                                                                                                                                 |
+| **M05 — Eventos e PGs**         | Em produção (Ciclo 1)              | Tipo padrão **PG (Pequeno Grupo)** criado de fábrica, filtro por tipo na agenda, tipos configuráveis com cor/desativação, criação/edição/cancelamento preservando respostas, opções de RSVP configuráveis e compartilhamento                                                                                                                                               |
+| **M06 — Presença e Frequência** | Em produção (Ciclo 4)              | Histórico append-only de RSVP (`rsvp_history`), chamada completa nos PGs (todos os membros ativos + visitantes que responderam) e em encontros de subgrupo, check-in por QR Code opcional, tela `/frequencia` e ficha da pessoa                                                                                                                                            |
+| **M07 — Responsabilidades**     | Em produção                        | Tipos configuráveis com intervalo mínimo, escala manual e geração determinística em modo proposta → revisão → confirmação, histórico de trocas                                                                                                                                                                                                                             |
+| **M08 — Comunicação**           | Em produção                        | Anúncios internos por público, modelos reutilizáveis com variáveis prontos para WhatsApp e preferências com janela de silêncio (`22h–7h`)                                                                                                                                                                                                                                  |
+| **M09 — Financeiro**            | Em produção                        | Livro-caixa imutável em centavos inteiros (estorno único, gatilho no banco), regras de contribuição vs. doação, aprovação opcional de despesas, visibilidade por escopo e exportação CSV                                                                                                                                                                                   |
+| **M10 — Assistente de IA**      | Em produção (desligado por padrão) | Motor determinístico (custo zero) sob flag `ia_assistente`, redação de avisos, resumo de ata/tarefas, sinais de atenção, divisão de grupos com confirmação humana obrigatória (RN-27) e pseudonimização de menores                                                                                                                                                         |
+| **M11 — Administração**         | Em produção                        | Chaves de funcionalidade (nascem desligadas), gestão de papéis e atribuições por escopo, trilha de auditoria imutável (`audit_log`)                                                                                                                                                                                                                                        |
 
 ---
 
@@ -69,7 +69,7 @@ cp .env.example .env                                   # já vem pronto para o b
 
 docker compose -f deploy/docker-compose.dev.yml up -d  # PostgreSQL 16 em localhost:5432
 
-npm run db:migrate                                     # aplica as migrações (0000–0012)
+npm run db:migrate                                     # aplica as migrações (0000–0013)
 npm run db:seed                                        # dados de exemplo (pode repetir)
 npm run dev                                            # http://localhost:5173
 ```
@@ -135,12 +135,13 @@ firebase.json            hosting SPA, cache do Service Worker e cabeçalhos de s
 src/
 ├── lib/
 │   ├── server/          código que NUNCA vai para o navegador
-│   │   ├── db/          schema (39 tabelas), migrações (0000–0012), conexão
+│   │   ├── db/          schema (41 tabelas), migrações (0000–0013), conexão
 │   │   ├── auth/        senha, sessão, JWT, convite, bloqueio, rate limit, e-mail
 │   │   ├── policy/      autorização — o ponto único de decisão
 │   │   ├── lideranca/   Master, os 2 líderes e seus mandatos
 │   │   ├── bootstrap/   catálogo (inclui tipo PG), primeiro acesso (Master), semente de dev
 │   │   ├── pessoas/     alvo, jornada (estágios), regras de menores, contato
+│   │   ├── draft/       atributos de perfil (4 eixos 0–10 + medidas) e balanceador determinístico
 │   │   ├── grupos/      transferência de subgrupo com histórico imutável
 │   │   ├── eventos/     regras de criação, edição, cancelamento e tipos
 │   │   ├── presenca/    cálculo de frequência (PGs da equipe, subgrupos, pessoa e mês)
@@ -154,18 +155,19 @@ src/
 │   │   └── env.ts       variáveis validadas na subida
 │   ├── cache/           cache offline IndexedDB e sincronização (limpo no logout)
 │   ├── eventos/         formulário e validação de eventos
-│   ├── ui/              design system (Moldura, PainelEntrada, GraficoMensal, Botao, Campo, Marca…)
+│   ├── pessoas/         visualização e editor do perfil de atributos (Draft)
+│   ├── ui/              design system (Moldura, PainelEntrada, GraficoMensal, RadarAtributos, Botao, Campo, Marca…)
 │   ├── styles/          tokens WCAG AA, tema claro e escuro, fonte Archivo
-│   ├── shared/          utilitários compartilhados (senha, telefone, opções RSVP)
+│   ├── shared/          utilitários compartilhados (senha, telefone, opções RSVP, atributos/Draft)
 │   ├── navegacao.ts     menu lateral desktop e barra inferior mobile por permissão
 │   ├── sessao.svelte.ts estado global da sessão no SPA
 │   └── api.ts           cliente da API usado pelas telas
 ├── routes/
-│   ├── api/             65 arquivos de rota da API (só no build da API e no dev)
-│   └── …                26 telas do SPA
+│   ├── api/             70 arquivos de rota da API (só no build da API e no dev)
+│   └── …                27 telas do SPA
 └── hooks.server.ts      CORS, cabeçalhos de segurança, manutenção
 deploy/                  Dockerfile da API, backup diário, primeiro-master.ts, compose dev
-tests/                   31 arquivos de teste (20 integração PGlite + 11 unidade)
+tests/                   33 arquivos de teste (21 integração PGlite + 12 unidade)
 docs/                    arquitetura, ciclos de entrega e ADRs
 infra/                   LEGADO (stack do M01 com Caddy) — não usada
 ```

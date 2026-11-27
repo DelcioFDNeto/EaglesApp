@@ -1388,3 +1388,91 @@ export const mandatoLider = pgTable(
 			.where(sql`${t.encerradoEm} is null`)
 	]
 );
+
+// ---------------------------------------------------------------------------
+// Perfis de Atributos & Draft — avaliação em 4 eixos (0–10) + dados básicos
+// ---------------------------------------------------------------------------
+
+/**
+ * Perfil de atributos para Draft e organização de atividades/provas.
+ *
+ * Separado de `person_profile` para manter isolados os dados sensíveis de
+ * contato/família (`person.view_sensitive`) do perfil de atributos visível
+ * aos membros Eagles (`person.view`).
+ */
+export const personAttribute = pgTable(
+	'person_attribute',
+	{
+		id: pk(),
+		personId: uuid('person_id')
+			.notNull()
+			.references(() => person.id, { onDelete: 'cascade' }),
+
+		// Os 4 atributos principais (escala 0 a 10, opcionais até avaliação)
+		physical: integer('physical'),
+		biblical: integer('biblical'),
+		mental: integer('mental'),
+		motor: integer('motor'),
+
+		// Dados complementares sólidos e não invasivos (sempre opcionais)
+		/** Altura em centímetros (100 a 250). */
+		heightCm: integer('height_cm'),
+		/** Peso em décimos de kg (ex.: 725 = 72,5 kg; 300 a 2500). */
+		weightTenthsKg: integer('weight_tenths_kg'),
+		/** 'destro' | 'canhoto' | 'ambidestro' */
+		dominantSide: text('dominant_side'),
+		/** 'PP' | 'P' | 'M' | 'G' | 'GG' | 'XG' */
+		shirtSize: text('shirt_size'),
+		/** Pontos fortes / especialidades (ex.: velocidade, memória bíblica). */
+		strengths: text('strengths'),
+		/** Observação para provas/draft (preferências ou restrição física leve). */
+		draftNotes: text('draft_notes'),
+
+		evaluatedByPersonId: uuid('evaluated_by_person_id').references(() => person.id, {
+			onDelete: 'set null'
+		}),
+		evaluatedAt: timestamp('evaluated_at', { withTimezone: true }),
+
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [uniqueIndex('person_attribute_person_idx').on(t.personId)]
+);
+
+/**
+ * Sessões de Draft salvas pela liderança/conselheiros (sugerir → ajustar → salvar).
+ */
+export const draftSession = pgTable(
+	'draft_session',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		notes: text('notes'),
+		/** 'equilibrado' | 'fisico' | 'biblico' | 'mental' | 'coordenacao' */
+		focus: text('focus').notNull().default('equilibrado'),
+		/** Array de times: [{ nome, membros: [{ personId, nome }] }] */
+		teams: jsonb('teams').notNull(),
+		createdByPersonId: uuid('created_by_person_id')
+			.notNull()
+			.references(() => person.id),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [index('draft_session_team_idx').on(t.teamId, t.createdAt)]
+);
+
+export const personAttributeRelations = relations(personAttribute, ({ one }) => ({
+	person: one(person, { fields: [personAttribute.personId], references: [person.id] }),
+	evaluatedBy: one(person, {
+		fields: [personAttribute.evaluatedByPersonId],
+		references: [person.id]
+	})
+}));
+
+export const draftSessionRelations = relations(draftSession, ({ one }) => ({
+	team: one(team, { fields: [draftSession.teamId], references: [team.id] }),
+	createdBy: one(person, { fields: [draftSession.createdByPersonId], references: [person.id] })
+}));

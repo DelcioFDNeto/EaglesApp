@@ -1,11 +1,23 @@
 import { json } from '@sveltejs/kit';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
-import { person, personProfile, personStatusHistory, userAccount } from '$server/db/schema';
+import {
+	person,
+	personAttribute,
+	personProfile,
+	personStatusHistory,
+	userAccount
+} from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
+import { naoEhMaster } from '$server/lideranca/regras';
 import { CAMPOS_RESTRITOS_MENOR, validarIdade } from '$server/pessoas/menores';
+import {
+	atributosBasicosSchema,
+	pesoParaDecimos,
+	serializarAtributos
+} from '$server/draft/atributos';
 
 const atualizarPerfilSchema = z.object({
 	nome: z.string().trim().min(1).max(200).optional(),
@@ -26,7 +38,9 @@ const atualizarPerfilSchema = z.object({
 	// O estágio na jornada não muda aqui: é de líder/conselheiro, com histórico
 	// (POST /api/pessoas/[id]/estagio). Aceito e ignorado, por compatibilidade.
 	status: z.string().optional(),
-	observacoes: z.string().trim().max(1000).optional().nullable()
+	observacoes: z.string().trim().max(1000).optional().nullable(),
+	// Dados complementares do perfil de atributos (notas 0–10 continuam restritas à liderança/conselheiros).
+	...atributosBasicosSchema.shape
 });
 
 function vazioParaNull(v: string | null | undefined): string | null {
@@ -65,18 +79,30 @@ export const GET = async ({ request, locals }) => {
 		return json({ erro: 'Pessoa não encontrada.' }, { status: 404 });
 	}
 
-	const [perfil] = await banco
-		.select()
-		.from(personProfile)
-		.where(eq(personProfile.personId, actor.personId))
-		.limit(1);
+	const [[perfil], [linhaAtributo], historico] = await Promise.all([
+		banco.select().from(personProfile).where(eq(personProfile.personId, actor.personId)).limit(1),
+		banco
+			.select()
+			.from(personAttribute)
+			.where(eq(personAttribute.personId, actor.personId))
+			.limit(1),
+		banco
+			.select()
+			.from(personStatusHistory)
+			.where(eq(personStatusHistory.personId, actor.personId))
+			.orderBy(desc(personStatusHistory.occurredAt))
+			.limit(30)
+	]);
 
-	const historico = await banco
-		.select()
-		.from(personStatusHistory)
-		.where(eq(personStatusHistory.personId, actor.personId))
-		.orderBy(desc(personStatusHistory.occurredAt))
-		.limit(30);
+	let avaliadoPorNome: string | null = null;
+	if (linhaAtributo?.evaluatedByPersonId) {
+		const [autor] = await banco
+			.select({ nome: person.fullName })
+			.from(person)
+			.where(and(eq(person.id, linhaAtributo.evaluatedByPersonId), naoEhMaster(person.id)))
+			.limit(1);
+		avaliadoPorNome = autor?.nome ?? null;
+	}
 
 	return json({
 		id: pessoa.id,
@@ -84,6 +110,8 @@ export const GET = async ({ request, locals }) => {
 		dataNascimento: pessoa.birthDate,
 		criadoEm: pessoa.createdAt,
 		podeAlterarStatus: false,
+		podeAvaliarAtributos: can(actor, 'person.update', { personId: actor.personId }),
+		atributos: serializarAtributos(linhaAtributo, avaliadoPorNome),
 		perfil: perfil
 			? {
 					telefone: perfil.phone,
@@ -147,17 +175,42 @@ export const PUT = async ({ request, locals }) => {
 
 	const dados = resultado.data;
 
-	const [perfilExistente] = await banco
-		.select()
-		.from(personProfile)
-		.where(eq(personProfile.personId, actor.personId))
-		.limit(1);
+	const [[perfilExistente], [eu], [attrExistente]] = await Promise.all([
+		banco.select().from(personProfile).where(eq(personProfile.personId, actor.personId)).limit(1),
+		banco
+			.select({ birthDate: person.birthDate })
+			.from(person)
+			.where(eq(person.id, actor.personId))
+			.limit(1),
+		banco
+			.select()
+			.from(personAttribute)
+			.where(eq(personAttribute.personId, actor.personId))
+			.limit(1)
+	]);
 
-	const [eu] = await banco
-		.select({ birthDate: person.birthDate })
-		.from(person)
-		.where(eq(person.id, actor.personId))
-		.limit(1);
+	const enviouAtributoBasico =
+		dados.alturaCm !== undefined ||
+		dados.pesoKg !== undefined ||
+		dados.lateralidade !== undefined ||
+		dados.tamanhoCamiseta !== undefined ||
+		dados.pontosFortes !== undefined;
+
+	const attrParaSalvar = {
+		heightCm: dados.alturaCm !== undefined ? dados.alturaCm : (attrExistente?.heightCm ?? null),
+		weightTenthsKg:
+			dados.pesoKg !== undefined
+				? pesoParaDecimos(dados.pesoKg)
+				: (attrExistente?.weightTenthsKg ?? null),
+		dominantSide:
+			dados.lateralidade !== undefined ? dados.lateralidade : (attrExistente?.dominantSide ?? null),
+		shirtSize:
+			dados.tamanhoCamiseta !== undefined
+				? dados.tamanhoCamiseta
+				: (attrExistente?.shirtSize ?? null),
+		strengths:
+			dados.pontosFortes !== undefined ? dados.pontosFortes : (attrExistente?.strengths ?? null)
+	};
 
 	const valor = <T>(novo: string | null | undefined, atual: T | null | undefined) =>
 		novo !== undefined ? vazioParaNull(novo) : (atual ?? null);
@@ -193,9 +246,13 @@ export const PUT = async ({ request, locals }) => {
 		irmaos: perfilParaSalvar.siblings,
 		vinculosFamiliares: perfilParaSalvar.familyTies
 	};
+	const restritosLista: string[] = CAMPOS_RESTRITOS_MENOR.filter((c) => restritos[c] !== null);
+	if (Object.values(attrParaSalvar).some((v) => v !== null)) {
+		restritosLista.push('atributos');
+	}
 	const erroIdade = validarIdade(
 		perfilParaSalvar.birthDate,
-		CAMPOS_RESTRITOS_MENOR.filter((c) => restritos[c] !== null),
+		restritosLista,
 		Boolean(conta?.email || conta?.phone)
 	);
 	if (erroIdade) {
@@ -221,6 +278,22 @@ export const PUT = async ({ request, locals }) => {
 				.where(eq(personProfile.personId, actor.personId));
 		} else {
 			await tx.insert(personProfile).values(perfilParaSalvar);
+		}
+
+		if (enviouAtributoBasico) {
+			const agora = new Date();
+			if (attrExistente) {
+				await tx
+					.update(personAttribute)
+					.set({ ...attrParaSalvar, updatedAt: agora })
+					.where(eq(personAttribute.id, attrExistente.id));
+			} else {
+				await tx.insert(personAttribute).values({
+					personId: actor.personId,
+					...attrParaSalvar,
+					updatedAt: agora
+				});
+			}
 		}
 	});
 

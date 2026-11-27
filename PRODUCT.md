@@ -46,6 +46,7 @@ Sucesso significa conselheiros fechando a semana do PG em poucos minutos, membro
     - Ciclo 2 (M02 Pessoas): editar ficha, mover estágios na caminhada com troca automática do papel base e histórico (entrada/saída de `membro` exclusiva de líderes), regras de menores 16–17 anos.
     - Ciclo 3 (M04 Subgrupos): editar subgrupos, arquivar/reativar pelo líder, transferir pessoas individualmente ou em lote com histórico append-only.
     - Ciclo 4 (M06 Presença e Frequência): histórico append-only de RSVP, chamada completa nos PGs (todos os membros ativos dos Eagles + visitantes que responderam) e em encontros de subgrupo, tela `/frequencia` (por tipo de evento da equipe e por subgrupo) e frequência na ficha da pessoa.
+    - Expansão de Perfis e Draft (migração `0013`): perfil de atributos em 4 eixos (**Físico**, **Bíblico**, **Mental**, **Coordenação Motora**, escala `0–10`) + dados complementares opcionais não invasivos (altura, peso, lateralidade, camiseta, pontos fortes e observação para provas), visível entre membros Eagles sem expor dados sensíveis, com gráfico radar, comparação lado a lado, motor determinístico de balanceamento de times, ajuste manual, compartilhamento no WhatsApp e histórico de Drafts salvos em `/draft`.
   - **Qualidade validada:** 339 testes automatizados (unidade + integração real em PGlite), verificação de tipos e formatação no CI.
 - **Regras invariantes de domínio e engenharia:**
   - Pessoa (`person`) existe sem conta de acesso (`user_account`); apenas `full_name` é obrigatório em nível de sistema.

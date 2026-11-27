@@ -13,6 +13,7 @@ export type NomeIcone =
 	| 'grupos'
 	| 'escalas'
 	| 'frequencia'
+	| 'draft'
 	| 'comunicacao'
 	| 'pessoas'
 	| 'financeiro'
@@ -80,6 +81,13 @@ export function itensNavegacao(permissoes: readonly string[]): ItemNav[] {
 			rotulo: 'Avisos',
 			rotuloCurto: 'Avisos',
 			icone: 'comunicacao',
+			secao: 'dia_a_dia'
+		},
+		tem(permissoes, 'person.view') && {
+			href: '/draft',
+			rotulo: 'Draft',
+			rotuloCurto: 'Draft',
+			icone: 'draft',
 			secao: 'dia_a_dia'
 		},
 		tem(permissoes, 'person.create', 'person.invite') && {

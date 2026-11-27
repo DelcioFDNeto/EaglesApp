@@ -6,6 +6,7 @@ import {
 	group,
 	groupMemberHistory,
 	person,
+	personAttribute,
 	personProfile,
 	personStatusHistory,
 	userAccount
@@ -18,6 +19,7 @@ import { ESTAGIOS, ROTULO_ESTAGIO, podeMudarEstagio, type Estagio } from '$serve
 import { CAMPOS_RESTRITOS_MENOR, MAIORIDADE, idadeEm, validarIdade } from '$server/pessoas/menores';
 import { naoEhMaster } from '$server/lideranca/regras';
 import { podeTransferir } from '$server/grupos/transferencia';
+import { serializarAtributos } from '$server/draft/atributos';
 import { normalizarTelefone, telefoneValido } from '$shared/telefone';
 import type { Actor } from '$server/policy/policy';
 
@@ -102,10 +104,20 @@ export const GET = async ({ request, params, locals }) => {
 				).map((g) => [g.id, g.nome])
 	);
 
+	const [linhaAtributo] = await banco
+		.select()
+		.from(personAttribute)
+		.where(eq(personAttribute.personId, alvo.id))
+		.limit(1);
+
 	// Nomes de quem fez cada mudança. O Master não tem nome para a equipe.
 	const autores = [
 		...new Set(
-			[...historico, ...caminho].map((h) => h.changedByPersonId).filter((x): x is string => !!x)
+			[
+				...historico.map((h) => h.changedByPersonId),
+				...caminho.map((c) => c.changedByPersonId),
+				linhaAtributo?.evaluatedByPersonId ?? null
+			].filter((x): x is string => !!x)
 		)
 	];
 	const nomes = new Map(
@@ -121,6 +133,9 @@ export const GET = async ({ request, params, locals }) => {
 
 	const estagio = perfil?.status ?? 'visitante';
 	const idade = alvo.birthDate ? idadeEm(alvo.birthDate) : null;
+	const avaliadoPor = linhaAtributo?.evaluatedByPersonId
+		? (nomes.get(linhaAtributo.evaluatedByPersonId) ?? null)
+		: null;
 
 	return json({
 		pessoa: {
@@ -133,6 +148,7 @@ export const GET = async ({ request, params, locals }) => {
 			dataEntrada: perfil?.joinedAt ?? null,
 			criadoEm: alvo.createdAt,
 			ehMenor: sensivel && idade !== null ? idade < MAIORIDADE : null,
+			atributos: serializarAtributos(linhaAtributo, avaliadoPor),
 			dados: sensivel
 				? {
 						dataNascimento: alvo.birthDate,
@@ -149,6 +165,7 @@ export const GET = async ({ request, params, locals }) => {
 		},
 		permissoes: {
 			podeEditar: can(actor, 'person.update', contexto) && alcancaAlvo(actor, alvo) && sensivel,
+			podeEditarAtributos: can(actor, 'person.update', contexto) && alcancaAlvo(actor, alvo),
 			estagiosPermitidos: estagiosPermitidos(actor, alvo),
 			mudarDePg: {
 				destinos,
@@ -274,15 +291,35 @@ export const PATCH = async ({ request, params, locals, getClientAddress }) => {
 	}
 	const nascimento = dados.dataNascimento !== undefined ? dados.dataNascimento : alvo.birthDate;
 
-	const [conta] = await banco
-		.select({ email: userAccount.email, phone: userAccount.phone })
-		.from(userAccount)
-		.where(eq(userAccount.personId, alvo.id))
-		.limit(1);
+	const [[conta], [attrAtual]] = await Promise.all([
+		banco
+			.select({ email: userAccount.email, phone: userAccount.phone })
+			.from(userAccount)
+			.where(eq(userAccount.personId, alvo.id))
+			.limit(1),
+		banco.select().from(personAttribute).where(eq(personAttribute.personId, alvo.id)).limit(1)
+	]);
+
+	const temAtributos = Boolean(
+		attrAtual &&
+		(attrAtual.physical !== null ||
+			attrAtual.biblical !== null ||
+			attrAtual.mental !== null ||
+			attrAtual.motor !== null ||
+			attrAtual.heightCm !== null ||
+			attrAtual.weightTenthsKg !== null ||
+			attrAtual.dominantSide !== null ||
+			attrAtual.shirtSize !== null ||
+			attrAtual.strengths !== null ||
+			attrAtual.draftNotes !== null)
+	);
+
+	const restritosPreenchidos: string[] = CAMPOS_RESTRITOS_MENOR.filter((c) => final[c] !== null);
+	if (temAtributos) restritosPreenchidos.push('atributos');
 
 	const erroIdade = validarIdade(
 		nascimento,
-		CAMPOS_RESTRITOS_MENOR.filter((c) => final[c] !== null),
+		restritosPreenchidos,
 		Boolean(conta?.email || conta?.phone)
 	);
 	if (erroIdade) return json({ erro: erroIdade, campo: 'dataNascimento' }, { status: 400 });

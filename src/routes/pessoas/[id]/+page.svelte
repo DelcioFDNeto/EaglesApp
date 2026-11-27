@@ -6,6 +6,9 @@
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
 	import GraficoMensal from '$ui/GraficoMensal.svelte';
+	import ResumoAtributos from '$lib/pessoas/ResumoAtributos.svelte';
+	import EditorAtributos from '$lib/pessoas/EditorAtributos.svelte';
+	import { ATRIBUTOS_VAZIOS, type AtributosPessoa } from '$shared/atributos';
 	import { api } from '$lib/api';
 
 	type Estagio = 'visitante' | 'recorrente' | 'membro';
@@ -41,12 +44,15 @@
 	let pessoa = $state<any>(null);
 	let permissoes = $state<{
 		podeEditar: boolean;
+		podeEditarAtributos?: boolean;
 		estagiosPermitidos: Estagio[];
 		mudarDePg?: { destinos: Array<{ id: string; nome: string }>; podeTirarDeTodos: boolean };
 	}>({
 		podeEditar: false,
+		podeEditarAtributos: false,
 		estagiosPermitidos: []
 	});
+	let editandoAtributos = $state(false);
 	let historico = $state<any[]>([]);
 	let historicoGrupos = $state<any[]>([]);
 
@@ -419,6 +425,43 @@
 				</section>
 			{/if}
 
+			<!-- Perfil de Atributos (Draft) -->
+			<section class="bloco" aria-labelledby="titulo-atributos">
+				<div class="cabecalho-bloco">
+					<h2 id="titulo-atributos">Atributos (Draft)</h2>
+					<div class="acoes-bloco">
+						<a href="/draft" class="link-sutil">Abrir Draft</a>
+						{#if permissoes.podeEditarAtributos && !pessoa.ehMenor && !editandoAtributos}
+							<Botao variante="texto" onclick={() => (editandoAtributos = true)}>Avaliar</Botao>
+						{/if}
+					</div>
+				</div>
+
+				{#if pessoa.ehMenor}
+					<Aviso tom="info" titulo="Menor de 18 anos">
+						Perfil de atributos e medidas ficam indisponíveis até o responsável dar consentimento
+						(LGPD).
+					</Aviso>
+				{:else if editandoAtributos}
+					<EditorAtributos
+						pessoaId={pessoa.id}
+						pessoaNome={pessoa.nome}
+						inicial={(pessoa.atributos ?? ATRIBUTOS_VAZIOS) as AtributosPessoa}
+						onSalvo={(atributosAtualizados, msg) => {
+							pessoa = { ...pessoa, atributos: atributosAtualizados };
+							mensagem = msg;
+							editandoAtributos = false;
+						}}
+						onCancelar={() => (editandoAtributos = false)}
+					/>
+				{:else}
+					<ResumoAtributos
+						nome={pessoa.nome}
+						atributos={(pessoa.atributos ?? ATRIBUTOS_VAZIOS) as AtributosPessoa}
+					/>
+				{/if}
+			</section>
+
 			<!-- Subgrupo -->
 			{#if podeMudarPg}
 				<section class="bloco" aria-labelledby="titulo-pg">
@@ -664,6 +707,21 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: var(--esp-2);
+	}
+
+	.acoes-bloco {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--esp-3);
+	}
+
+	.link-sutil {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-marca);
+		min-height: var(--toque-min);
+		display: inline-flex;
+		align-items: center;
 	}
 
 	.botoes {

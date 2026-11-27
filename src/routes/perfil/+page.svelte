@@ -5,11 +5,25 @@
 	import Campo from '$ui/Campo.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
+	import ResumoAtributos from '$lib/pessoas/ResumoAtributos.svelte';
+	import EditorAtributos from '$lib/pessoas/EditorAtributos.svelte';
+	import {
+		ATRIBUTOS_VAZIOS,
+		LATERALIDADES,
+		ROTULO_LATERALIDADE,
+		TAMANHOS_CAMISETA,
+		formatarAltura,
+		parsePesoTexto,
+		type AtributosPessoa,
+		type Lateralidade,
+		type TamanhoCamiseta
+	} from '$shared/atributos';
 	import { api, apiCache, type Perfil } from '$lib/api';
 
 	let perfil = $state<Perfil | null>(null);
 	let carregando = $state(true);
 	let editando = $state(false);
+	let editandoAtributos = $state(false);
 	let mensagem = $state<string | undefined>(undefined);
 	let erro = $state<string | undefined>(undefined);
 	let salvando = $state(false);
@@ -27,6 +41,17 @@
 		'visitante'
 	);
 	let formObservacoes = $state('');
+	let formAltura = $state('');
+	let formPeso = $state('');
+	let formLateralidade = $state<Lateralidade | ''>('');
+	let formCamiseta = $state<TamanhoCamiseta | ''>('');
+	let formPontosFortes = $state('');
+
+	const previewAltura = $derived.by(() => {
+		const n = Number(formAltura.trim());
+		if (!formAltura.trim() || !Number.isInteger(n) || n < 100 || n > 250) return null;
+		return formatarAltura(n);
+	});
 
 	const STATUS_ROTULO: Record<string, string> = {
 		visitante: 'Visitante',
@@ -40,11 +65,11 @@
 		carregarPerfil();
 	});
 
-	async function carregarPerfil() {
+	async function carregarPerfil(forcar = false) {
 		carregando = true;
 		erro = undefined;
 		try {
-			const dados = await apiCache.perfil();
+			const dados = await apiCache.perfil(forcar ? 0 : undefined);
 			perfil = dados;
 			formNome = dados.nome ?? '';
 			formTelefone = dados.perfil?.telefone ?? '';
@@ -57,6 +82,14 @@
 			formVinculosFamiliares = dados.perfil?.vinculosFamiliares ?? '';
 			formStatus = (dados.perfil?.status as any) ?? 'visitante';
 			formObservacoes = dados.perfil?.observacoes ?? '';
+			formAltura = dados.atributos?.alturaCm != null ? String(dados.atributos.alturaCm) : '';
+			formPeso =
+				dados.atributos?.pesoKg != null
+					? dados.atributos.pesoKg.toLocaleString('pt-BR', { maximumFractionDigits: 1 })
+					: '';
+			formLateralidade = dados.atributos?.lateralidade ?? '';
+			formCamiseta = dados.atributos?.tamanhoCamiseta ?? '';
+			formPontosFortes = dados.atributos?.pontosFortes ?? '';
 		} catch (e: any) {
 			erro =
 				e.message === 'sem_conexao'
@@ -68,9 +101,30 @@
 	}
 
 	async function salvarPerfil() {
-		salvando = true;
 		erro = undefined;
 		mensagem = undefined;
+
+		let alturaCm: number | null = null;
+		if (formAltura.trim()) {
+			const n = Number(formAltura.trim());
+			if (!Number.isInteger(n) || n < 100 || n > 250) {
+				erro = 'Informe a altura em centímetros inteiros entre 100 e 250 (ex.: 178).';
+				return;
+			}
+			alturaCm = n;
+		}
+
+		let pesoKg: number | null = null;
+		if (formPeso.trim()) {
+			const p = parsePesoTexto(formPeso);
+			if (p === null || Number.isNaN(p) || p < 30 || p > 250) {
+				erro = 'Informe um peso válido entre 30 e 250 kg (ex.: 72,5).';
+				return;
+			}
+			pesoKg = p;
+		}
+
+		salvando = true;
 
 		const corpo: Record<string, unknown> = {
 			nome: formNome.trim() || undefined,
@@ -82,7 +136,12 @@
 			relacionamento: formRelacionamento.trim() || null,
 			irmaos: formIrmaos.trim() || null,
 			vinculosFamiliares: formVinculosFamiliares.trim() || null,
-			observacoes: formObservacoes.trim() || null
+			observacoes: formObservacoes.trim() || null,
+			alturaCm,
+			pesoKg,
+			lateralidade: formLateralidade || null,
+			tamanhoCamiseta: formCamiseta || null,
+			pontosFortes: formPontosFortes.trim() || null
 		};
 
 		if (perfil?.podeAlterarStatus) {
@@ -95,7 +154,7 @@
 			if (res.ok) {
 				mensagem = 'Perfil atualizado com sucesso.';
 				editando = false;
-				await carregarPerfil();
+				await carregarPerfil(true);
 			} else {
 				erro = dados.erro ?? 'Não foi possível atualizar o perfil.';
 			}
@@ -183,6 +242,58 @@
 
 					<Campo id="observacoes" rotulo="Observações" bind:valor={formObservacoes} />
 
+					<fieldset class="bloco-draft-form">
+						<legend>Dados para o Draft (opcionais)</legend>
+						<p class="sub">
+							As notas de Físico, Bíblico, Mental e Coordenação Motora são avaliadas pela liderança
+							e conselheiros.
+						</p>
+						<div class="par">
+							<Campo
+								id="altura"
+								rotulo="Altura (cm)"
+								inputmode="numeric"
+								placeholder="Ex.: 178"
+								ajuda={previewAltura ? `Equivale a ${previewAltura}.` : 'Entre 100 e 250 cm.'}
+								bind:valor={formAltura}
+							/>
+							<Campo
+								id="peso"
+								rotulo="Peso (kg)"
+								placeholder="Ex.: 72,5"
+								ajuda="Entre 30 e 250 kg."
+								bind:valor={formPeso}
+							/>
+						</div>
+						<div class="par">
+							<div class="campo-select">
+								<label for="lateralidade">Mão / pé dominante</label>
+								<select id="lateralidade" bind:value={formLateralidade}>
+									<option value="">Não informado</option>
+									{#each LATERALIDADES as l (l)}
+										<option value={l}>{ROTULO_LATERALIDADE[l]}</option>
+									{/each}
+								</select>
+							</div>
+							<div class="campo-select">
+								<label for="camiseta">Tamanho de camiseta</label>
+								<select id="camiseta" bind:value={formCamiseta}>
+									<option value="">Não informado</option>
+									{#each TAMANHOS_CAMISETA as t (t)}
+										<option value={t}>{t}</option>
+									{/each}
+								</select>
+							</div>
+						</div>
+						<Campo
+							id="pontosFortes"
+							rotulo="Pontos fortes e especialidades"
+							maxlength="280"
+							placeholder="Ex.: corrida, memória bíblica, estratégia"
+							bind:valor={formPontosFortes}
+						/>
+					</fieldset>
+
 					<div class="acoes">
 						<Botao tipo="submit" largura="cheia" carregando={salvando}>Salvar alterações</Botao>
 						<Botao variante="texto" largura="cheia" onclick={() => (editando = false)}>
@@ -265,6 +376,38 @@
 					<div class="acoes">
 						<Botao onclick={() => (editando = true)} largura="cheia">Editar perfil</Botao>
 					</div>
+
+					<section class="bloco-atributos" aria-labelledby="titulo-meus-atributos">
+						<div class="cabecalho-bloco">
+							<h3 id="titulo-meus-atributos">Perfil de atributos (Draft)</h3>
+							<div class="acoes-bloco">
+								<a href="/draft" class="link-draft">Ver Draft</a>
+								{#if perfil.podeAvaliarAtributos && !editandoAtributos}
+									<Botao variante="texto" onclick={() => (editandoAtributos = true)}>Avaliar</Botao>
+								{/if}
+							</div>
+						</div>
+
+						{#if editandoAtributos}
+							<EditorAtributos
+								pessoaId={perfil.id}
+								pessoaNome={perfil.nome}
+								inicial={(perfil.atributos ?? ATRIBUTOS_VAZIOS) as AtributosPessoa}
+								onSalvo={(atributosAtualizados, msg) => {
+									if (perfil) perfil = { ...perfil, atributos: atributosAtualizados };
+									mensagem = msg;
+									editandoAtributos = false;
+									carregarPerfil(true);
+								}}
+								onCancelar={() => (editandoAtributos = false)}
+							/>
+						{:else}
+							<ResumoAtributos
+								nome={perfil.nome}
+								atributos={(perfil.atributos ?? ATRIBUTOS_VAZIOS) as AtributosPessoa}
+							/>
+						{/if}
+					</section>
 
 					{#if perfil.historico && perfil.historico.length > 0}
 						<section class="historico">
@@ -509,5 +652,69 @@
 	.carregando p {
 		color: var(--cor-texto-2);
 		font-size: var(--texto-sm);
+	}
+
+	.bloco-draft-form {
+		border: 0;
+		border-top: 1px solid var(--cor-linha);
+		padding: var(--esp-4) 0 0;
+		margin: var(--esp-2) 0 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+	}
+
+	.bloco-draft-form legend {
+		font-family: var(--fonte-titulo);
+		font-size: var(--texto-base);
+		font-weight: 700;
+		color: var(--cor-texto);
+		padding: 0;
+	}
+
+	.par {
+		display: grid;
+		gap: var(--esp-3);
+	}
+
+	@media (min-width: 34rem) {
+		.par {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+
+	.bloco-atributos {
+		padding-top: var(--esp-4);
+		border-top: 1px solid var(--cor-linha);
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+	}
+
+	.cabecalho-bloco {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--esp-2);
+	}
+
+	.cabecalho-bloco h3 {
+		font-size: var(--texto-base);
+		margin: 0;
+	}
+
+	.acoes-bloco {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--esp-3);
+	}
+
+	.link-draft {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-marca);
+		min-height: var(--toque-min);
+		display: inline-flex;
+		align-items: center;
 	}
 </style>

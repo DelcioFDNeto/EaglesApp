@@ -16,13 +16,19 @@ describe('navegação', () => {
 		]);
 	});
 
-	it('membro ganha Subgrupos e escalas, mas nada de cuidar de outros nem administrar', () => {
+	it('membro ganha Subgrupos, escalas e Draft, mas nada de cuidar de outros nem administrar', () => {
 		const itens = itensNavegacao(permissoesDe('membro'));
 		const h = itens.map((i) => i.href);
-		expect(h).toEqual(expect.arrayContaining(['/grupos', '/responsabilidades', '/financeiro']));
+		expect(h).toEqual(
+			expect.arrayContaining(['/grupos', '/responsabilidades', '/draft', '/financeiro'])
+		);
 		expect(itens.find((i) => i.href === '/grupos')).toMatchObject({
 			rotulo: 'Subgrupos',
 			rotuloCurto: 'Subgrupos'
+		});
+		expect(itens.find((i) => i.href === '/draft')).toMatchObject({
+			rotulo: 'Draft',
+			rotuloCurto: 'Draft'
 		});
 		expect(h).not.toContain('/pessoas');
 		expect(h).not.toContain('/admin');
