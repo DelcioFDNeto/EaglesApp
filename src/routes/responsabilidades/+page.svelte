@@ -363,8 +363,6 @@
 
 <main class="conteudo">
 	<div class="pilha">
-		<a href="/inicio" class="voltar">← Início</a>
-
 		<header>
 			<h1>Responsabilidades</h1>
 			<p class="sub">

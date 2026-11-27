@@ -1,43 +1,31 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import Marca from '$ui/Marca.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Botao from '$ui/Botao.svelte';
 	import InstalarPwa from '$ui/InstalarPwa.svelte';
-	import { api, apiCache, type Inicio } from '$lib/api';
+	import { apiCache, type Inicio } from '$lib/api';
+	import { sessao } from '$lib/sessao.svelte';
 
 	const boasVindas = $derived(page.url.searchParams.get('boas-vindas') === '1');
+
 	let inicio = $state<Inicio | null>(null);
 	let primeiroNome = $derived(inicio?.nome?.split(' ')[0] ?? '');
 	let carregando = $state(true);
-	let saindo = $state(false);
 	let erro = $state<string | undefined>(undefined);
 
-	const podeVerFinanceiro = $derived(
-		(inicio?.permissoes ?? []).some(
-			(p) => p === 'finance.view_all' || p === 'finance.view_group' || p === 'finance.view_own'
-		)
-	);
+	const podeCriarEvento = $derived((inicio?.permissoes ?? []).includes('event.manage'));
 
-	const podeVerAdmin = $derived(
-		(inicio?.permissoes ?? []).some(
-			(p) => p === 'settings.manage' || p === 'rbac.manage' || p === 'audit.view'
-		)
-	);
-
-	const podeVerLideranca = $derived((inicio?.permissoes ?? []).includes('rbac.manage'));
-
-	const podeGerenciarPessoas = $derived(
-		(inicio?.permissoes ?? []).some((p) => p === 'person.create' || p === 'person.invite')
-	);
-
-	const podeVerAssistente = $derived(
-		(inicio?.permissoes ?? []).some(
-			(p) => p === 'ai.use_basic' || p === 'ai.use_analytics' || p === 'ai.use_finance'
-		)
-	);
+	// "sexta-feira, 27 de novembro" → "Sexta-feira, 27 de novembro" (só a primeira letra).
+	const hoje = (() => {
+		const t = new Intl.DateTimeFormat('pt-BR', {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long'
+		}).format(new Date());
+		return t.charAt(0).toUpperCase() + t.slice(1);
+	})();
 
 	const formatadorData = new Intl.DateTimeFormat('pt-BR', {
 		weekday: 'short',
@@ -47,11 +35,53 @@
 		minute: '2-digit'
 	});
 
+	/**
+	 * Primeiros passos de quem organiza, na ordem em que um depende do outro.
+	 * Só entram os que se aplicam à pessoa; o bloco some quando tudo está feito.
+	 */
+	const passos = $derived.by(() => {
+		const p = inicio?.primeirosPassos;
+		if (!p) return [];
+		return [
+			{
+				feito: p.pg,
+				titulo: 'Criar o primeiro PG',
+				texto: 'Os PGs organizam as pessoas e os encontros.',
+				href: '/grupos'
+			},
+			{
+				feito: p.tipoEvento,
+				titulo: 'Cadastrar os tipos de evento',
+				texto: 'Ex.: PG, Encontro dos Eagles, Outside.',
+				href: '/eventos/tipos'
+			},
+			{
+				feito: p.pessoas,
+				titulo: 'Cadastrar pessoas e enviar convites',
+				texto: 'O convite vai pelo WhatsApp; a pessoa só define a senha.',
+				href: '/pessoas'
+			},
+			{
+				feito: p.evento,
+				titulo: 'Marcar o primeiro encontro',
+				texto: 'Depois disso, cada um confirma presença em um toque.',
+				href: '/eventos/novo'
+			}
+		].filter((x): x is typeof x & { feito: boolean } => x.feito !== null);
+	});
+	const faltaAlgumPasso = $derived(passos.some((p) => !p.feito));
+	// Sem nada para a coluna da direita, o painel fica numa coluna só, centrada.
+	const temLateral = $derived(
+		(inicio?.proximasResponsabilidades?.length ?? 0) > 0 || Boolean(inicio?.ultimoAviso)
+	);
+	const proximoPasso = $derived(passos.find((p) => !p.feito));
+
 	async function carregarInicio() {
 		carregando = true;
 		erro = undefined;
 		try {
 			inicio = await apiCache.inicio();
+			sessao.definir(inicio);
 		} catch (e: any) {
 			erro =
 				e.message === 'sem_conexao'
@@ -65,19 +95,6 @@
 	onMount(() => {
 		carregarInicio();
 	});
-
-	async function sair() {
-		saindo = true;
-		try {
-			await api.post('/api/auth/logout');
-		} catch {
-			// Mesmo sem conexão, encerramos a sessão local.
-		} finally {
-			localStorage.removeItem('eagles_token');
-			saindo = false;
-			await goto('/entrar');
-		}
-	}
 
 	function rotuloStatusEscala(status: string) {
 		switch (status) {
@@ -97,35 +114,19 @@
 	<title>Início · Eagles</title>
 </svelte:head>
 
-<header>
-	<div class="barra">
-		<Marca tamanho={28} comNome />
-		<Botao variante="texto" onclick={sair} carregando={saindo}>Sair</Botao>
-	</div>
-</header>
-
-{#if carregando}
-	<main class="conteudo">
-		<div class="pilha">
-			<div class="carregando">
-				<Marca tamanho={44} />
-				<p>Carregando…</p>
-			</div>
+<main class="conteudo" class:largo={temLateral}>
+	{#if carregando}
+		<div class="carregando" aria-live="polite">
+			<Marca tamanho={44} />
+			<p>Carregando…</p>
 		</div>
-	</main>
-{:else if erro}
-	<main class="conteudo">
-		<div class="pilha">
-			<div class="vazio">
-				<Marca tamanho={44} />
-				<h2>Não foi possível carregar</h2>
-				<p>{erro}</p>
-				<Botao onclick={carregarInicio} largura="cheia">Tentar novamente</Botao>
-			</div>
+	{:else if erro}
+		<div class="vazio">
+			<h1>Não foi possível carregar</h1>
+			<p>{erro}</p>
+			<Botao onclick={carregarInicio}>Tentar novamente</Botao>
 		</div>
-	</main>
-{:else}
-	<main class="conteudo">
+	{:else}
 		<div class="pilha">
 			{#if boasVindas}
 				<Aviso tom="sucesso">
@@ -133,7 +134,10 @@
 				</Aviso>
 			{/if}
 
-			<h1>Olá, {primeiroNome}</h1>
+			<header class="saudacao">
+				<p class="hoje">{hoje}</p>
+				<h1>Olá, {primeiroNome}</h1>
+			</header>
 
 			{#if inicio?.avisoLideranca}
 				<Aviso tom="aviso" titulo="Liderança">
@@ -143,325 +147,180 @@
 
 			<InstalarPwa />
 
-			{#if inicio?.proximoEvento}
-				<section class="destaque" aria-labelledby="titulo-proximo-evento">
-					<span class="etiqueta">{inicio.proximoEvento.tipoNome ?? 'Próximo encontro'}</span>
-					<h2 id="titulo-proximo-evento">{inicio.proximoEvento.title}</h2>
-					<p class="meta">
-						{formatadorData.format(new Date(inicio.proximoEvento.startsAt))}
-						{#if inicio.proximoEvento.location}
-							· {inicio.proximoEvento.location}
-						{/if}
-					</p>
-					<Botao href={`/eventos/${inicio.proximoEvento.id}`} largura="cheia">
-						Ver encontro e confirmar presença
-					</Botao>
-				</section>
-			{:else}
-				<section class="vazio">
-					<Marca tamanho={44} />
-					<h2>Ainda não há encontros agendados</h2>
-					<p>
-						Quando o próximo encontro dos Eagles estiver marcado, ele aparece aqui para você
-						confirmar presença em um toque.
-					</p>
-				</section>
-			{/if}
+			<div class="painel" class:duas-colunas={temLateral}>
+				<div class="coluna">
+					{#if inicio?.proximoEvento}
+						<section class="destaque" aria-labelledby="titulo-proximo-evento">
+							<span class="etiqueta">{inicio.proximoEvento.tipoNome ?? 'Próximo encontro'}</span>
+							<h2 id="titulo-proximo-evento">{inicio.proximoEvento.title}</h2>
+							<p class="meta">
+								{formatadorData.format(new Date(inicio.proximoEvento.startsAt))}
+								{#if inicio.proximoEvento.location}
+									· {inicio.proximoEvento.location}
+								{/if}
+							</p>
+							<Botao href={`/eventos/${inicio.proximoEvento.id}`} largura="cheia">
+								Confirmar presença
+							</Botao>
+						</section>
+					{:else}
+						<section class="destaque sem-evento" aria-labelledby="titulo-sem-evento">
+							<h2 id="titulo-sem-evento">Nenhum encontro marcado</h2>
+							<p class="meta">
+								{podeCriarEvento
+									? 'Marque o próximo encontro para as pessoas confirmarem presença.'
+									: 'Quando o próximo encontro for marcado, ele aparece aqui para você confirmar presença em um toque.'}
+							</p>
+							{#if podeCriarEvento && !faltaAlgumPasso}
+								<Botao href="/eventos/novo">Marcar encontro</Botao>
+							{/if}
+						</section>
+					{/if}
 
-			{#if inicio?.ultimoAviso}
-				<section class="bloco" aria-labelledby="titulo-ultimo-aviso">
-					<div class="cabecalho-bloco">
-						<h2 id="titulo-ultimo-aviso">Último aviso</h2>
-						<a href="/comunicacao" class="ver-tudo">Ver todos</a>
-					</div>
-					<a href="/comunicacao" class="linha-link">
-						<div class="linha-texto">
-							<strong>{inicio.ultimoAviso.title}</strong>
-							<span
-								>{inicio.ultimoAviso.body.slice(0, 120)}{inicio.ultimoAviso.body.length > 120
-									? '…'
-									: ''}</span
-							>
-						</div>
-					</a>
-				</section>
-			{/if}
-
-			{#if inicio?.proximasResponsabilidades && inicio.proximasResponsabilidades.length > 0}
-				<section class="bloco" aria-labelledby="titulo-minhas-escalas">
-					<div class="cabecalho-bloco">
-						<h2 id="titulo-minhas-escalas">Suas responsabilidades</h2>
-						<a href="/responsabilidades" class="ver-tudo">Ver todas</a>
-					</div>
-					<ul class="lista-simples">
-						{#each inicio.proximasResponsabilidades as r (r.id)}
-							<li>
-								<a href={`/eventos/${r.eventId}`} class="linha-link">
-									<div class="linha-texto">
-										<strong>{r.responsabilidadeNome}</strong>
-										<span>
-											{r.eventoTitulo} · {formatadorData.format(new Date(r.eventoInicio))}
+					{#if faltaAlgumPasso}
+						<section class="passos" aria-labelledby="titulo-passos">
+							<div class="cabecalho-bloco">
+								<h2 id="titulo-passos">Primeiros passos</h2>
+								<span class="progresso">
+									{passos.filter((p) => p.feito).length} de {passos.length}
+								</span>
+							</div>
+							<ol>
+								{#each passos as passo (passo.href)}
+									<li class:feito={passo.feito} class:atual={passo === proximoPasso}>
+										<span class="marcador" aria-hidden="true">
+											{#if passo.feito}
+												<svg viewBox="0 0 16 16" width="14" height="14">
+													<path
+														d="M3.5 8.5l3 3 6-7"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+													/>
+												</svg>
+											{/if}
 										</span>
-									</div>
-									<span class="tag tag-{r.status}">{rotuloStatusEscala(r.status)}</span>
-								</a>
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/if}
+										<div class="passo-texto">
+											{#if passo.feito}
+												<strong>{passo.titulo}</strong>
+												<span>Feito</span>
+											{:else}
+												<a href={passo.href}>{passo.titulo}</a>
+												<span>{passo.texto}</span>
+											{/if}
+										</div>
+									</li>
+								{/each}
+							</ol>
+						</section>
+					{/if}
+				</div>
 
-			<nav class="atalhos" aria-label="Navegação principal">
-				<a href="/eventos" class="atalho">
-					<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-						<rect
-							x="2"
-							y="3"
-							width="12"
-							height="11"
-							rx="1.5"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-						/>
-						<path
-							d="M5 1.5v3M11 1.5v3M2 6.5h12"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-						/>
-					</svg>
-					<span>Eventos</span>
-				</a>
-				<a href="/responsabilidades" class="atalho">
-					<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-						<path
-							d="M3 4.5h10M3 8h10M3 11.5h6"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-						/>
-						<path
-							d="M11 11.5l1.2 1.2L14.5 10"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					<span>Responsabilidades e escalas</span>
-				</a>
-				<a href="/comunicacao" class="atalho">
-					<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-						<path
-							d="M2.5 3.5h11a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H6.2L3 14.2V12h-.5a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linejoin="round"
-						/>
-					</svg>
-					<span>Comunicação e avisos</span>
-				</a>
-				{#if podeVerFinanceiro}
-					<a href="/financeiro" class="atalho">
-						<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-							<rect
-								x="2"
-								y="3.5"
-								width="12"
-								height="9"
-								rx="1.4"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-							/>
-							<circle cx="8" cy="8" r="1.8" fill="none" stroke="currentColor" stroke-width="1.4" />
-						</svg>
-						<span>Financeiro</span>
-					</a>
-				{/if}
-				{#if podeVerAdmin}
-					<a href="/admin" class="atalho">
-						<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-							<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4" />
-							<path
-								d="M8 2v1.6M8 12.4V14M2 8h1.6M12.4 8H14M3.8 3.8l1.1 1.1M11.1 11.1l1.1 1.1M12.2 3.8l-1.1 1.1M4.9 11.1l-1.1 1.1"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-								stroke-linecap="round"
-							/>
-						</svg>
-						<span>Administração</span>
-					</a>
-				{/if}
-				{#if podeVerAssistente}
-					<a href="/assistente" class="atalho">
-						<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-							<rect
-								x="2.5"
-								y="2.5"
-								width="11"
-								height="11"
-								rx="2"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-							/>
-							<path
-								d="M5.5 6h5M5.5 8.5h5M5.5 11h3"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-								stroke-linecap="round"
-							/>
-						</svg>
-						<span>Assistente de IA</span>
-					</a>
-				{/if}
-				{#if podeVerLideranca}
-					<a href="/lideranca" class="atalho">
-						<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-							<path
-								d="M2.5 12.5h11M3.5 12.5 2.5 5l3.2 2.6L8 3.5l2.3 4.1L13.5 5l-1 7.5"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-								stroke-linejoin="round"
-								stroke-linecap="round"
-							/>
-						</svg>
-						<span>Liderança</span>
-					</a>
-				{/if}
-				{#if podeGerenciarPessoas}
-					<a href="/pessoas" class="atalho">
-						<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-							<circle
-								cx="6"
-								cy="5.2"
-								r="2.4"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-							/>
-							<path
-								d="M1.8 13.5c.6-2.4 2.2-3.6 4.2-3.6 1.3 0 2.4.5 3.2 1.5"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-								stroke-linecap="round"
-							/>
-							<path
-								d="M12.5 8.5v5M10 11h5"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="1.4"
-								stroke-linecap="round"
-							/>
-						</svg>
-						<span>Pessoas e convites</span>
-					</a>
-				{/if}
-				<a href="/grupos" class="atalho">
-					<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-						<circle
-							cx="5.5"
-							cy="5.5"
-							r="2.2"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-						/>
-						<circle cx="11" cy="6" r="1.8" fill="none" stroke="currentColor" stroke-width="1.4" />
-						<path
-							d="M1.8 13c.4-2.2 1.9-3.3 3.7-3.3S8.8 10.8 9.2 13M9.8 13c.2-1.5 1.1-2.4 2.3-2.4 1 0 1.8.6 2.1 2.4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-						/>
-					</svg>
-					<span>Grupos (PGs)</span>
-				</a>
-				<a href="/perfil" class="atalho">
-					<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-						<circle cx="8" cy="5.2" r="2.6" fill="none" stroke="currentColor" stroke-width="1.4" />
-						<path
-							d="M3 13.5c.7-2.6 2.6-3.8 5-3.8s4.3 1.2 5 3.8"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-						/>
-					</svg>
-					<span>Meu perfil</span>
-				</a>
-				<a href="/conta/sessoes" class="atalho">
-					<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-						<rect
-							x="2"
-							y="2.5"
-							width="8"
-							height="11"
-							rx="1.4"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-						/>
-						<path
-							d="M12 5.5h1.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H10"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="1.4"
-							stroke-linecap="round"
-						/>
-					</svg>
-					<span>Dispositivos conectados</span>
-				</a>
-			</nav>
+				<div class="coluna">
+					{#if inicio?.proximasResponsabilidades && inicio.proximasResponsabilidades.length > 0}
+						<section class="bloco" aria-labelledby="titulo-minhas-escalas">
+							<div class="cabecalho-bloco">
+								<h2 id="titulo-minhas-escalas">Suas responsabilidades</h2>
+								<a href="/responsabilidades" class="ver-tudo">Ver todas</a>
+							</div>
+							<ul class="lista-simples">
+								{#each inicio.proximasResponsabilidades as r (r.id)}
+									<li>
+										<a href={`/eventos/${r.eventId}`} class="linha-link">
+											<div class="linha-texto">
+												<strong>{r.responsabilidadeNome}</strong>
+												<span>
+													{r.eventoTitulo} · {formatadorData.format(new Date(r.eventoInicio))}
+												</span>
+											</div>
+											<span class="tag tag-{r.status}">{rotuloStatusEscala(r.status)}</span>
+										</a>
+									</li>
+								{/each}
+							</ul>
+						</section>
+					{/if}
+
+					{#if inicio?.ultimoAviso}
+						<section class="bloco" aria-labelledby="titulo-ultimo-aviso">
+							<div class="cabecalho-bloco">
+								<h2 id="titulo-ultimo-aviso">Último aviso</h2>
+								<a href="/comunicacao" class="ver-tudo">Ver todos</a>
+							</div>
+							<a href="/comunicacao" class="linha-link">
+								<div class="linha-texto">
+									<strong>{inicio.ultimoAviso.title}</strong>
+									<span class="trecho">{inicio.ultimoAviso.body}</span>
+								</div>
+							</a>
+						</section>
+					{/if}
+				</div>
+			</div>
 		</div>
-	</main>
-{/if}
+	{/if}
+</main>
 
 <style>
-	header {
-		border-bottom: 1px solid var(--cor-linha);
-		background: var(--cor-superficie);
-		position: sticky;
-		top: 0;
-		z-index: 10;
+	.saudacao {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin-top: var(--esp-2);
 	}
 
-	.barra {
-		max-width: 560px;
-		margin-inline: auto;
-		padding: var(--esp-2) var(--esp-3);
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--esp-3);
+	.hoje {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-texto-2);
 	}
 
 	h1 {
 		font-size: var(--texto-2xl);
 		font-weight: 800;
-		margin-top: var(--esp-2);
 		color: var(--cor-texto);
+	}
+
+	.painel,
+	.coluna {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-5);
+	}
+
+	/* Desktop largo: o encontro e os passos à esquerda, o resto à direita. */
+	@media (min-width: 1180px) {
+		.painel.duas-colunas {
+			display: grid;
+			grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+			align-items: start;
+			gap: var(--esp-6);
+		}
+
+		h1 {
+			font-size: var(--texto-3xl);
+		}
 	}
 
 	.destaque {
 		display: flex;
 		flex-direction: column;
 		gap: var(--esp-3);
-		padding: var(--esp-4);
+		padding: var(--esp-5);
 		background: var(--cor-superficie);
 		border: 1px solid var(--cor-linha);
 		border-radius: var(--raio-lg);
+		box-shadow: var(--sombra-2);
+	}
+
+	.sem-evento {
+		box-shadow: none;
+	}
+
+	.sem-evento :global(.botao) {
+		align-self: flex-start;
 	}
 
 	.etiqueta {
@@ -484,6 +343,95 @@
 		color: var(--cor-texto-2);
 		margin: 0;
 	}
+
+	/* --- Primeiros passos --- */
+
+	.passos {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-3);
+	}
+
+	.progresso {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
+	.passos ol {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio-lg);
+		background: var(--cor-superficie);
+		overflow: hidden;
+	}
+
+	.passos li {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--esp-3);
+		padding: var(--esp-3) var(--esp-4);
+	}
+
+	.passos li + li {
+		border-top: 1px solid var(--cor-linha);
+	}
+
+	.marcador {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		margin-top: 1px;
+		border-radius: var(--raio-cheio);
+		border: 2px solid var(--cor-linha-forte);
+	}
+
+	.feito .marcador {
+		border-color: var(--cor-sucesso);
+		background: var(--cor-sucesso);
+		color: var(--cor-superficie);
+	}
+
+	.atual .marcador {
+		border-color: var(--cor-marca);
+	}
+
+	.passo-texto {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.passo-texto a {
+		font-weight: 700;
+		color: var(--cor-texto);
+		text-decoration: underline;
+		text-decoration-color: var(--cor-linha-forte);
+		text-underline-offset: 3px;
+	}
+
+	.atual .passo-texto a {
+		color: var(--cor-marca);
+		text-decoration-color: currentColor;
+	}
+
+	.passo-texto span {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
+	}
+
+	.feito strong {
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
+	/* --- Blocos da direita --- */
 
 	.bloco {
 		display: flex;
@@ -529,6 +477,16 @@
 		border-radius: var(--raio);
 		text-decoration: none;
 		color: var(--cor-texto);
+		transition:
+			background-color var(--transicao),
+			border-color var(--transicao);
+	}
+
+	@media (hover: hover) {
+		.linha-link:hover {
+			background: var(--cor-superficie-2);
+			border-color: var(--cor-marca);
+		}
 	}
 
 	.linha-texto {
@@ -543,8 +501,17 @@
 	}
 
 	.linha-texto span {
-		font-size: var(--texto-xs);
+		font-size: var(--texto-sm);
 		color: var(--cor-texto-2);
+	}
+
+	/* Três linhas do aviso, sem cortar palavra no meio com reticências manuais. */
+	.trecho {
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 	}
 
 	.tag {
@@ -573,7 +540,7 @@
 		align-items: center;
 		text-align: center;
 		gap: var(--esp-3);
-		padding: var(--esp-6) var(--esp-4);
+		padding: var(--esp-7) var(--esp-4);
 	}
 
 	.vazio p,
@@ -582,42 +549,5 @@
 		font-size: var(--texto-sm);
 		max-width: 36ch;
 		margin: 0;
-	}
-
-	.atalhos {
-		display: flex;
-		flex-direction: column;
-		gap: var(--esp-1);
-		padding-top: var(--esp-2);
-		border-top: 1px solid var(--cor-linha);
-	}
-
-	.atalho {
-		min-height: var(--toque-min);
-		display: flex;
-		align-items: center;
-		gap: var(--esp-3);
-		font-size: var(--texto-base);
-		font-weight: 600;
-		color: var(--cor-texto);
-		text-decoration: none;
-		border-radius: var(--raio);
-		padding: var(--esp-2) var(--esp-3);
-		transition:
-			background-color var(--transicao),
-			color var(--transicao);
-	}
-
-	.atalho svg {
-		flex: none;
-		color: var(--cor-marca);
-	}
-
-	@media (hover: hover) {
-		.atalho:hover,
-		.linha-link:hover {
-			background: var(--cor-superficie-2);
-			border-color: var(--cor-marca);
-		}
 	}
 </style>

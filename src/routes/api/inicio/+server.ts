@@ -1,18 +1,21 @@
 import { json } from '@sveltejs/kit';
-import { and, asc, desc, eq, gte, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, ne } from 'drizzle-orm';
 import { db } from '$server/db';
 import {
 	announcement,
 	escala,
 	event,
 	eventType,
+	group,
 	groupMember,
 	person,
 	personProfile,
 	responsabilidade
 } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
-import { can } from '$server/policy/policy';
+import { can, groupsWhere, type Actor } from '$server/policy/policy';
+import type { Database } from '$server/db';
+import { naoEhMaster } from '$server/lideranca/regras';
 import { avisoDeLideranca } from '$server/lideranca/mandatos';
 
 /**
@@ -161,6 +164,66 @@ export const GET = async ({ request, locals }) => {
 		proximasResponsabilidades,
 		ultimoAviso,
 		// Só para Master e líderes: mandato vencendo/vencido ou vaga aberta.
-		avisoLideranca: await avisoDeLideranca(banco, actor)
+		avisoLideranca: await avisoDeLideranca(banco, actor),
+		primeirosPassos: await primeirosPassos(banco, actor)
 	});
 };
+
+/**
+ * Para quem organiza, o que ainda falta para o app servir à comunidade:
+ * um app recém-instalado não tem PG, pessoas nem encontros, e a tela inicial
+ * vazia não diz por onde começar.
+ *
+ * Cada passo só vem para quem pode fazê-lo (`null` = não se aplica). Some da
+ * tela quando tudo estiver feito. Só diz "feito ou não": nada de contagens.
+ */
+async function primeirosPassos(banco: Database, actor: Actor) {
+	const podeOuEmAlgumPg = (p: Parameters<typeof can>[1]) =>
+		can(actor, p) || groupsWhere(actor, p).length > 0;
+
+	const existe = async (consulta: Promise<unknown[]>) => (await consulta).length > 0;
+
+	const [pg, tipoEvento, pessoas, evento] = await Promise.all([
+		can(actor, 'group.manage')
+			? existe(
+					banco
+						.select({ id: group.id })
+						.from(group)
+						.where(and(eq(group.teamId, actor.teamId), isNull(group.archivedAt)))
+						.limit(1)
+				)
+			: null,
+		podeOuEmAlgumPg('event.manage')
+			? existe(
+					banco
+						.select({ id: eventType.id })
+						.from(eventType)
+						.where(and(eq(eventType.teamId, actor.teamId), eq(eventType.active, true)))
+						.limit(1)
+				)
+			: null,
+		podeOuEmAlgumPg('person.create')
+			? existe(
+					banco
+						.select({ id: person.id })
+						.from(person)
+						.where(
+							and(
+								eq(person.teamId, actor.teamId),
+								ne(person.id, actor.personId),
+								isNull(person.deletedAt),
+								naoEhMaster(person.id)
+							)
+						)
+						.limit(1)
+				)
+			: null,
+		podeOuEmAlgumPg('event.manage')
+			? existe(
+					banco.select({ id: event.id }).from(event).where(eq(event.teamId, actor.teamId)).limit(1)
+				)
+			: null
+	]);
+
+	return { pg, tipoEvento, pessoas, evento };
+}

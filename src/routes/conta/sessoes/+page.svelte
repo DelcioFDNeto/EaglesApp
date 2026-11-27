@@ -73,8 +73,6 @@
 
 <main class="conteudo">
 	<div class="pilha">
-		<a href="/inicio" class="voltar">← Início</a>
-
 		<header>
 			<h1>Dispositivos conectados</h1>
 			<p class="legenda">
@@ -138,14 +136,6 @@
 </main>
 
 <style>
-	.voltar {
-		font-size: var(--texto-sm);
-		font-weight: 600;
-		min-height: var(--toque-min);
-		display: inline-flex;
-		align-items: center;
-	}
-
 	h1 {
 		font-size: var(--texto-2xl);
 	}

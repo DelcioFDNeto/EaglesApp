@@ -1,13 +1,13 @@
 {
+	"id": "/",
 	"name": "Eagles",
 	"short_name": "Eagles",
-	"description": "Encontros, grupos e responsabilidades dos Eagles.",
+	"description": "Encontros, PGs e escalas dos Eagles num só lugar.",
 	"lang": "pt-BR",
 	"dir": "ltr",
 	"start_url": "/inicio",
 	"scope": "/",
 	"display": "standalone",
-	"orientation": "portrait",
 	"background_color": "#FBF7F6",
 	"theme_color": "#A91825",
 	"categories": ["productivity", "social"],
@@ -16,19 +16,25 @@
 			"src": "/icone-192.png",
 			"sizes": "192x192",
 			"type": "image/png",
-			"purpose": "any maskable"
+			"purpose": "any"
 		},
 		{
 			"src": "/icone-512.png",
 			"sizes": "512x512",
 			"type": "image/png",
-			"purpose": "any maskable"
+			"purpose": "any"
 		},
 		{
-			"src": "/apple-touch-icon.png",
-			"sizes": "180x180",
+			"src": "/icone-maskable-192.png",
+			"sizes": "192x192",
 			"type": "image/png",
-			"purpose": "any"
+			"purpose": "maskable"
+		},
+		{
+			"src": "/icone-maskable-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
 		}
 	]
 }

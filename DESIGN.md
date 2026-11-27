@@ -87,7 +87,21 @@ Contraste mínimo 4,5:1 para texto normal sobre fundo claro e escuro. Mínimo 3:
 | `--esp-6` | 2rem    | Padding de vazio centralizado    |
 | `--esp-7` | 3rem    | Espaço entre blocos grandes      |
 
-Conteúdo operacional sempre com `max-width: 560px`, `margin-inline: auto`, padding `var(--esp-4)`.
+Conteúdo operacional sempre dentro de `.conteudo` (`margin-inline: auto`, padding `var(--esp-4)`):
+
+| Onde                       | Largura do `.conteudo`                                    |
+| -------------------------- | --------------------------------------------------------- |
+| Celular (< 960px)          | 560px                                                     |
+| Desktop (≥ 960px)          | 760px, ao lado do menu lateral de 256px                   |
+| Desktop, `.conteudo.largo` | 1080px (painel com duas colunas, ex.: `/inicio` ≥ 1180px) |
+
+### Moldura e navegação (`src/lib/ui/Moldura.svelte`)
+
+- **Celular:** faixa da marca no topo + barra inferior com até 4 atalhos do dia a dia e "Mais" (`/menu`).
+- **Desktop:** menu lateral fixo, agrupado em Dia a dia / Cuidar / Administrar, com a conta no rodapé.
+- Os itens vêm de `src/lib/navegacao.ts`, filtrados pelas permissões. O menu só esconde; quem barra é o servidor.
+- Telas de topo não têm "← Início": a moldura já leva lá. Telas de detalhe mantêm o voltar delas ("← Eventos").
+- Telas sem sessão (entrar, convite, senha) ficam fora da moldura; no desktop ganham o painel da marca (`PainelEntrada.svelte`).
 
 ## 5. Formas
 
@@ -119,12 +133,14 @@ Conteúdo operacional sempre com `max-width: 560px`, `margin-inline: auto`, padd
 7. **Microcopy direta.** Sem travessão decorativo, sem negrito de efeito, sem jargão técnico vazando para o usuário.
 8. **Estados completos:** vazio útil, carregamento sem layout shift, erro acionável, offline com botão de recarregar, sucesso, permissão negada.
 
-## 8. PWA / manifest (notas para Fase 3)
+## 8. Marca, ícones e prévia de links
 
-- `theme-color` deve variar por esquema de cor (claro/escuro) — hoje é único (`#A91825`).
-- `background_color` vermelho gera flash ao abrir — ajustar para neutro quente.
-- `orientation: portrait` trava o app; avaliar remoção.
-- Ícone `maskable` com margem insuficiente — revisar em fase de assets.
+- **Arte:** a águia da `Eagles.png`, recortada sem o letreiro (ilegível em ícone), sobre `#A91825`.
+- **Ícones:** `icone-192/512` ("any", águia em ~88% do quadro) e `icone-maskable-192/512` (~72%, dentro da área segura do Android). `apple-touch-icon` (180) e `favicon` (64).
+- **Marca no app:** `marca-96/192.png` em quadrado arredondado (`Marca.svelte`).
+- **Prévia de links (WhatsApp):** `og-eagles.jpg` (1200×630, < 100 KB) e metatags Open Graph no `src/app.html`, com endereço absoluto vindo de `PUBLIC_SITE_URL`.
+- `theme-color` separado para claro (`#A91825`) e escuro (`#17090C`). O app não trava mais na vertical.
+- **Pendente:** logo vetorial. A arte de origem é um JPEG de 640px; os ícones grandes saem levemente suaves.
 
 ---
 

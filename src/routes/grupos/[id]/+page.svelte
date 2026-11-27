@@ -216,7 +216,6 @@
 			<header>
 				<div class="topo">
 					<h1>{grupo?.name || 'Carregando…'}</h1>
-					{#if grupo?.slug}<span class="slug">#{grupo.slug}</span>{/if}
 					{#if grupo?.arquivado}<span class="arquivado">Arquivado</span>{/if}
 				</div>
 				{#if grupo?.description}<p class="sub">{grupo.description}</p>{/if}
@@ -436,15 +435,6 @@
 		margin: 0;
 	}
 
-	.slug {
-		font-size: var(--texto-xs);
-		font-weight: 600;
-		color: var(--cor-marca);
-		background: var(--cor-marca-suave);
-		padding: 2px 8px;
-		border-radius: var(--raio-cheio);
-	}
-
 	.arquivado {
 		font-size: var(--texto-xs);
 		font-weight: 700;
@@ -476,7 +466,8 @@
 	.mover {
 		border-color: var(--cor-marca);
 		position: sticky;
-		bottom: var(--esp-3);
+		/* Acima da barra inferior do celular (variável da Moldura; 0 no desktop). */
+		bottom: calc(var(--altura-barra, 0px) + env(safe-area-inset-bottom) + var(--esp-3));
 		box-shadow: 0 6px 24px color-mix(in srgb, var(--cor-texto) 14%, transparent);
 	}
 

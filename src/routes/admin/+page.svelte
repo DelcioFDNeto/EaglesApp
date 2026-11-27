@@ -285,8 +285,6 @@
 
 <main class="conteudo">
 	<div class="pilha">
-		<a href="/inicio" class="voltar">← Início</a>
-
 		<header>
 			<h1>Administração</h1>
 			<p class="sub">Chaves de funcionalidade, papéis com escopo e trilha de auditoria imutável.</p>
@@ -600,15 +598,6 @@
 </main>
 
 <style>
-	.voltar {
-		font-size: var(--texto-sm);
-		font-weight: 600;
-		min-height: var(--toque-min);
-		display: inline-flex;
-		align-items: center;
-		align-self: flex-start;
-	}
-
 	header {
 		display: flex;
 		flex-direction: column;

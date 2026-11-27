@@ -357,8 +357,6 @@
 
 <main class="conteudo">
 	<div class="pilha">
-		<a href="/inicio" class="voltar">← Início</a>
-
 		<header>
 			<h1>Comunicação</h1>
 			<p class="sub">
@@ -756,15 +754,6 @@
 </main>
 
 <style>
-	.voltar {
-		font-size: var(--texto-sm);
-		font-weight: 600;
-		min-height: var(--toque-min);
-		display: inline-flex;
-		align-items: center;
-		align-self: flex-start;
-	}
-
 	header {
 		display: flex;
 		flex-direction: column;

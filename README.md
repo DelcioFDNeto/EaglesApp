@@ -169,4 +169,4 @@ descartável e conferido antes de ser criptografado e enviado para fora da VPS.
 - Testes ponta a ponta (Playwright) ainda não escritos
 - Contraste WCAG AA não verificado por ferramenta; telas a 360 px não revisadas
 - Consentimento parental para menores (16–17 anos) ainda não implementado
-- Logo em versão vetorial/transparente — hoje `Marca.svelte` usa um desenho simplificado
+- Logo em versão vetorial: os ícones e a marca saem do JPEG de 640px (`Eagles.png`)

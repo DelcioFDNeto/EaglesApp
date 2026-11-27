@@ -223,8 +223,17 @@ Quem já tem acesso não recebe convite: se esqueceu a senha, usa
 
 ## 3. Frontend no Firebase Hosting
 
-O endereço da API vai **dentro do build**, vindo de [`.env.production`](.env.production)
-(versionado; só tem a URL pública). O build se recusa a sair sem uma URL `https://`.
+Dois endereços vão **dentro do build**, vindos de [`.env.production`](.env.production)
+(versionado; só tem URLs públicas). O build se recusa a sair sem os dois em `https://`:
+
+| Variável          | Para quê                                                                      |
+| ----------------- | ----------------------------------------------------------------------------- |
+| `PUBLIC_API_URL`  | Para onde o app manda as chamadas                                             |
+| `PUBLIC_SITE_URL` | Endereço do próprio app, para a prévia de links do WhatsApp (imagem e título) |
+
+O WhatsApp guarda a prévia por endereço: um link já enviado antes de uma
+mudança continua com a prévia antiga. Para conferir a nova, envie um endereço
+ainda não usado (ex.: `…/inicio?v=2`).
 
 ```bash
 # Uma vez: login na conta Google do projeto

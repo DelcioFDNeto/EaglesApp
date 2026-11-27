@@ -136,6 +136,13 @@ export type Inicio = {
 	} | null;
 	/** Só para Master e líderes: mandato vencendo/vencido ou vaga aberta. */
 	avisoLideranca?: string | null;
+	/** Para quem organiza: o que já foi feito (`null` = não se aplica a esta pessoa). */
+	primeirosPassos?: {
+		pg: boolean | null;
+		tipoEvento: boolean | null;
+		pessoas: boolean | null;
+		evento: boolean | null;
+	};
 };
 
 export const apiCache = {

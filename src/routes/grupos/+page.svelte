@@ -13,7 +13,6 @@
 	let mensagem = $state<string | undefined>(undefined);
 	let criando = $state(false);
 	let novoNome = $state('');
-	let novoSlug = $state('');
 	let novaDescricao = $state('');
 	let mostrarArquivados = $state(false);
 
@@ -45,7 +44,20 @@
 	}
 
 	async function criarGrupo() {
-		if (!novoNome.trim() || !novoSlug.trim()) return;
+		if (!novoNome.trim()) return;
+		// Código interno do PG, tirado do nome: "PG Azul" → "pg-azul". A pessoa
+		// não precisa saber que ele existe.
+		const base =
+			novoNome
+				.trim()
+				.normalize('NFD')
+				.replace(/[\u0300-\u036f]/g, '')
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-')
+				.replace(/^-+|-+$/g, '')
+				.slice(0, 45) || 'pg';
+		let slug = base;
+		for (let n = 2; grupos.some((g) => g.slug === slug); n++) slug = `${base}-${n}`;
 		criando = true;
 		erro = undefined;
 		mensagem = undefined;
@@ -53,14 +65,13 @@
 		try {
 			const res = await api.post('/api/grupos', {
 				name: novoNome.trim(),
-				slug: novoSlug.trim().toLowerCase(),
+				slug,
 				description: novaDescricao.trim() || undefined
 			});
 			const data = await res.json().catch(() => ({}));
 			if (res.ok) {
 				mensagem = 'Grupo criado com sucesso.';
 				novoNome = '';
-				novoSlug = '';
 				novaDescricao = '';
 				await carregarGrupos();
 			} else {
@@ -83,8 +94,6 @@
 
 <main class="conteudo">
 	<div class="pilha">
-		<a href="/inicio" class="voltar">← Início</a>
-
 		<header>
 			<h1>Grupos (PGs)</h1>
 			<p class="sub">
@@ -126,7 +135,6 @@
 								<div class="grupo-info">
 									<div class="topo-grupo">
 										<strong>{g.name}</strong>
-										{#if g.slug}<span class="slug">#{g.slug}</span>{/if}
 										{#if g.archivedAt}<span class="arquivado">Arquivado</span>{/if}
 									</div>
 									{#if g.description}
@@ -154,13 +162,6 @@
 						}}
 					>
 						<Campo id="nome" rotulo="Nome do grupo" bind:valor={novoNome} obrigatorio />
-						<Campo
-							id="slug"
-							rotulo="Identificador (slug)"
-							ajuda="Use apenas letras minúsculas, números e hífen (ex.: pg-azul)."
-							bind:valor={novoSlug}
-							obrigatorio
-						/>
 						<Campo id="descricao" rotulo="Descrição" bind:valor={novaDescricao} />
 						<Botao tipo="submit" largura="cheia" carregando={criando}>Criar grupo</Botao>
 					</form>
@@ -196,15 +197,6 @@
 		background: var(--cor-superficie-2);
 		color: var(--cor-texto-2);
 		border: 1px solid var(--cor-linha);
-	}
-
-	.voltar {
-		font-size: var(--texto-sm);
-		font-weight: 600;
-		min-height: var(--toque-min);
-		display: inline-flex;
-		align-items: center;
-		align-self: flex-start;
 	}
 
 	header {
@@ -274,15 +266,6 @@
 	.topo-grupo strong {
 		font-size: var(--texto-base);
 		font-weight: 700;
-	}
-
-	.slug {
-		font-size: var(--texto-xs);
-		font-weight: 600;
-		color: var(--cor-marca);
-		background: var(--cor-marca-suave);
-		padding: 1px 6px;
-		border-radius: var(--raio-cheio);
 	}
 
 	.descricao {

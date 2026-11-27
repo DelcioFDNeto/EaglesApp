@@ -47,6 +47,16 @@ if (ehBuild && !alvoApi && !origemApi?.startsWith('https://')) {
 	);
 }
 
+// A prévia de links (WhatsApp) precisa do endereço absoluto do app: sem ele a
+// imagem some da prévia sem erro nenhum. Ver src/app.html.
+const siteUrl = loadEnv('production', process.cwd(), 'PUBLIC_').PUBLIC_SITE_URL;
+if (ehBuild && !alvoApi && !siteUrl?.startsWith('https://')) {
+	throw new Error(
+		'Build do SPA sem PUBLIC_SITE_URL em HTTPS. Defina em .env.production ' +
+			'(ex.: PUBLIC_SITE_URL=https://eagles-app-pg.web.app). Ver DEPLOY.md.'
+	);
+}
+
 const adapter = alvoApi
 	? adapterNode({ out: 'build-api', precompress: false })
 	: adapterStatic({
