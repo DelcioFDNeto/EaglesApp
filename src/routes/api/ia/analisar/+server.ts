@@ -24,7 +24,14 @@ import {
 } from '$server/ia/motor';
 
 const analisarSchema = z.object({
-	tipo: z.enum(['sinais_atencao', 'divisao_grupos', 'resumo_financeiro'])
+	tipo: z.enum(['sinais_atencao', 'divisao_grupos', 'resumo_financeiro']),
+	criterios: z
+		.object({
+			agruparVinculosFamiliares: z.boolean().optional(),
+			equilibrarFaixaEtaria: z.boolean().optional(),
+			equilibrarFrequencia: z.boolean().optional()
+		})
+		.optional()
 });
 
 /**
@@ -63,7 +70,7 @@ export const POST = async ({ request, locals }) => {
 		);
 	}
 
-	const { tipo } = resultado.data;
+	const { tipo, criterios } = resultado.data;
 	const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
 	if (tipo === 'resumo_financeiro') {
@@ -142,7 +149,11 @@ export const POST = async ({ request, locals }) => {
 			id: personTable.id,
 			nome: personTable.fullName,
 			birthDate: personTable.birthDate,
+			profileBirthDate: personProfile.birthDate,
 			status: personProfile.status,
+			relationshipStatus: personProfile.relationshipStatus,
+			siblings: personProfile.siblings,
+			familyTies: personProfile.familyTies,
 			groupId: groupMember.groupId
 		})
 		.from(personTable)
@@ -240,10 +251,14 @@ export const POST = async ({ request, locals }) => {
 		pessoas: pessoasVisiveis.map((p) => ({
 			id: p.id,
 			nome: p.nome,
-			birthDate: p.birthDate,
+			birthDate: p.birthDate ?? p.profileBirthDate,
 			frequencia: mapaPresenca.get(p.id) ?? 0,
-			grupoAtualId: p.groupId
-		}))
+			grupoAtualId: p.groupId,
+			relationshipStatus: p.relationshipStatus,
+			siblings: p.siblings,
+			familyTies: p.familyTies
+		})),
+		criterios
 	});
 
 	const [sugestao] = await banco
@@ -252,7 +267,11 @@ export const POST = async ({ request, locals }) => {
 			teamId: actor.teamId,
 			kind: 'divisao_grupos',
 			requestedByPersonId: actor.personId,
-			inputSnapshot: { totalGrupos: grupos.length, totalPessoas: pessoasVisiveis.length },
+			inputSnapshot: {
+				totalGrupos: grupos.length,
+				totalPessoas: pessoasVisiveis.length,
+				criterios: criterios ?? null
+			},
 			output: saida,
 			status: 'pendente',
 			expiresAt

@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
 import { uuidv7 } from '$server/db/id';
@@ -7,14 +7,20 @@ import {
 	escala,
 	escalaHistorico,
 	event as eventTable,
+	eventRegistration,
 	groupMember,
 	person as personTable,
+	presence,
 	responsabilidade as responsabilidadeTable
 } from '$server/db/schema';
 import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
-import { gerarPropostaDeEscala } from '$server/responsabilidades/gerador';
+import {
+	classificarRsvpParaEscala,
+	gerarPropostaDeEscala
+} from '$server/responsabilidades/gerador';
 import { naoEhMaster } from '$server/lideranca/regras';
+import { chavesQueConfirmam, type OpcaoRsvp } from '$shared/rsvp';
 
 const gerarEscalaSchema = z.object({
 	eventoId: z.string().uuid(),
@@ -58,7 +64,8 @@ export const POST = async ({ request, locals }) => {
 			id: eventTable.id,
 			teamId: eventTable.teamId,
 			groupId: eventTable.groupId,
-			startsAt: eventTable.startsAt
+			startsAt: eventTable.startsAt,
+			rsvpOptions: eventTable.rsvpOptions
 		})
 		.from(eventTable)
 		.where(and(eq(eventTable.id, eventoId), eq(eventTable.teamId, actor.teamId)))
@@ -165,6 +172,57 @@ export const POST = async ({ request, locals }) => {
 		existentesNoEvento.map((e) => e.responsabilidadeId)
 	);
 
+	// RSVP do encontro (disponibilidade dos candidatos)
+	const candidatoIdsLista = candidatos.map((c) => c.personId);
+	const opcoesEvento = Array.isArray(evento.rsvpOptions) ? (evento.rsvpOptions as OpcaoRsvp[]) : [];
+	const chavesConfirmam = chavesQueConfirmam(opcoesEvento);
+
+	const rsvpsEvento = await banco
+		.select({
+			personId: eventRegistration.personId,
+			option: eventRegistration.option
+		})
+		.from(eventRegistration)
+		.where(
+			and(
+				eq(eventRegistration.eventId, eventoId),
+				inArray(eventRegistration.personId, candidatoIdsLista)
+			)
+		);
+
+	const mapaRsvp = new Map(
+		rsvpsEvento.map((r) => [r.personId, classificarRsvpParaEscala(r.option, chavesConfirmam)])
+	);
+
+	// Frequência efetiva nos últimos 90 dias (`present` ou `late`)
+	const dataEvento = new Date(evento.startsAt);
+	const janela90dInicio = new Date(
+		Math.min(Date.now(), dataEvento.getTime()) - 90 * 24 * 60 * 60 * 1000
+	);
+
+	const presencas90d = await banco
+		.select({ personId: presence.personId })
+		.from(presence)
+		.where(
+			and(
+				inArray(presence.personId, candidatoIdsLista),
+				inArray(presence.status, ['present', 'late']),
+				gte(presence.registeredAt, janela90dInicio)
+			)
+		);
+
+	const mapaFrequencia90d = new Map<string, number>();
+	for (const p of presencas90d) {
+		mapaFrequencia90d.set(p.personId, (mapaFrequencia90d.get(p.personId) ?? 0) + 1);
+	}
+
+	const candidatosEnriquecidos = candidatos.map((c) => ({
+		personId: c.personId,
+		nome: c.nome,
+		rsvp: mapaRsvp.get(c.personId) ?? null,
+		frequencia90d: mapaFrequencia90d.get(c.personId) ?? 0
+	}));
+
 	// Histórico oficial (confirmadas ou cumpridas) para evitar repetição (RN-19)
 	const historico = await banco
 		.select({
@@ -179,9 +237,9 @@ export const POST = async ({ request, locals }) => {
 		);
 
 	const itensPropostos = gerarPropostaDeEscala({
-		dataEvento: new Date(evento.startsAt),
+		dataEvento,
 		responsabilidades,
-		candidatos,
+		candidatos: candidatosEnriquecidos,
 		historico: historico.map((h) => ({
 			personId: h.personId,
 			responsabilidadeId: h.responsabilidadeId,

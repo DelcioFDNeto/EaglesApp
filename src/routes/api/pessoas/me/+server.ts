@@ -13,6 +13,7 @@ import { autenticarAtor } from '$lib/server/auth/middleware';
 import { can } from '$server/policy/policy';
 import { naoEhMaster } from '$server/lideranca/regras';
 import { CAMPOS_RESTRITOS_MENOR, validarIdade } from '$server/pessoas/menores';
+import { ehUrlFotoValida } from '$server/arquivos/validacao';
 import {
 	atributosBasicosSchema,
 	pesoParaDecimos,
@@ -29,7 +30,11 @@ const atualizarPerfilSchema = z.object({
 		.nullable(),
 	dataNascimento: z.string().trim().optional().nullable(),
 	fotoUrl: z
-		.union([z.string().trim().url(), z.literal('')])
+		.string()
+		.trim()
+		.refine(ehUrlFotoValida, {
+			message: 'URL da foto inválida. Informe um endereço http(s) ou envie uma imagem.'
+		})
 		.optional()
 		.nullable(),
 	relacionamento: z.string().trim().max(80).optional().nullable(),
@@ -247,6 +252,9 @@ export const PUT = async ({ request, locals }) => {
 		vinculosFamiliares: perfilParaSalvar.familyTies
 	};
 	const restritosLista: string[] = CAMPOS_RESTRITOS_MENOR.filter((c) => restritos[c] !== null);
+	if (perfilParaSalvar.photoUrl !== null) {
+		restritosLista.push('foto');
+	}
 	if (Object.values(attrParaSalvar).some((v) => v !== null)) {
 		restritosLista.push('atributos');
 	}

@@ -56,6 +56,11 @@
 	let gerandoAnalise = $state<string | null>(null);
 	let decidindoId = $state<string | null>(null);
 
+	// Critérios configuráveis da divisão de subgrupos (§6 / RF-10.4)
+	let critEquilibrarFrequencia = $state(true);
+	let critAgruparFamilia = $state(true);
+	let critEquilibrarIdade = $state(true);
+
 	const pendentesCount = $derived(sugestoes.filter((s) => s.status === 'pendente').length);
 	const podeVerAnalises = $derived(permissoesIa.analitico || permissoesIa.financeiro);
 
@@ -186,7 +191,18 @@
 		erro = undefined;
 		mensagem = undefined;
 		try {
-			const res = await api.post('/api/ia/analisar', { tipo });
+			const payload =
+				tipo === 'divisao_grupos'
+					? {
+							tipo,
+							criterios: {
+								equilibrarFrequencia: critEquilibrarFrequencia,
+								agruparVinculosFamiliares: critAgruparFamilia,
+								equilibrarFaixaEtaria: critEquilibrarIdade
+							}
+						}
+					: { tipo };
+			const res = await api.post('/api/ia/analisar', payload);
 			const d = await res.json().catch(() => ({}));
 			if (res.ok) {
 				mensagem =
@@ -482,20 +498,38 @@
 
 						{#if permissoesIa.podeAplicarGrupos}
 							<li class="item">
-								<div class="item-topo">
-									<div class="item-info">
-										<strong>Proposta de divisão equilibrada de grupos</strong>
-										<p class="desc">
-											Distribui pessoas equilibrando tamanho e frequência. Gera uma proposta
-											pendente que só altera os subgrupos após sua confirmação explícita.
-										</p>
-									</div>
+								<div class="item-info">
+									<strong>Proposta de divisão equilibrada de grupos</strong>
+									<p class="desc">
+										Distribui pessoas equilibrando tamanho, frequência, faixa etária e vínculos
+										familiares. Gera uma proposta pendente que só altera os subgrupos após sua
+										confirmação explícita.
+									</p>
+								</div>
+
+								<fieldset class="criterios-divisao">
+									<legend>Critérios da divisão</legend>
+									<label class="opcao-check">
+										<input type="checkbox" bind:checked={critEquilibrarFrequencia} />
+										<span>Equilibrar frequência</span>
+									</label>
+									<label class="opcao-check">
+										<input type="checkbox" bind:checked={critAgruparFamilia} />
+										<span>Manter vínculos familiares/casais juntos</span>
+									</label>
+									<label class="opcao-check">
+										<input type="checkbox" bind:checked={critEquilibrarIdade} />
+										<span>Equilibrar faixa etária</span>
+									</label>
+								</fieldset>
+
+								<div class="acoes-linha">
 									<Botao
 										carregando={gerandoAnalise === 'divisao_grupos'}
 										desabilitado={!iaAtiva}
 										onclick={() => executarAnalise('divisao_grupos')}
 									>
-										Gerar proposta
+										Sugerir divisão de subgrupos
 									</Botao>
 								</div>
 							</li>
@@ -590,6 +624,9 @@
 													{/if}
 													{#if al.menor}
 														<span class="chip chip-neutro">Menor protegido</span>
+													{/if}
+													{#if al.justificativa}
+														<span class="meta"> · {al.justificativa}</span>
 													{/if}
 												</li>
 											{/each}
@@ -876,5 +913,40 @@
 		color: var(--cor-texto-2);
 		font-size: var(--texto-sm);
 		max-width: 36ch;
+	}
+
+	.criterios-divisao {
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio-sm);
+		padding: var(--esp-3);
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+		background: var(--cor-superficie-2);
+	}
+
+	.criterios-divisao legend {
+		font-size: var(--texto-xs);
+		font-weight: 700;
+		color: var(--cor-texto-2);
+		padding: 0 var(--esp-1);
+	}
+
+	.opcao-check {
+		display: flex;
+		align-items: center;
+		gap: var(--esp-2);
+		min-height: 32px;
+		font-size: var(--texto-sm);
+		color: var(--cor-texto);
+		cursor: pointer;
+	}
+
+	.opcao-check input[type='checkbox'] {
+		width: 18px;
+		height: 18px;
+		accent-color: var(--cor-marca);
+		cursor: pointer;
 	}
 </style>

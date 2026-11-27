@@ -4,7 +4,7 @@
 	import Botao from '$ui/Botao.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
-	import { api } from '$lib/api';
+	import { api, buscarBlobUrl } from '$lib/api';
 	import { extrairCodigoCheckin, gerarSvgQr } from '$lib/eventos/qrcode';
 
 	interface BarcodeDetectorResultado {
@@ -30,6 +30,20 @@
 		expiresAt: string;
 		isActive: boolean;
 	};
+
+	type AnexoEvento = {
+		id: string;
+		fileAssetId: string;
+		titulo: string;
+		url: string;
+		filename: string;
+		mimeType: string;
+		sizeBytes: number;
+		criadoEm: string;
+	};
+
+	const MAX_ANEXO_BYTES = 3 * 1024 * 1024;
+	const MIMES_ANEXO = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 	let evento = $state<any>(null);
 	let inscricoes: any[] = $state([]);
@@ -81,6 +95,18 @@
 	let cameraStream: MediaStream | null = null;
 	let timerScan: ReturnType<typeof setTimeout> | null = null;
 	let timerCopiado: ReturnType<typeof setTimeout> | null = null;
+
+	// Anexos do evento (§8): PDF e imagens até 3 MB.
+	let anexos = $state<AnexoEvento[]>([]);
+	let tituloAnexo = $state('');
+	let arquivoAnexo = $state<File | null>(null);
+	let inputAnexoEl = $state<HTMLInputElement | null>(null);
+	let enviandoAnexo = $state(false);
+	let removendoAnexoId = $state<string | null>(null);
+	let abrindoAnexoId = $state<string | null>(null);
+	let erroAnexo = $state<string | undefined>(undefined);
+	let mensagemAnexo = $state<string | undefined>(undefined);
+	let blobUrlsAbertas: string[] = [];
 
 	const OPCOES_VALIDADE_QR = [
 		{ minutos: 30, rotulo: '30 minutos' },
@@ -178,6 +204,7 @@
 		const [, resEscalas] = await Promise.allSettled([
 			carregarPresencas(eventoId),
 			api.get(`/api/escalas?eventoId=${encodeURIComponent(eventoId)}`),
+			carregarAnexos(eventoId),
 			checkinQrAtivo && evento?.status !== 'cancelled' && permissoesEvento.podeRegistrarPresenca
 				? carregarQrAtivo(eventoId)
 				: Promise.resolve()
@@ -367,6 +394,158 @@
 		}
 	}
 
+	/** Carrega a lista de anexos do evento. */
+	async function carregarAnexos(eventoId = evento?.id) {
+		if (!eventoId) return;
+		try {
+			const res = await api.get(`/api/eventos/${eventoId}/anexos`);
+			if (res.ok) {
+				const data = await res.json();
+				anexos = data.anexos ?? [];
+			}
+		} catch {
+			// Offline ou indisponível: mantém o estado atual sem bloquear o evento.
+		}
+	}
+
+	function selecionarArquivoAnexo(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const selecionado = input.files?.[0] ?? null;
+		erroAnexo = undefined;
+		mensagemAnexo = undefined;
+
+		if (!selecionado) {
+			arquivoAnexo = null;
+			return;
+		}
+		if (selecionado.size === 0) {
+			erroAnexo = 'O arquivo selecionado está vazio.';
+			arquivoAnexo = null;
+			input.value = '';
+			return;
+		}
+		if (selecionado.size > MAX_ANEXO_BYTES) {
+			erroAnexo = 'O arquivo excede o limite máximo de 3 MB.';
+			arquivoAnexo = null;
+			input.value = '';
+			return;
+		}
+		if (selecionado.type && !MIMES_ANEXO.includes(selecionado.type)) {
+			erroAnexo = 'Envie um PDF ou imagem (JPEG, PNG ou WebP).';
+			arquivoAnexo = null;
+			input.value = '';
+			return;
+		}
+
+		arquivoAnexo = selecionado;
+	}
+
+	async function enviarAnexo() {
+		if (!evento?.id || !arquivoAnexo) return;
+		enviandoAnexo = true;
+		erroAnexo = undefined;
+		mensagemAnexo = undefined;
+		try {
+			const formData = new FormData();
+			formData.append('file', arquivoAnexo);
+			if (tituloAnexo.trim()) {
+				formData.append('titulo', tituloAnexo.trim());
+			}
+
+			const res = await api.upload(`/api/eventos/${evento.id}/anexos`, formData);
+			const data = await res.json().catch(() => ({}));
+			if (res.ok) {
+				tituloAnexo = '';
+				arquivoAnexo = null;
+				if (inputAnexoEl) inputAnexoEl.value = '';
+				mensagemAnexo = 'Anexo adicionado ao evento.';
+				await carregarAnexos(evento.id);
+			} else {
+				erroAnexo = data.erro ?? 'Não foi possível enviar o anexo.';
+			}
+		} catch {
+			erroAnexo = 'Sem conexão. Não foi possível enviar o anexo.';
+		} finally {
+			enviandoAnexo = false;
+		}
+	}
+
+	async function abrirAnexo(anexo: AnexoEvento, forcarDownload = false) {
+		abrindoAnexoId = anexo.id;
+		erroAnexo = undefined;
+		try {
+			const blobUrl = await buscarBlobUrl(anexo.url);
+			if (!blobUrl) {
+				erroAnexo = 'Não foi possível carregar o anexo.';
+				return;
+			}
+			if (forcarDownload) {
+				const link = document.createElement('a');
+				link.href = blobUrl;
+				link.download = anexo.filename;
+				document.body.appendChild(link);
+				link.click();
+				link.remove();
+				if (blobUrl.startsWith('blob:')) {
+					setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+				}
+				return;
+			}
+
+			if (blobUrl.startsWith('blob:')) {
+				blobUrlsAbertas.push(blobUrl);
+			}
+			const janela = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+			if (!janela) {
+				const link = document.createElement('a');
+				link.href = blobUrl;
+				link.download = anexo.filename;
+				document.body.appendChild(link);
+				link.click();
+				link.remove();
+			}
+		} catch {
+			erroAnexo = 'Sem conexão. Não foi possível baixar o anexo.';
+		} finally {
+			abrindoAnexoId = null;
+		}
+	}
+
+	async function removerAnexo(anexoId: string) {
+		if (!evento?.id) return;
+		removendoAnexoId = anexoId;
+		erroAnexo = undefined;
+		mensagemAnexo = undefined;
+		try {
+			const res = await api.delete(`/api/eventos/${evento.id}/anexos/${anexoId}`);
+			const data = await res.json().catch(() => ({}));
+			if (res.ok) {
+				anexos = anexos.filter((a) => a.id !== anexoId);
+				mensagemAnexo = 'Anexo removido.';
+			} else {
+				erroAnexo = data.erro ?? 'Não foi possível remover o anexo.';
+			}
+		} catch {
+			erroAnexo = 'Sem conexão. O anexo não foi removido.';
+		} finally {
+			removendoAnexoId = null;
+		}
+	}
+
+	function formatarTamanhoArquivo(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
+	}
+
+	function rotuloTipoArquivo(mime: string): string {
+		if (mime === 'application/pdf') return 'PDF';
+		if (mime === 'image/jpeg') return 'JPEG';
+		if (mime === 'image/png') return 'PNG';
+		if (mime === 'image/webp') return 'WebP';
+		return 'Arquivo';
+	}
+
 	/** Só a presença: cada toque na chamada não recarrega o evento inteiro. */
 	async function carregarPresencas(eventoId = evento?.id) {
 		if (!eventoId) return;
@@ -420,6 +599,10 @@
 		return () => {
 			pararCamera();
 			if (timerCopiado) clearTimeout(timerCopiado);
+			for (const url of blobUrlsAbertas) {
+				URL.revokeObjectURL(url);
+			}
+			blobUrlsAbertas = [];
 		};
 	});
 
@@ -967,6 +1150,115 @@
 								<span class="chip chip-escala-{esc.status}">
 									{STATUS_ESCALA[esc.status] ?? esc.status}
 								</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
+
+			<section class="secao" aria-labelledby="titulo-anexos">
+				<div class="cabecalho-secao">
+					<h2 id="titulo-anexos">Anexos</h2>
+					{#if anexos.length > 0}
+						<span class="contador">
+							{anexos.length}
+							{anexos.length === 1 ? 'arquivo' : 'arquivos'}
+						</span>
+					{/if}
+				</div>
+
+				{#if erroAnexo}
+					<Aviso tom="erro">{erroAnexo}</Aviso>
+				{/if}
+				{#if mensagemAnexo}
+					<Aviso tom="sucesso">{mensagemAnexo}</Aviso>
+				{/if}
+
+				{#if permissoesEvento.podeGerenciarEvento}
+					<form
+						class="form-anexo"
+						onsubmit={(e) => {
+							e.preventDefault();
+							enviarAnexo();
+						}}
+					>
+						<div class="campo-extra">
+							<label for="anexo-titulo">Título do anexo (opcional)</label>
+							<input
+								id="anexo-titulo"
+								type="text"
+								maxlength="160"
+								bind:value={tituloAnexo}
+								placeholder="Ex.: Roteiro, mapa do local, orientação em PDF"
+							/>
+						</div>
+						<div class="campo-extra">
+							<label for="anexo-arquivo">Arquivo (PDF, JPEG, PNG ou WebP até 3 MB)</label>
+							<input
+								id="anexo-arquivo"
+								bind:this={inputAnexoEl}
+								type="file"
+								accept="application/pdf,image/jpeg,image/png,image/webp"
+								onchange={selecionarArquivoAnexo}
+								disabled={enviandoAnexo}
+							/>
+						</div>
+						<Botao
+							tipo="submit"
+							variante="secundario"
+							carregando={enviandoAnexo}
+							desabilitado={!arquivoAnexo}
+						>
+							Adicionar anexo
+						</Botao>
+					</form>
+				{/if}
+
+				{#if anexos.length === 0}
+					<p class="texto-vazio">Nenhum anexo disponível para este evento.</p>
+				{:else}
+					<ul class="lista">
+						{#each anexos as anexo (anexo.id)}
+							<li class="item item-acoes">
+								<div class="item-info">
+									<strong>{anexo.titulo}</strong>
+									<span class="subitem">
+										{rotuloTipoArquivo(anexo.mimeType)} · {formatarTamanhoArquivo(anexo.sizeBytes)}
+										{#if anexo.filename !== anexo.titulo}
+											· {anexo.filename}
+										{/if}
+									</span>
+								</div>
+								<div class="acoes-anexo">
+									<Botao
+										variante="secundario"
+										carregando={abrindoAnexoId === anexo.id}
+										desabilitado={removendoAnexoId === anexo.id}
+										onclick={() => abrirAnexo(anexo, false)}
+										aria-label={`Abrir anexo ${anexo.titulo}`}
+									>
+										Abrir
+									</Botao>
+									<Botao
+										variante="texto"
+										desabilitado={abrindoAnexoId === anexo.id || removendoAnexoId === anexo.id}
+										onclick={() => abrirAnexo(anexo, true)}
+										aria-label={`Baixar anexo ${anexo.titulo}`}
+									>
+										Baixar
+									</Botao>
+									{#if permissoesEvento.podeGerenciarEvento}
+										<Botao
+											variante="destrutivo"
+											carregando={removendoAnexoId === anexo.id}
+											desabilitado={abrindoAnexoId === anexo.id}
+											onclick={() => removerAnexo(anexo.id)}
+											aria-label={`Remover anexo ${anexo.titulo}`}
+										>
+											Remover
+										</Botao>
+									{/if}
+								</div>
 							</li>
 						{/each}
 					</ul>
@@ -1660,10 +1952,31 @@
 		align-items: center;
 	}
 
-	.botoes-presenca {
+	.botoes-presenca,
+	.acoes-anexo {
 		display: flex;
 		gap: var(--esp-2);
 		flex-wrap: wrap;
+	}
+
+	.form-anexo {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+		padding: var(--esp-4);
+		background: var(--cor-superficie);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio);
+	}
+
+	.form-anexo .campo-extra {
+		margin-bottom: 0;
+	}
+
+	.form-anexo input[type='file'] {
+		display: flex;
+		align-items: center;
+		padding: var(--esp-2);
 	}
 
 	.carregando {

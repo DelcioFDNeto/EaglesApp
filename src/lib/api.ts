@@ -31,11 +31,12 @@ const API_URL = ((envPublico as Record<string, string | undefined>).PUBLIC_API_U
 
 export async function apiFetch(path: string, opts: RequestInit = {}): Promise<Response> {
 	const token = typeof localStorage !== 'undefined' ? localStorage.getItem('eagles_token') : null;
+	const ehFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
 
 	const res = await fetch(`${API_URL}${path}`, {
 		...opts,
 		headers: {
-			'Content-Type': 'application/json',
+			...(ehFormData ? {} : { 'Content-Type': 'application/json' }),
 			...(token ? { Authorization: `Bearer ${token}` } : {}),
 			...opts.headers
 		}
@@ -51,6 +52,16 @@ export async function apiFetch(path: string, opts: RequestInit = {}): Promise<Re
 	return res;
 }
 
+/** Baixa um arquivo autenticado (`/api/arquivos/...`) como Object URL segura (sem JWT na querystring). */
+export async function buscarBlobUrl(path: string): Promise<string | null> {
+	if (!path) return null;
+	if (!path.startsWith('/api/')) return path;
+	const res = await apiFetch(path, { method: 'GET' });
+	if (!res.ok) return null;
+	const blob = await res.blob();
+	return URL.createObjectURL(blob);
+}
+
 /** Helpers tipados para verbos comuns */
 export const api = {
 	get: (path: string, opts?: RequestInit) => apiFetch(path, { ...opts, method: 'GET' }),
@@ -59,6 +70,12 @@ export const api = {
 			...opts,
 			method: 'POST',
 			body: body !== undefined ? JSON.stringify(body) : undefined
+		}),
+	upload: (path: string, formData: FormData, opts?: RequestInit) =>
+		apiFetch(path, {
+			...opts,
+			method: 'POST',
+			body: formData
 		}),
 	put: (path: string, body?: unknown, opts?: RequestInit) =>
 		apiFetch(path, {

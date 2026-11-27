@@ -1543,3 +1543,72 @@ export const notificationRelations = relations(notification, ({ one }) => ({
 export const pushSubscriptionRelations = relations(pushSubscription, ({ one }) => ({
 	person: one(person, { fields: [pushSubscription.personId], references: [person.id] })
 }));
+
+// ---------------------------------------------------------------------------
+// Arquivos e Anexos (§8 anexos, §11 foto de perfil, §13 comprovantes, §25)
+// ---------------------------------------------------------------------------
+
+/**
+ * Armazenamento seguro de uploads validados (até 3 MB, magic bytes conferidos).
+ * Mantido no Postgres para sobreviver automaticamente ao backup criptografado
+ * e passar sempre por verificação RBAC/LGPD no download (`/api/arquivos/[id]`).
+ */
+export const fileAsset = pgTable(
+	'file_asset',
+	{
+		id: pk(),
+		teamId: uuid('team_id')
+			.notNull()
+			.references(() => team.id, { onDelete: 'cascade' }),
+		/** 'perfil_foto' | 'comprovante' | 'evento_anexo' */
+		scope: text('scope').notNull(),
+		ownerPersonId: uuid('owner_person_id').references(() => person.id, { onDelete: 'set null' }),
+		filename: text('filename').notNull(),
+		/** 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf' */
+		mimeType: text('mime_type').notNull(),
+		sizeBytes: integer('size_bytes').notNull(),
+		dataBase64: text('data_base64').notNull(),
+		uploadedByPersonId: uuid('uploaded_by_person_id')
+			.notNull()
+			.references(() => person.id),
+		createdAt: createdAt()
+	},
+	(t) => [index('file_asset_team_scope_idx').on(t.teamId, t.scope)]
+);
+
+/**
+ * Anexos vinculados a eventos (§8: roteiros, avisos em PDF, imagens de mapa).
+ */
+export const eventAttachment = pgTable(
+	'event_attachment',
+	{
+		id: pk(),
+		eventId: uuid('event_id')
+			.notNull()
+			.references(() => event.id, { onDelete: 'cascade' }),
+		fileAssetId: uuid('file_asset_id')
+			.notNull()
+			.references(() => fileAsset.id, { onDelete: 'cascade' }),
+		title: text('title').notNull(),
+		uploadedByPersonId: uuid('uploaded_by_person_id')
+			.notNull()
+			.references(() => person.id),
+		createdAt: createdAt()
+	},
+	(t) => [
+		index('event_attachment_event_idx').on(t.eventId),
+		uniqueIndex('event_attachment_file_idx').on(t.fileAssetId)
+	]
+);
+
+export const fileAssetRelations = relations(fileAsset, ({ one }) => ({
+	team: one(team, { fields: [fileAsset.teamId], references: [team.id] }),
+	owner: one(person, { fields: [fileAsset.ownerPersonId], references: [person.id] }),
+	uploadedBy: one(person, { fields: [fileAsset.uploadedByPersonId], references: [person.id] })
+}));
+
+export const eventAttachmentRelations = relations(eventAttachment, ({ one }) => ({
+	event: one(event, { fields: [eventAttachment.eventId], references: [event.id] }),
+	file: one(fileAsset, { fields: [eventAttachment.fileAssetId], references: [fileAsset.id] }),
+	uploadedBy: one(person, { fields: [eventAttachment.uploadedByPersonId], references: [person.id] })
+}));

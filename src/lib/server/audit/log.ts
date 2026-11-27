@@ -49,8 +49,13 @@ export type AuditAction =
 	| 'event.atualizado'
 	| 'event.cancelado'
 	| 'event.reativado'
+	| 'event.anexo_adicionado'
+	| 'event.anexo_removido'
 	| 'event_type.criado'
 	| 'event_type.atualizado'
+	// Arquivos
+	| 'file.enviado'
+	| 'file.removido'
 	// RBAC
 	| 'rbac.papel_atribuido'
 	| 'rbac.papel_removido'

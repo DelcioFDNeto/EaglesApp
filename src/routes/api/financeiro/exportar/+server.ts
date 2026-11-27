@@ -12,8 +12,24 @@ import { autenticarAtor, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
 import { gerarCsvPrestacaoDeContas } from '$server/financeiro/calculos';
 
+const SOMENTE_DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDataInicio(valor: string | null): Date | null {
+	if (!valor) return null;
+	const alvo = SOMENTE_DATA_RE.test(valor) ? `${valor}T00:00:00.000Z` : valor;
+	const ts = Date.parse(alvo);
+	return Number.isNaN(ts) ? null : new Date(ts);
+}
+
+function parseDataFim(valor: string | null): Date | null {
+	if (!valor) return null;
+	const alvo = SOMENTE_DATA_RE.test(valor) ? `${valor}T23:59:59.999Z` : valor;
+	const ts = Date.parse(alvo);
+	return Number.isNaN(ts) ? null : new Date(ts);
+}
+
 /**
- * Exporta prestação de contas em CSV respeitando RN-24 e filtros ativos (RF-08.11).
+ * Exporta prestação de contas em CSV respeitando RN-24 e filtros ativos (RF-08.11 / §14).
  */
 export const GET = async ({ request, url, locals }) => {
 	const banco = db();
@@ -33,16 +49,28 @@ export const GET = async ({ request, url, locals }) => {
 	}
 
 	const filtros = [eq(financeTransaction.teamId, actor.teamId)];
-	const de = url.searchParams.get('de');
-	const ate = url.searchParams.get('ate');
+	const dataDe = parseDataInicio(url.searchParams.get('de'));
+	const dataAte = parseDataFim(url.searchParams.get('ate'));
+	const tipo = url.searchParams.get('tipo');
+	const categoriaId = url.searchParams.get('categoriaId');
+	const responsavelId = url.searchParams.get('responsavelId');
 	const eventoId = url.searchParams.get('eventoId');
 	const grupoId = url.searchParams.get('grupoId');
 
-	if (de && !Number.isNaN(Date.parse(de))) {
-		filtros.push(gte(financeTransaction.occurredAt, new Date(de)));
+	if (dataDe) {
+		filtros.push(gte(financeTransaction.occurredAt, dataDe));
 	}
-	if (ate && !Number.isNaN(Date.parse(ate))) {
-		filtros.push(lte(financeTransaction.occurredAt, new Date(ate)));
+	if (dataAte) {
+		filtros.push(lte(financeTransaction.occurredAt, dataAte));
+	}
+	if (tipo === 'entrada' || tipo === 'saida') {
+		filtros.push(eq(financeTransaction.kind, tipo));
+	}
+	if (categoriaId && isUuid(categoriaId)) {
+		filtros.push(eq(financeTransaction.categoryId, categoriaId));
+	}
+	if (responsavelId && isUuid(responsavelId)) {
+		filtros.push(eq(financeTransaction.responsiblePersonId, responsavelId));
 	}
 	if (eventoId && isUuid(eventoId)) {
 		filtros.push(eq(financeTransaction.eventId, eventoId));
@@ -73,7 +101,7 @@ export const GET = async ({ request, url, locals }) => {
 		.leftJoin(groupTable, eq(groupTable.id, financeTransaction.groupId))
 		.leftJoin(eventTable, eq(eventTable.id, financeTransaction.eventId))
 		.where(and(...filtros))
-		.orderBy(desc(financeTransaction.occurredAt));
+		.orderBy(desc(financeTransaction.occurredAt), desc(financeTransaction.createdAt));
 
 	const visiveis = linhas.filter((m) => {
 		if (podeVerTudo || podeVerGrupoGlobal) return true;

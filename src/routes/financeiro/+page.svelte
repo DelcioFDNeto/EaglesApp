@@ -1,12 +1,20 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import Botao from '$ui/Botao.svelte';
 	import Campo from '$ui/Campo.svelte';
 	import Aviso from '$ui/Aviso.svelte';
 	import Marca from '$ui/Marca.svelte';
-	import { api } from '$lib/api';
+	import { api, buscarBlobUrl } from '$lib/api';
 
 	type Aba = 'livro' | 'config';
+
+	const MAX_COMPROVANTE_BYTES = 3 * 1024 * 1024;
+	const TIPOS_COMPROVANTE_ACEITOS = new Set([
+		'image/jpeg',
+		'image/png',
+		'image/webp',
+		'application/pdf'
+	]);
 
 	let aba = $state<Aba>('livro');
 	let carregando = $state(true);
@@ -34,9 +42,14 @@
 	let regras = $state<any[]>([]);
 	let eventos = $state<any[]>([]);
 	let grupos = $state<any[]>([]);
+	let responsaveis = $state<Array<{ id: string; nome: string }>>([]);
 
-	// Filtros
+	// Filtros (§14)
+	let filtroDe = $state('');
+	let filtroAte = $state('');
 	let filtroTipo = $state('');
+	let filtroCategoriaId = $state('');
+	let filtroResponsavelId = $state('');
 	let filtroEventoId = $state('');
 	let filtroGrupoId = $state('');
 
@@ -50,6 +63,13 @@
 	let formGroupId = $state('');
 	let formReceiptUrl = $state('');
 	let salvandoLancamento = $state(false);
+	let enviandoComprovante = $state(false);
+	let comprovanteAnexadoNome = $state<string | null>(null);
+	let inputComprovanteEl = $state<HTMLInputElement | null>(null);
+
+	// Abertura autenticada de comprovantes (/api/arquivos/...)
+	let abrindoComprovanteId = $state<string | null>(null);
+	const blobUrlsAbertos = new Set<string>();
 
 	// Estorno (RN-21)
 	let estornandoId = $state<string | null>(null);
@@ -73,6 +93,17 @@
 	const categoriasDoTipo = $derived(categorias.filter((c) => c.kind === formKind));
 	const categoriasEntradaNaoDoacao = $derived(
 		categorias.filter((c) => c.kind === 'entrada' && !c.isDonation)
+	);
+	const temFiltroAtivo = $derived(
+		Boolean(
+			filtroDe ||
+			filtroAte ||
+			filtroTipo ||
+			filtroCategoriaId ||
+			filtroResponsavelId ||
+			filtroEventoId ||
+			filtroGrupoId
+		)
 	);
 
 	const METODO_ROTULO: Record<string, string> = {
@@ -115,19 +146,43 @@
 		carregarTudo();
 	});
 
-	async function carregarMovimentacoes() {
+	onDestroy(() => {
+		for (const url of blobUrlsAbertos) URL.revokeObjectURL(url);
+		blobUrlsAbertos.clear();
+	});
+
+	function construirParamsFiltros(): URLSearchParams {
 		const params = new URLSearchParams();
+		if (filtroDe) params.set('de', filtroDe);
+		if (filtroAte) params.set('ate', filtroAte);
 		if (filtroTipo) params.set('tipo', filtroTipo);
+		if (filtroCategoriaId) params.set('categoriaId', filtroCategoriaId);
+		if (filtroResponsavelId) params.set('responsavelId', filtroResponsavelId);
 		if (filtroEventoId) params.set('eventoId', filtroEventoId);
 		if (filtroGrupoId) params.set('grupoId', filtroGrupoId);
+		return params;
+	}
 
-		const qs = params.toString();
+	async function limparFiltros() {
+		filtroDe = '';
+		filtroAte = '';
+		filtroTipo = '';
+		filtroCategoriaId = '';
+		filtroResponsavelId = '';
+		filtroEventoId = '';
+		filtroGrupoId = '';
+		await carregarMovimentacoes();
+	}
+
+	async function carregarMovimentacoes() {
+		const qs = construirParamsFiltros().toString();
 		const res = await api.get(`/api/financeiro/movimentacoes${qs ? `?${qs}` : ''}`);
 		if (res.ok) {
 			const d = await res.json();
 			escopoVisibilidade = d.escopoVisibilidade ?? 'own';
 			if (d.permissoesFinanceiro) permissoes = d.permissoesFinanceiro;
 			if (d.resumo) resumo = d.resumo;
+			if (Array.isArray(d.responsaveis)) responsaveis = d.responsaveis;
 			movimentacoes = d.movimentacoes ?? [];
 		} else {
 			const d = await res.json().catch(() => ({}));
@@ -178,6 +233,75 @@
 		}
 	}
 
+	async function aoSelecionarComprovante(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const arquivo = input.files?.[0];
+		if (!arquivo) return;
+
+		erro = undefined;
+		if (arquivo.type && !TIPOS_COMPROVANTE_ACEITOS.has(arquivo.type)) {
+			erro = 'Formato inválido. Envie JPG, PNG, WebP ou PDF.';
+			input.value = '';
+			return;
+		}
+		if (arquivo.size > MAX_COMPROVANTE_BYTES) {
+			erro = 'O comprovante deve ter no máximo 3 MB.';
+			input.value = '';
+			return;
+		}
+
+		enviandoComprovante = true;
+		try {
+			const formData = new FormData();
+			formData.append('file', arquivo);
+			formData.append('scope', 'comprovante');
+			const res = await api.upload('/api/arquivos', formData);
+			const d = await res.json().catch(() => ({}));
+			if (res.ok && d.arquivo?.url) {
+				formReceiptUrl = d.arquivo.url;
+				comprovanteAnexadoNome = d.arquivo.filename ?? arquivo.name;
+			} else {
+				erro = d.erro ?? 'Não foi possível enviar o comprovante.';
+			}
+		} catch {
+			erro = 'Erro ao enviar o comprovante.';
+		} finally {
+			enviandoComprovante = false;
+			input.value = '';
+		}
+	}
+
+	function removerComprovanteAnexado() {
+		formReceiptUrl = '';
+		comprovanteAnexadoNome = null;
+		if (inputComprovanteEl) inputComprovanteEl.value = '';
+	}
+
+	async function abrirComprovante(id: string, url: string) {
+		abrindoComprovanteId = id;
+		erro = undefined;
+		try {
+			const blobUrl = await buscarBlobUrl(url);
+			if (!blobUrl) {
+				erro = 'Não foi possível abrir o comprovante.';
+				return;
+			}
+			blobUrlsAbertos.add(blobUrl);
+			const novaAba = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+			if (!novaAba) {
+				const a = document.createElement('a');
+				a.href = blobUrl;
+				a.target = '_blank';
+				a.rel = 'noopener noreferrer';
+				a.click();
+			}
+		} catch {
+			erro = 'Erro ao carregar o comprovante.';
+		} finally {
+			abrindoComprovanteId = null;
+		}
+	}
+
 	async function lancarMovimentacao() {
 		const amountCents = parseReaisParaCentavos(formValorReais);
 		if (!amountCents) {
@@ -208,6 +332,8 @@
 				formValorReais = '';
 				formDescricao = '';
 				formReceiptUrl = '';
+				comprovanteAnexadoNome = null;
+				if (inputComprovanteEl) inputComprovanteEl.value = '';
 				await carregarMovimentacoes();
 			} else {
 				erro = d.erro ?? 'Não foi possível registrar a movimentação.';
@@ -330,10 +456,7 @@
 	async function exportarCsv() {
 		erro = undefined;
 		try {
-			const params = new URLSearchParams();
-			if (filtroEventoId) params.set('eventoId', filtroEventoId);
-			if (filtroGrupoId) params.set('grupoId', filtroGrupoId);
-			const qs = params.toString();
+			const qs = construirParamsFiltros().toString();
 			const res = await api.get(`/api/financeiro/exportar${qs ? `?${qs}` : ''}`);
 			if (!res.ok) {
 				erro = 'Não foi possível exportar o CSV.';
@@ -452,41 +575,97 @@
 				<Botao variante="texto" onclick={exportarCsv}>Exportar CSV</Botao>
 			</div>
 
-			<div class="filtros">
-				<select
-					aria-label="Filtrar por tipo"
-					bind:value={filtroTipo}
-					onchange={carregarMovimentacoes}
-				>
-					<option value="">Entradas e saídas</option>
-					<option value="entrada">Somente entradas</option>
-					<option value="saida">Somente saídas</option>
-				</select>
-				{#if eventos.length > 0}
-					<select
-						aria-label="Filtrar por encontro"
-						bind:value={filtroEventoId}
-						onchange={carregarMovimentacoes}
-					>
-						<option value="">Todos os encontros</option>
-						{#each eventos as ev (ev.id)}
-							<option value={ev.id}>{ev.title}</option>
-						{/each}
-					</select>
+			<section class="filtros-secao" aria-label="Filtros do livro-caixa">
+				<div class="filtros">
+					<div class="filtro-campo">
+						<label for="filtro-de">De</label>
+						<input
+							id="filtro-de"
+							type="date"
+							bind:value={filtroDe}
+							onchange={carregarMovimentacoes}
+						/>
+					</div>
+					<div class="filtro-campo">
+						<label for="filtro-ate">Até</label>
+						<input
+							id="filtro-ate"
+							type="date"
+							bind:value={filtroAte}
+							onchange={carregarMovimentacoes}
+						/>
+					</div>
+					<div class="filtro-campo">
+						<label for="filtro-tipo">Tipo</label>
+						<select id="filtro-tipo" bind:value={filtroTipo} onchange={carregarMovimentacoes}>
+							<option value="">Todos</option>
+							<option value="entrada">Entradas</option>
+							<option value="saida">Saídas</option>
+						</select>
+					</div>
+					{#if categorias.length > 0}
+						<div class="filtro-campo">
+							<label for="filtro-categoria">Categoria</label>
+							<select
+								id="filtro-categoria"
+								bind:value={filtroCategoriaId}
+								onchange={carregarMovimentacoes}
+							>
+								<option value="">Todas</option>
+								{#each categorias as c (c.id)}
+									<option value={c.id}>{c.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+					{#if escopoVisibilidade !== 'own' && responsaveis.length > 0}
+						<div class="filtro-campo">
+							<label for="filtro-responsavel">Responsável</label>
+							<select
+								id="filtro-responsavel"
+								bind:value={filtroResponsavelId}
+								onchange={carregarMovimentacoes}
+							>
+								<option value="">Todos</option>
+								{#each responsaveis as r (r.id)}
+									<option value={r.id}>{r.nome}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+					{#if eventos.length > 0}
+						<div class="filtro-campo">
+							<label for="filtro-evento">Evento</label>
+							<select
+								id="filtro-evento"
+								bind:value={filtroEventoId}
+								onchange={carregarMovimentacoes}
+							>
+								<option value="">Todos</option>
+								{#each eventos as ev (ev.id)}
+									<option value={ev.id}>{ev.title}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+					{#if grupos.length > 0}
+						<div class="filtro-campo">
+							<label for="filtro-grupo">Subgrupo</label>
+							<select id="filtro-grupo" bind:value={filtroGrupoId} onchange={carregarMovimentacoes}>
+								<option value="">Todos</option>
+								{#each grupos as g (g.id)}
+									<option value={g.id}>{g.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+				</div>
+				{#if temFiltroAtivo}
+					<div class="filtros-acoes">
+						<Botao variante="texto" onclick={limparFiltros}>Limpar filtros</Botao>
+					</div>
 				{/if}
-				{#if grupos.length > 0}
-					<select
-						aria-label="Filtrar por grupo"
-						bind:value={filtroGrupoId}
-						onchange={carregarMovimentacoes}
-					>
-						<option value="">Todos os grupos</option>
-						{#each grupos as g (g.id)}
-							<option value={g.id}>{g.name}</option>
-						{/each}
-					</select>
-				{/if}
-			</div>
+			</section>
 
 			{#if movimentacoes.length === 0}
 				<div class="vazio">
@@ -527,14 +706,28 @@
 											· {m.eventTitle}{/if}
 									</span>
 									{#if m.receiptUrl}
-										<a
-											href={m.receiptUrl}
-											target="_blank"
-											rel="noopener noreferrer"
-											class="link-comp"
-										>
-											Ver comprovante
-										</a>
+										{#if m.receiptUrl.startsWith('/api/arquivos/')}
+											<button
+												type="button"
+												class="link-comp botao-comp"
+												disabled={abrindoComprovanteId === m.id}
+												aria-busy={abrindoComprovanteId === m.id || undefined}
+												onclick={() => abrirComprovante(m.id, m.receiptUrl)}
+											>
+												{abrindoComprovanteId === m.id
+													? 'Abrindo comprovante…'
+													: 'Abrir comprovante'}
+											</button>
+										{:else}
+											<a
+												href={m.receiptUrl}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="link-comp"
+											>
+												Ver comprovante
+											</a>
+										{/if}
 									{/if}
 								</div>
 								<strong class="valor-linha" class:positivo={m.kind === 'entrada'}>
@@ -680,13 +873,44 @@
 							{/if}
 						</div>
 
+						<div class="campo-comprovante">
+							<label for="tx-comp-arquivo">Anexar comprovante (opcional)</label>
+							<input
+								id="tx-comp-arquivo"
+								bind:this={inputComprovanteEl}
+								type="file"
+								accept="image/jpeg,image/png,image/webp,application/pdf"
+								class="input-arquivo"
+								disabled={enviandoComprovante || salvandoLancamento}
+								onchange={aoSelecionarComprovante}
+							/>
+							<p class="ajuda-campo" aria-live="polite">
+								{#if enviandoComprovante}
+									Enviando comprovante…
+								{:else}
+									JPG, PNG, WebP ou PDF (máx. 3 MB).
+								{/if}
+							</p>
+							{#if comprovanteAnexadoNome && formReceiptUrl.startsWith('/api/arquivos/')}
+								<div class="arquivo-anexado">
+									<span class="arquivo-nome">{comprovanteAnexadoNome}</span>
+									<Botao variante="texto" onclick={removerComprovanteAnexado}>Remover</Botao>
+								</div>
+							{/if}
+						</div>
+
 						<Campo
 							id="tx-comp"
 							rotulo="Link do comprovante (opcional)"
 							bind:valor={formReceiptUrl}
 						/>
 
-						<Botao tipo="submit" largura="cheia" carregando={salvandoLancamento}>
+						<Botao
+							tipo="submit"
+							largura="cheia"
+							carregando={salvandoLancamento}
+							desabilitado={enviandoComprovante}
+						>
 							Registrar movimentação
 						</Botao>
 					</form>
@@ -886,13 +1110,33 @@
 		color: var(--cor-erro);
 	}
 
+	.filtros-secao {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
 	.filtros {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 		gap: var(--esp-2);
 	}
 
+	.filtro-campo {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-1);
+		min-width: 0;
+	}
+
+	.filtro-campo label {
+		font-size: var(--texto-xs);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
 	.filtros select,
+	.filtros input[type='date'],
 	.campo-select select {
 		min-height: var(--toque-min);
 		padding: 0 var(--esp-3);
@@ -902,6 +1146,22 @@
 		border-radius: var(--raio);
 		font-size: 16px;
 		width: 100%;
+		transition:
+			border-color var(--transicao),
+			box-shadow var(--transicao);
+	}
+
+	.filtros select:focus-visible,
+	.filtros input[type='date']:focus-visible,
+	.campo-select select:focus-visible {
+		border-color: var(--cor-foco);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--cor-foco) 24%, transparent);
+		outline: none;
+	}
+
+	.filtros-acoes {
+		display: flex;
+		justify-content: flex-start;
 	}
 
 	.lista {
@@ -988,9 +1248,123 @@
 	}
 
 	.link-comp {
-		font-size: var(--texto-xs);
+		display: inline-flex;
+		align-items: center;
+		min-height: var(--toque-min);
+		padding: 0 var(--esp-2);
+		margin-left: calc(var(--esp-2) * -1);
+		border-radius: var(--raio-sm);
+		font-size: var(--texto-sm);
 		font-weight: 600;
+		color: var(--cor-marca);
+		text-decoration: underline;
+		text-underline-offset: 2px;
 		align-self: flex-start;
+		transition:
+			background-color var(--transicao),
+			opacity var(--transicao),
+			transform 90ms cubic-bezier(0.2, 0, 0.2, 1);
+	}
+
+	.link-comp:focus-visible {
+		outline: 2px solid var(--cor-foco);
+		outline-offset: 2px;
+	}
+
+	.botao-comp {
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		font-family: inherit;
+	}
+
+	.botao-comp:active:not(:disabled) {
+		transform: scale(0.97);
+	}
+
+	.botao-comp:disabled {
+		opacity: 0.65;
+		cursor: not-allowed;
+	}
+
+	@media (hover: hover) {
+		.link-comp:hover {
+			background: var(--cor-marca-suave);
+		}
+	}
+
+	.campo-comprovante {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.campo-comprovante label {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
+	.input-arquivo {
+		min-height: var(--toque-min);
+		padding: var(--esp-1);
+		background: var(--cor-superficie);
+		color: var(--cor-texto);
+		border: 1px solid var(--cor-linha-forte);
+		border-radius: var(--raio);
+		font-size: var(--texto-sm);
+		width: 100%;
+		cursor: pointer;
+		transition:
+			border-color var(--transicao),
+			box-shadow var(--transicao);
+	}
+
+	.input-arquivo::file-selector-button {
+		min-height: 36px;
+		padding: 0 var(--esp-3);
+		margin-right: var(--esp-3);
+		background: var(--cor-superficie-2);
+		color: var(--cor-texto);
+		border: 1px solid var(--cor-linha-forte);
+		border-radius: var(--raio-sm);
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.input-arquivo:focus-visible {
+		border-color: var(--cor-foco);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--cor-foco) 24%, transparent);
+		outline: none;
+	}
+
+	.input-arquivo:disabled {
+		opacity: 0.65;
+		cursor: not-allowed;
+	}
+
+	.ajuda-campo {
+		font-size: var(--texto-sm);
+		color: var(--cor-texto-2);
+	}
+
+	.arquivo-anexado {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--esp-2);
+		padding: var(--esp-2) var(--esp-3);
+		background: var(--cor-superficie-2);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio);
+	}
+
+	.arquivo-nome {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-texto);
+		overflow-wrap: anywhere;
 	}
 
 	.acoes-item,

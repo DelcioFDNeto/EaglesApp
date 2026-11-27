@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$server/db';
 import {
@@ -18,6 +18,36 @@ import { autenticarAtor, flagAtiva, isUuid } from '$lib/server/auth/middleware';
 import { can, groupsWhere } from '$server/policy/policy';
 import { calcularResumoFinanceiro, formatarCentavos } from '$server/financeiro/calculos';
 import { notificarPessoa } from '$server/notificacoes/motor';
+import { naoEhMaster } from '$server/lideranca/regras';
+
+const RECEIPT_ARQUIVO_RE =
+	/^\/api\/arquivos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SOMENTE_DATA_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function receiptUrlValida(valor: string): boolean {
+	if (valor === '') return true;
+	if (RECEIPT_ARQUIVO_RE.test(valor)) return true;
+	try {
+		const parsed = new URL(valor);
+		return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+	} catch {
+		return false;
+	}
+}
+
+function parseDataInicio(valor: string | null): Date | null {
+	if (!valor) return null;
+	const alvo = SOMENTE_DATA_RE.test(valor) ? `${valor}T00:00:00.000Z` : valor;
+	const ts = Date.parse(alvo);
+	return Number.isNaN(ts) ? null : new Date(ts);
+}
+
+function parseDataFim(valor: string | null): Date | null {
+	if (!valor) return null;
+	const alvo = SOMENTE_DATA_RE.test(valor) ? `${valor}T23:59:59.999Z` : valor;
+	const ts = Date.parse(alvo);
+	return Number.isNaN(ts) ? null : new Date(ts);
+}
 
 const criarMovimentacaoSchema = z.object({
 	kind: z.enum(['entrada', 'saida']),
@@ -31,7 +61,12 @@ const criarMovimentacaoSchema = z.object({
 	eventId: z.string().uuid().optional().nullable(),
 	groupId: z.string().uuid().optional().nullable(),
 	receiptUrl: z
-		.union([z.string().trim().url(), z.literal('')])
+		.string()
+		.trim()
+		.max(2048)
+		.refine(receiptUrlValida, {
+			message: 'Informe uma URL http(s) válida ou anexe um comprovante.'
+		})
 		.optional()
 		.nullable()
 });
@@ -69,21 +104,25 @@ export const GET = async ({ request, url, locals }) => {
 
 	const filtros = [eq(financeTransaction.teamId, actor.teamId)];
 
-	const de = url.searchParams.get('de');
-	const ate = url.searchParams.get('ate');
+	const dataDe = parseDataInicio(url.searchParams.get('de'));
+	const dataAte = parseDataFim(url.searchParams.get('ate'));
 	const categoriaId = url.searchParams.get('categoriaId');
+	const responsavelId = url.searchParams.get('responsavelId');
 	const eventoId = url.searchParams.get('eventoId');
 	const grupoId = url.searchParams.get('grupoId');
 	const tipo = url.searchParams.get('tipo');
 
-	if (de && !Number.isNaN(Date.parse(de))) {
-		filtros.push(gte(financeTransaction.occurredAt, new Date(de)));
+	if (dataDe) {
+		filtros.push(gte(financeTransaction.occurredAt, dataDe));
 	}
-	if (ate && !Number.isNaN(Date.parse(ate))) {
-		filtros.push(lte(financeTransaction.occurredAt, new Date(ate)));
+	if (dataAte) {
+		filtros.push(lte(financeTransaction.occurredAt, dataAte));
 	}
 	if (categoriaId && isUuid(categoriaId)) {
 		filtros.push(eq(financeTransaction.categoryId, categoriaId));
+	}
+	if (responsavelId && isUuid(responsavelId)) {
+		filtros.push(eq(financeTransaction.responsiblePersonId, responsavelId));
 	}
 	if (eventoId && isUuid(eventoId)) {
 		filtros.push(eq(financeTransaction.eventId, eventoId));
@@ -159,6 +198,34 @@ export const GET = async ({ request, url, locals }) => {
 		for (const p of pessoas) nomesContrib.set(p.id, p.nome);
 	}
 
+	// Responsáveis distintos no escopo visível do usuário (RN-24), sem Master (§14)
+	const filtrosResponsaveis = [
+		eq(financeTransaction.teamId, actor.teamId),
+		naoEhMaster(personTable.id)
+	];
+	if (!podeVerTudo && !podeVerGrupoGlobal) {
+		if (gruposVisiveis.length > 0) {
+			const condEscopo = or(
+				inArray(financeTransaction.groupId, gruposVisiveis),
+				eq(financeTransaction.personId, actor.personId)
+			);
+			if (condEscopo) filtrosResponsaveis.push(condEscopo);
+		} else {
+			filtrosResponsaveis.push(eq(financeTransaction.personId, actor.personId));
+		}
+	}
+
+	const responsaveisBrutos = await banco
+		.selectDistinct({
+			id: personTable.id,
+			nome: personTable.fullName
+		})
+		.from(financeTransaction)
+		.innerJoin(personTable, eq(personTable.id, financeTransaction.responsiblePersonId))
+		.where(and(...filtrosResponsaveis));
+
+	const responsaveis = responsaveisBrutos.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
 	const resumo = calcularResumoFinanceiro(visiveis);
 	const aprovacaoDespesasAtiva = await flagAtiva(banco, actor.teamId, 'aprovacao_despesas');
 
@@ -172,6 +239,7 @@ export const GET = async ({ request, url, locals }) => {
 			aprovacaoDespesasAtiva
 		},
 		resumo,
+		responsaveis,
 		movimentacoes: visiveis.map((m) => ({
 			...m,
 			contributorName: m.personId ? (nomesContrib.get(m.personId) ?? null) : null,

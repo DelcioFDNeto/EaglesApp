@@ -18,7 +18,10 @@
 		type Lateralidade,
 		type TamanhoCamiseta
 	} from '$shared/atributos';
-	import { api, apiCache, type Perfil } from '$lib/api';
+	import { api, apiCache, buscarBlobUrl, type Perfil } from '$lib/api';
+
+	const MAX_FOTO_BYTES = 3 * 1024 * 1024;
+	const MIMES_FOTO = ['image/jpeg', 'image/png', 'image/webp'];
 
 	let perfil = $state<Perfil | null>(null);
 	let carregando = $state(true);
@@ -27,6 +30,9 @@
 	let mensagem = $state<string | undefined>(undefined);
 	let erro = $state<string | undefined>(undefined);
 	let salvando = $state(false);
+	let enviandoFoto = $state(false);
+	let erroFoto = $state<string | undefined>(undefined);
+	let fotoExibida = $state<string | null>(null);
 
 	let formNome = $state('');
 	let formTelefone = $state('');
@@ -52,6 +58,91 @@
 		if (!formAltura.trim() || !Number.isInteger(n) || n < 100 || n > 250) return null;
 		return formatarAltura(n);
 	});
+
+	const fotoOrigem = $derived(editando ? formFotoUrl.trim() : (perfil?.perfil?.fotoUrl ?? ''));
+
+	$effect(() => {
+		const origem = fotoOrigem;
+		if (!origem) {
+			fotoExibida = null;
+			return;
+		}
+		if (!origem.startsWith('/api/')) {
+			fotoExibida = origem;
+			return;
+		}
+
+		let cancelado = false;
+		let urlCriada: string | null = null;
+		fotoExibida = null;
+
+		buscarBlobUrl(origem)
+			.then((url) => {
+				if (cancelado) {
+					if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+					return;
+				}
+				urlCriada = url;
+				fotoExibida = url;
+			})
+			.catch(() => {
+				if (!cancelado) fotoExibida = null;
+			});
+
+		return () => {
+			cancelado = true;
+			if (urlCriada && urlCriada.startsWith('blob:')) {
+				URL.revokeObjectURL(urlCriada);
+			}
+		};
+	});
+
+	async function enviarFotoPerfil(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const arquivo = input.files?.[0];
+		input.value = '';
+		if (!arquivo) return;
+
+		erroFoto = undefined;
+		erro = undefined;
+		mensagem = undefined;
+
+		if (arquivo.size === 0) {
+			erroFoto = 'O arquivo selecionado está vazio.';
+			return;
+		}
+		if (arquivo.size > MAX_FOTO_BYTES) {
+			erroFoto = 'A imagem excede o limite máximo de 3 MB.';
+			return;
+		}
+		if (arquivo.type && !MIMES_FOTO.includes(arquivo.type)) {
+			erroFoto = 'Escolha uma imagem nos formatos JPEG, PNG ou WebP.';
+			return;
+		}
+
+		enviandoFoto = true;
+		try {
+			const formData = new FormData();
+			formData.append('scope', 'perfil_foto');
+			formData.append('file', arquivo);
+
+			const res = await api.upload('/api/arquivos', formData);
+			const dados = await res.json().catch(() => ({}));
+			if (res.ok && typeof dados.arquivo?.url === 'string') {
+				formFotoUrl = dados.arquivo.url;
+				mensagem = 'Foto enviada. Salve as alterações para atualizar seu perfil.';
+			} else {
+				erroFoto = dados.erro ?? 'Não foi possível enviar a foto.';
+			}
+		} catch (err: unknown) {
+			erroFoto =
+				err instanceof Error && err.message === 'sem_conexao'
+					? 'Você está offline. Tente novamente quando a conexão voltar.'
+					: 'Erro ao enviar a foto.';
+		} finally {
+			enviandoFoto = false;
+		}
+	}
 
 	const STATUS_ROTULO: Record<string, string> = {
 		visitante: 'Visitante',
@@ -214,7 +305,58 @@
 						tipo="date"
 						bind:valor={formDataNascimento}
 					/>
-					<Campo id="fotoUrl" rotulo="URL da foto" tipo="text" bind:valor={formFotoUrl} />
+					<div class="campo-foto">
+						<span class="rotulo-foto">Foto de perfil</span>
+						<div class="foto-upload-linha">
+							{#if fotoExibida}
+								<img src={fotoExibida} alt="Prévia da foto de perfil" class="foto-perfil" />
+							{:else}
+								<div class="foto-perfil placeholder" aria-hidden="true">
+									<Marca tamanho={44} />
+								</div>
+							{/if}
+
+							<div class="foto-upload-controles">
+								<div class="foto-upload-botoes">
+									<label class="botao-arquivo" class:ocupado={enviandoFoto}>
+										<input
+											id="fotoArquivo"
+											type="file"
+											accept="image/jpeg,image/png,image/webp"
+											onchange={enviarFotoPerfil}
+											disabled={enviandoFoto}
+										/>
+										<span>{enviandoFoto ? 'Enviando foto…' : 'Escolher imagem'}</span>
+									</label>
+									{#if formFotoUrl.trim()}
+										<Botao
+											variante="texto"
+											desabilitado={enviandoFoto}
+											onclick={() => {
+												formFotoUrl = '';
+												erroFoto = undefined;
+											}}
+										>
+											Remover foto
+										</Botao>
+									{/if}
+								</div>
+								<p class="ajuda-foto">JPEG, PNG ou WebP até 3 MB.</p>
+							</div>
+						</div>
+						{#if erroFoto}
+							<Aviso tom="erro">{erroFoto}</Aviso>
+						{/if}
+						<details class="foto-url-externa">
+							<summary>Ou informar link externo da imagem</summary>
+							<Campo
+								id="fotoUrl"
+								rotulo="URL da foto (https://)"
+								tipo="text"
+								bind:valor={formFotoUrl}
+							/>
+						</details>
+					</div>
 					<Campo
 						id="relacionamento"
 						rotulo="Estado civil / relacionamento"
@@ -295,8 +437,18 @@
 					</fieldset>
 
 					<div class="acoes">
-						<Botao tipo="submit" largura="cheia" carregando={salvando}>Salvar alterações</Botao>
-						<Botao variante="texto" largura="cheia" onclick={() => (editando = false)}>
+						<Botao tipo="submit" largura="cheia" carregando={salvando} desabilitado={enviandoFoto}>
+							Salvar alterações
+						</Botao>
+						<Botao
+							variante="texto"
+							largura="cheia"
+							onclick={() => {
+								editando = false;
+								erroFoto = undefined;
+								formFotoUrl = perfil?.perfil?.fotoUrl ?? '';
+							}}
+						>
 							Cancelar
 						</Botao>
 					</div>
@@ -304,8 +456,8 @@
 			{:else}
 				<section class="perfil-visual">
 					<div class="cabecalho-perfil">
-						{#if perfil.perfil?.fotoUrl}
-							<img src={perfil.perfil.fotoUrl} alt={`Foto de ${perfil.nome}`} class="foto-perfil" />
+						{#if fotoExibida}
+							<img src={fotoExibida} alt={`Foto de ${perfil.nome}`} class="foto-perfil" />
 						{:else}
 							<div class="foto-perfil placeholder" aria-hidden="true">
 								<Marca tamanho={48} />
@@ -716,5 +868,119 @@
 		min-height: var(--toque-min);
 		display: inline-flex;
 		align-items: center;
+	}
+
+	.campo-foto {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.rotulo-foto {
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+	}
+
+	.foto-upload-linha {
+		display: flex;
+		align-items: center;
+		gap: var(--esp-4);
+		padding: var(--esp-3);
+		background: var(--cor-superficie);
+		border: 1px solid var(--cor-linha);
+		border-radius: var(--raio);
+		flex-wrap: wrap;
+	}
+
+	.foto-upload-controles {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-1);
+		flex: 1;
+		min-width: 180px;
+	}
+
+	.foto-upload-botoes {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--esp-2);
+	}
+
+	.botao-arquivo {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: var(--toque-min);
+		padding: 0 var(--esp-4);
+		background: var(--cor-superficie);
+		color: var(--cor-texto);
+		border: 1px solid var(--cor-linha-forte);
+		border-radius: var(--raio);
+		font-size: var(--texto-sm);
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			border-color var(--transicao),
+			color var(--transicao),
+			opacity var(--transicao);
+	}
+
+	.botao-arquivo input[type='file'] {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.botao-arquivo:focus-within {
+		outline: 2px solid var(--cor-foco);
+		outline-offset: 2px;
+	}
+
+	.botao-arquivo.ocupado {
+		opacity: 0.65;
+		cursor: not-allowed;
+	}
+
+	@media (hover: hover) {
+		.botao-arquivo:hover:not(.ocupado) {
+			border-color: var(--cor-marca);
+			color: var(--cor-marca);
+		}
+	}
+
+	.ajuda-foto {
+		font-size: var(--texto-xs);
+		color: var(--cor-texto-2);
+		margin: 0;
+	}
+
+	.foto-url-externa {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.foto-url-externa summary {
+		font-size: var(--texto-xs);
+		font-weight: 600;
+		color: var(--cor-texto-2);
+		cursor: pointer;
+		min-height: var(--toque-min);
+		display: inline-flex;
+		align-items: center;
+	}
+
+	.foto-url-externa summary:focus-visible {
+		outline: 2px solid var(--cor-foco);
+		outline-offset: 2px;
 	}
 </style>

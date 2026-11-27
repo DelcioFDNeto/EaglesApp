@@ -38,11 +38,23 @@
 	let gerandoProposta = $state(false);
 	let confirmandoProposta = $state(false);
 
+	type SugestaoSubstituto = {
+		personId: string;
+		nome: string;
+		respeitaIntervalo: boolean;
+		rsvp: 'confirmado' | 'talvez' | 'nao_vou' | null;
+		carga90Dias: number;
+		frequencia90d: number;
+		justificativa: string;
+	};
+
 	// Troca de responsável (RF-07.5)
 	let trocandoId = $state<string | null>(null);
 	let substitutoId = $state('');
 	let motivoTroca = $state('');
 	let salvandoTroca = $state(false);
+	let substitutosSugeridos = $state<SugestaoSubstituto[]>([]);
+	let carregandoSubstitutos = $state(false);
 
 	const STATUS_ROTULO: Record<string, string> = {
 		proposta: 'Proposta (pendente)',
@@ -277,6 +289,36 @@
 		}
 	}
 
+	async function abrirTroca(item: any) {
+		if (trocandoId === item.id) {
+			trocandoId = null;
+			substitutosSugeridos = [];
+			carregandoSubstitutos = false;
+			return;
+		}
+		trocandoId = item.id;
+		substitutoId = pessoas.find((p) => p.id !== item.personId)?.id ?? '';
+		motivoTroca = '';
+		substitutosSugeridos = [];
+		carregandoSubstitutos = true;
+		try {
+			const res = await api.get(`/api/escalas/${item.id}/substitutos`);
+			if (res.ok && trocandoId === item.id) {
+				const d = await res.json();
+				substitutosSugeridos = d.substitutos ?? [];
+				if (substitutosSugeridos.length > 0) {
+					substitutoId = substitutosSugeridos[0]!.personId;
+				}
+			}
+		} catch {
+			// Mantém seleção manual no campo caso a sugestão falhe
+		} finally {
+			if (trocandoId === item.id) {
+				carregandoSubstitutos = false;
+			}
+		}
+	}
+
 	async function confirmarTroca(id: string) {
 		if (!substitutoId) {
 			erro = 'Escolha quem vai assumir a responsabilidade.';
@@ -297,6 +339,7 @@
 				trocandoId = null;
 				substitutoId = '';
 				motivoTroca = '';
+				substitutosSugeridos = [];
 				await carregarEscalaDoEvento(eventoSelecionadoId);
 			} else {
 				erro = d.erro ?? 'Não foi possível registrar a troca.';
@@ -557,16 +600,7 @@
 													Marcar cumprida
 												</Botao>
 											{/if}
-											<Botao
-												variante="texto"
-												onclick={() => {
-													trocandoId = trocandoId === item.id ? null : item.id;
-													substitutoId = pessoas.find((p) => p.id !== item.personId)?.id ?? '';
-													motivoTroca = '';
-												}}
-											>
-												Trocar
-											</Botao>
+											<Botao variante="texto" onclick={() => abrirTroca(item)}>Trocar</Botao>
 											<Botao variante="destrutivo" onclick={() => removerItemEscala(item.id)}>
 												Remover
 											</Botao>
@@ -580,9 +614,44 @@
 													confirmarTroca(item.id);
 												}}
 											>
+												<div class="sugestoes-substituto" aria-live="polite">
+													<span class="sugestoes-titulo">Substitutos sugeridos</span>
+													{#if carregandoSubstitutos}
+														<span class="meta">Calculando melhores opções…</span>
+													{:else if substitutosSugeridos.length === 0}
+														<span class="meta">Nenhuma sugestão disponível para este encontro.</span
+														>
+													{:else}
+														<div class="lista-sugestoes" role="list">
+															{#each substitutosSugeridos as sug (sug.personId)}
+																<button
+																	type="button"
+																	class="sugestao-btn"
+																	class:selecionada={substitutoId === sug.personId}
+																	aria-pressed={substitutoId === sug.personId}
+																	onclick={() => (substitutoId = sug.personId)}
+																>
+																	<span class="sugestao-topo">
+																		<strong>{sug.nome}</strong>
+																		{#if sug.rsvp === 'confirmado'}
+																			<span class="chip chip-confirmada">Confirmado</span>
+																		{:else if sug.rsvp === 'talvez'}
+																			<span class="chip chip-proposta">Talvez</span>
+																		{/if}
+																	</span>
+																	<span class="meta">{sug.justificativa}</span>
+																</button>
+															{/each}
+														</div>
+													{/if}
+												</div>
+
 												<div class="campo-select">
 													<label for={`sub-${item.id}`}>Substituir por</label>
 													<select id={`sub-${item.id}`} bind:value={substitutoId}>
+														{#each substitutosSugeridos.filter((s) => !pessoas.some((p) => p.id === s.personId)) as s (s.personId)}
+															<option value={s.personId}>{s.nome}</option>
+														{/each}
 														{#each pessoas.filter((p) => p.id !== item.personId) as p (p.id)}
 															<option value={p.id}>{p.nome}</option>
 														{/each}
@@ -595,7 +664,13 @@
 												/>
 												<div class="acoes-linha">
 													<Botao tipo="submit" carregando={salvandoTroca}>Salvar troca</Botao>
-													<Botao variante="texto" onclick={() => (trocandoId = null)}>
+													<Botao
+														variante="texto"
+														onclick={() => {
+															trocandoId = null;
+															substitutosSugeridos = [];
+														}}
+													>
 														Cancelar
 													</Botao>
 												</div>
@@ -873,6 +948,56 @@
 		gap: var(--esp-3);
 		padding-top: var(--esp-3);
 		border-top: 1px solid var(--cor-linha);
+	}
+
+	.sugestoes-substituto {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.sugestoes-titulo {
+		font-size: var(--texto-xs);
+		font-weight: 700;
+		color: var(--cor-texto-2);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	.lista-sugestoes {
+		display: flex;
+		flex-direction: column;
+		gap: var(--esp-2);
+	}
+
+	.sugestao-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+		width: 100%;
+		text-align: left;
+		padding: var(--esp-2) var(--esp-3);
+		min-height: var(--toque-min);
+		background: var(--cor-superficie-2);
+		border: 1px solid var(--cor-linha-forte);
+		border-radius: var(--raio-sm);
+		color: var(--cor-texto);
+		cursor: pointer;
+	}
+
+	.sugestao-btn.selecionada {
+		background: var(--cor-marca-suave);
+		border-color: var(--cor-marca);
+	}
+
+	.sugestao-topo {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--esp-2);
+		width: 100%;
+		font-size: var(--texto-sm);
 	}
 
 	.chip {
