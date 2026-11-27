@@ -75,7 +75,11 @@ export async function buscarComCache<T>(
 			if (resposta.ok) {
 				const dados = (await resposta.json()) as T;
 				if (store) {
-					await cacheSalvar(store, endpoint, dados, ttlMs);
+					try {
+						await cacheSalvar(store, endpoint, dados, ttlMs);
+					} catch {
+						// Falha no IndexedDB não pode descartar uma resposta válida da API.
+					}
 				}
 				return dados;
 			}
@@ -86,9 +90,13 @@ export async function buscarComCache<T>(
 
 	// Fallback para cache.
 	if (store) {
-		const cache = await cacheLer<T>(store, endpoint);
-		if (cache) {
-			return cache.dado;
+		try {
+			const cache = await cacheLer<T>(store, endpoint);
+			if (cache) {
+				return cache.dado;
+			}
+		} catch {
+			// Ignora erro de leitura do IndexedDB e devolve erro de busca abaixo.
 		}
 	}
 

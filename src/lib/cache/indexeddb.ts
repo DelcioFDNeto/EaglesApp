@@ -37,8 +37,21 @@ function abrirBanco(): Promise<IDBDatabase> {
 			}
 		};
 
-		requisicao.onsuccess = () => resolve(requisicao.result);
-		requisicao.onerror = () => reject(requisicao.error);
+		requisicao.onsuccess = () => {
+			const banco = requisicao.result;
+			banco.onclose = () => {
+				dbPromise = null;
+			};
+			banco.onversionchange = () => {
+				banco.close();
+				dbPromise = null;
+			};
+			resolve(banco);
+		};
+		requisicao.onerror = () => {
+			dbPromise = null;
+			reject(requisicao.error);
+		};
 	});
 
 	return dbPromise;
@@ -58,7 +71,6 @@ async function transacao<T>(
 		} catch (erro) {
 			reject(erro);
 		}
-		tx.oncomplete = () => banco.close();
 		tx.onerror = () => reject(tx.error);
 	});
 }
